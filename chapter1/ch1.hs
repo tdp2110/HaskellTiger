@@ -38,27 +38,26 @@ interpStm (CompoundStm stm1 stm2) env =
       Ok -> let (log2, env2, state2) = interpStm stm2 env1 in
               (log1 ++ log2, env2, state2)
 interpStm (AssignStm identifier expr) env =
-  let (log, env', errorOrVal) = interpExp expr env in
+  let (log', env', errorOrVal) = interpExp expr env in
     case errorOrVal of
-      Left error -> (log, env', Fail error)
-      Right val -> (log, [(identifier, val)] ++ env', Ok)
+      Left err -> (log', env', Fail err)
+      Right val -> (log', [(identifier, val)] ++ env', Ok)
 interpStm (PrintStm exprs) env =
   let accum res@(logAccum, envAccum, stateAccum) expr =
         case stateAccum of
           Fail _ -> res
           Ok -> let (nextLog, nextEnv, errorOrVal) = interpExp expr envAccum in
             case errorOrVal of
-              Left error -> (logAccum ++ nextLog, nextEnv, Fail error)
+              Left err -> (logAccum ++ nextLog, nextEnv, Fail err)
               Right val -> (logAccum ++ nextLog ++ [show val], nextEnv, Ok)
   in foldl' accum ([], env, Ok) exprs
 
-lookup' :: Id -> Env -> Either Error Integer
-lookup' id env = case lookup id env of
-  Nothing -> Left $ UnboundVar id env
-  Just v -> Right v
-
 interpExp :: Exp -> Env -> ([[Char]], Env, Either Error Integer)
-interpExp (IdExp identifier) env = ([], env, lookup' identifier env)
+interpExp (IdExp identifier) env =
+  let lookup' identifier' env' = case lookup identifier' env' of
+        Nothing -> Left $ UnboundVar identifier' env'
+        Just v -> Right v
+  in ([], env, lookup' identifier env)
 interpExp (NumExp n) env= ([], env, Right n)
 interpExp (OpExp e1 op e2) env =
   let res@(log1, env1, errOrV1) = interpExp e1 env in
