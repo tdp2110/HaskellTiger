@@ -1,6 +1,4 @@
 import Data.List
---import Control.Monad
---import Control.Monad.Trans.Writer.Strict
 
 type Id = [Char]
 
@@ -29,44 +27,60 @@ maxargsExp _ = 0
 
 type Binding = (Id, Integer)
 type Env = [Binding]
+data Error = DivByZero | UnboundVar Id Env deriving Show
+data StopState = Ok | Fail Error deriving Show
 
-interpStm :: Env -> Stm -> ([[Char]], Env)
-interpStm env (CompoundStm stm1 stm2) =
-  let (log, env') = interpStm env stm1 in
-    interpStm env' stm2
-interpStm env (AssignStm identifier expr) =
-  let (log, env', maybeVal) = interpExp env expr in
-    case maybeVal of
-      Nothing -> error "couldn't evaluate"
-      Just val -> (log, [(identifier, val)] ++ env')
-interpStm env (PrintStm exprs) =
-  let accum (logAccum, envAccum) expr =
-        let (nextLog, nextEnv, maybeVal) = interpExp envAccum expr in
-          case maybeVal of
-            Nothing -> error "couldn't evaluate in PrintStm"
-            Just v -> (logAccum ++ nextLog ++ [show v], nextEnv)
-  in foldl' accum ([], env) exprs
+interpStm :: Stm -> Env -> ([[Char]], Env, StopState)
+interpStm (CompoundStm stm1 stm2) env =
+  let res@(log1, env1, state1) = interpStm stm1 env in
+    case state1 of
+      Fail _ -> res
+      Ok -> let (log2, env2, state2) = interpStm stm2 env1 in
+              (log1 ++ log2, env2, state2)
+interpStm (AssignStm identifier expr) env =
+  let (log, env', errorOrVal) = interpExp expr env in
+    case errorOrVal of
+      Left error -> (log, env', Fail error)
+      Right val -> (log, [(identifier, val)] ++ env', Ok)
+interpStm (PrintStm exprs) env =
+  let accum res@(logAccum, envAccum, stateAccum) expr =
+        case stateAccum of
+          Fail _ -> res
+          Ok -> let (nextLog, nextEnv, errorOrVal) = interpExp expr envAccum in
+            case errorOrVal of
+              Left error -> (logAccum ++ nextLog, nextEnv, Fail error)
+              Right val -> (logAccum ++ nextLog ++ [show val], nextEnv, Ok)
+  in foldl' accum ([], env, Ok) exprs
 
-interpExp :: Env -> Exp -> ([[Char]], Env, Maybe Integer)
-interpExp env (IdExp identifier) = ([], env, lookup identifier env)
-interpExp env (NumExp n) = ([], env, Just n)
-interpExp env (OpExp e1 op e2) =
-  let (log1, env1, maybeV1) = interpExp env e1 in
-    let (log2, env2, maybeV2) = interpExp env1 e2 in
-      let maybeVal = do
-            v1 <- maybeV1
-            v2 <- maybeV2
-            let res = case op of
-                  Plus -> v1 + v2
-                  Minus -> v1 - v2
-                  Times -> v1 * v2
-                  Div -> div v1  v2 -- let's see if we can deal with div _ 0
-              in return res
-      in (log1 ++ log2, env2 ++ env1, maybeVal)
-interpExp env (EseqExp stm e) =
-  let (log, env') = interpStm env stm in
-    let (log', env'', maybeVal) = interpExp env' e in
-      (log ++ log', env'', maybeVal)
+lookup' :: Id -> Env -> Either Error Integer
+lookup' id env = case lookup id env of
+  Nothing -> Left $ UnboundVar id env
+  Just v -> Right v
+
+interpExp :: Exp -> Env -> ([[Char]], Env, Either Error Integer)
+interpExp (IdExp identifier) env = ([], env, lookup' identifier env)
+interpExp (NumExp n) env= ([], env, Right n)
+interpExp (OpExp e1 op e2) env =
+  let res@(log1, env1, errOrV1) = interpExp e1 env in
+    case errOrV1 of
+      Left _ -> res
+      Right v1 -> let (log2, env2, errOrV2) = interpExp e2 env1 in
+        let errOrResult = do
+            v2 <- errOrV2
+            case op of
+              Plus -> return $ v1 + v2
+              Minus -> return $ v1 - v2
+              Times -> return $ v1 * v2
+              Div -> case v2 of
+                       0 -> Left DivByZero
+                       _ -> return $ div v1 v2
+        in (log1 ++ log2, env2 ++ env1, errOrResult)
+interpExp (EseqExp stm e) env=
+  let (log', env', okOrErr) = interpStm stm env in
+    case okOrErr of
+      Fail err -> (log', env', Left err)
+      Ok -> let (log'', env'', res) = interpExp e env' in
+        (log' ++ log'', env'', res)
 
 prog1 :: Exp
 prog2 :: Stm
@@ -75,7 +89,9 @@ prog2 = CompoundStm (
   AssignStm "a" (OpExp (NumExp 5) Plus (NumExp 3)))
         (PrintStm [IdExp "b"])
 
-(prints, _) = interpStm [] $ CompoundStm (CompoundStm (AssignStm "var" $ NumExp 42) (AssignStm "x" prog1)) (PrintStm [IdExp "var", IdExp "x"])
+res1 = interpStm (CompoundStm (CompoundStm (AssignStm "var" $ NumExp 42) (AssignStm "x" prog1)) (PrintStm [IdExp "var", IdExp "x"])) []
+
+res2 = interpStm (PrintStm [IdExp "var", OpExp (NumExp 1) Div (IdExp "var")]) [("var", 0)]
 
 main::IO()
 main = do
@@ -83,4 +99,5 @@ main = do
   putStrLn $ show prog1
   putStrLn $ show prog2
   putStrLn $ show $ maxargs prog2
-  putStrLn $ show prints
+  putStrLn $ show res1
+  putStrLn $ show res2
