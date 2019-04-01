@@ -30,7 +30,8 @@ type Env = [Binding]
 data Error = DivByZero | UnboundVar Id Env deriving Show
 data StopState = Ok | Fail Error deriving Show
 
-interpStm :: Stm -> Env -> ([[Char]], Env, StopState)
+-- I'm sure this could be cleaned up with some monads
+interpStm :: Stm -> Env -> ([Char], Env, StopState)
 interpStm (CompoundStm stm1 stm2) env =
   let res@(log1, env1, state1) = interpStm stm1 env in
     case state1 of
@@ -48,16 +49,17 @@ interpStm (PrintStm exprs) env =
           Fail _ -> res
           Ok -> let (nextLog, nextEnv, errorOrVal) = interpExp expr envAccum in
             case errorOrVal of
-              Left err -> (logAccum ++ nextLog, nextEnv, Fail err)
-              Right val -> (logAccum ++ nextLog ++ [show val], nextEnv, Ok)
-  in foldl' accum ([], env, Ok) exprs
+              Left err -> (logAccum ++ [nextLog], nextEnv, Fail err)
+              Right val -> (logAccum ++ [nextLog] ++ [show val], nextEnv, Ok)
+  in let (theWords, env', stopState) = foldl' accum ([], env, Ok) exprs
+     in ((unwords $ filter (not . null) theWords) ++ "\n", env', stopState)
 
-interpExp :: Exp -> Env -> ([[Char]], Env, Either Error Integer)
+interpExp :: Exp -> Env -> ([Char], Env, Either Error Integer)
 interpExp (IdExp identifier) env =
   let lookup' identifier' env' = case lookup identifier' env' of
         Nothing -> Left $ UnboundVar identifier' env'
         Just v -> Right v
-  in ([], env, lookup' identifier env)
+  in ("", env, lookup' identifier env)
 interpExp (NumExp n) env= ([], env, Right n)
 interpExp (OpExp e1 op e2) env =
   let res@(log1, env1, errOrV1) = interpExp e1 env in
