@@ -1,3 +1,5 @@
+module Ch1 where
+
 import Data.List
 
 type Id = [Char]
@@ -66,15 +68,14 @@ interpExp (OpExp e1 op e2) env =
     case errOrV1 of
       Left _ -> res
       Right v1 -> let (log2, env2, errOrV2) = interpExp e2 env1 in
-        let errOrResult = do
-            v2 <- errOrV2
-            case op of
-              Plus -> return $ v1 + v2
-              Minus -> return $ v1 - v2
-              Times -> return $ v1 * v2
-              Div -> case v2 of
-                       0 -> Left DivByZero
-                       _ -> return $ div v1 v2
+        let errOrResult = do v2 <- errOrV2
+                             case op of
+                               Plus -> return $ v1 + v2
+                               Minus -> return $ v1 - v2
+                               Times -> return $ v1 * v2
+                               Div -> case v2 of
+                                 0 -> Left DivByZero
+                                 _ -> return $ div v1 v2
         in (log1 ++ log2, env2 ++ env1, errOrResult)
 interpExp (EseqExp stm e) env=
   let (log', env', okOrErr) = interpStm stm env in
@@ -89,16 +90,3 @@ prog1 = OpExp (NumExp 1337) Minus (IdExp "var")
 prog2 = CompoundStm (
   AssignStm "a" (OpExp (NumExp 5) Plus (NumExp 3)))
         (PrintStm [IdExp "b"])
-
-res1 = interpStm (CompoundStm (CompoundStm (AssignStm "var" $ NumExp 42) (AssignStm "x" prog1)) (PrintStm [IdExp "var", IdExp "x"])) []
-
-res2 = interpStm (PrintStm [IdExp "var", OpExp (NumExp 1) Div (IdExp "var")]) [("var", 0)]
-
-main::IO()
-main = do
-  putStrLn "hello world"
-  putStrLn $ show prog1
-  putStrLn $ show prog2
-  putStrLn $ show $ maxargs prog2
-  putStrLn $ show res1
-  putStrLn $ show res2
