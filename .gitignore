@@ -4,3 +4,4 @@ a.out
 *.o
 dist
 dist-newstyle
+.ghc.environment.*
