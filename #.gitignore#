@@ -3,4 +3,4 @@ a.out
 *.hi
 *.o
 dist
-dist-newstyle
+0dist-newstyle

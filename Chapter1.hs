@@ -1,4 +1,4 @@
-module Ch1 where
+module Chapter1 where
 
 import Data.List
 
@@ -29,8 +29,8 @@ maxargsExp _ = 0
 
 type Binding = (Id, Integer)
 type Env = [Binding]
-data Error = DivByZero | UnboundVar Id Env deriving Show
-data StopState = Ok | Fail Error deriving Show
+data Error = DivByZero | UnboundVar Id Env deriving (Eq, Show)
+data StopState = Ok | Fail Error deriving (Eq, Show)
 
 -- I'm sure this could be cleaned up with some monads
 interpStm :: Stm -> Env -> ([Char], Env, StopState)
