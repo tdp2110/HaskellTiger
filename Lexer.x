@@ -4,8 +4,9 @@ module Lexer where
 
 %wrapper "posn"
 
-$digit = 0-9 -- digits
-$alpha = [a-zA-Z] -- alphabetic characters
+$digit = 0-9
+$alpha = [a-zA-Z]
+$eof = \Z
 
 tokens :-
 
@@ -19,6 +20,7 @@ tokens :-
   nil                                     { \s p -> Nil }
   do                                      { \s p -> Do }
   array                                   { \s p -> Array }
+  ":="                                    { \s p -> Assign }
   if                                      { \s p -> If }
   then                                    { \s p -> Then }
   else                                    { \s p -> Else }
@@ -53,6 +55,7 @@ tokens :-
   ";"                                     { \s p -> Semicolon }
   ":"                                     { \s p -> Colon }
   ","                                     { \s p -> Comma }
+  $eof                                    { \s p -> EOF }
 
 {
 -- Each action has type :: String -> Token
@@ -67,6 +70,7 @@ data Token =
     | Nil
     | Do
     | Array
+    | Assign
     | If
     | Then
     | Else
@@ -101,5 +105,6 @@ data Token =
     | Colon
     | Comma
     | Plus
+    | EOF
     deriving (Eq,Show)
 }
