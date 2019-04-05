@@ -43,43 +43,63 @@ tokens :-
   "*"                                     { \s p -> Times }
   "-"                                     { \s p -> Minus }
   "+"                                     { \s p -> Plus }
+  "."                                     { \s p -> Dot }
+  "}"                                     { \s p -> RBrace }
+  "{"                                     { \s p -> LBrace }
+  "]"                                     { \s p -> RBrack }
+  "["                                     { \s p -> LBrack }
+  ")"                                     { \s p -> RParen }
+  "("                                     { \s p -> LParen }
+  ";"                                     { \s p -> Semicolon }
+  ":"                                     { \s p -> Colon }
+  ","                                     { \s p -> Comma }
 
 {
 -- Each action has type :: String -> Token
 
 -- The token type:
 data Token =
-    Type |
-    Var |
-    Function |
-    Break |
-    Of |
-    Nil |
-    Do |
-    Array |
-    If |
-    Then |
-    Else |
-    While |
-    For |
-    To |
-    Let |
-    In |
-    End |
-    Class |
-    Extends |
-    Method |
-    New |
-    Or |
-    And |
-    GE |
-    LE |
-    LT' |
-    NEq |
-    Eq |
-    Divide |
-    Times |
-    Minus |
-    Plus
+      Type
+    | Var
+    | Function
+    | Break
+    | Of
+    | Nil
+    | Do
+    | Array
+    | If
+    | Then
+    | Else
+    | While
+    | For
+    | To
+    | Let
+    | In
+    | End
+    | Class
+    | Extends
+    | Method
+    | New
+    | Or
+    | And
+    | GE
+    | LE
+    | LT'
+    | NEq
+    | Eq
+    | Divide
+    | Times
+    | Minus
+    | Dot
+    | RBrace
+    | LBrace
+    | RBrack
+    | LBrack
+    | RParen
+    | LParen
+    | Semicolon
+    | Colon
+    | Comma
+    | Plus
     deriving (Eq,Show)
 }
