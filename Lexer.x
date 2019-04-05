@@ -28,6 +28,21 @@ tokens :-
   let                                     { \s p -> Let }
   in                                      { \s p -> In }
   end                                     { \s p -> End }
+  class                                   { \s p -> Class }
+  extends                                 { \s p -> Extends }
+  method                                  { \s p -> Method }
+  new                                     { \s p -> New }
+  "|"                                     { \s p -> Or }
+  "&"                                     { \s p -> And }
+  ">="                                    { \s p -> GE }
+  "<="                                    { \s p -> LE }
+  "<"                                     { \s p -> LT' }
+  "<>"                                    { \s p -> NEq }
+  "="                                     { \s p -> Eq }
+  "/"                                     { \s p -> Divide }
+  "*"                                     { \s p -> Times }
+  "-"                                     { \s p -> Minus }
+  "+"                                     { \s p -> Plus }
 
 {
 -- Each action has type :: String -> Token
@@ -50,6 +65,21 @@ data Token =
     To |
     Let |
     In |
-    End
+    End |
+    Class |
+    Extends |
+    Method |
+    New |
+    Or |
+    And |
+    GE |
+    LE |
+    LT' |
+    NEq |
+    Eq |
+    Divide |
+    Times |
+    Minus |
+    Plus
     deriving (Eq,Show)
 }
