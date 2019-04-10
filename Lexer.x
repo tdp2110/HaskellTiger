@@ -57,6 +57,8 @@ state:-
 <0>            "handle"      { mkL HANDLE }
 <0>            "try"         { mkL TRY }
 <0>            "raise"       { mkL RAISE }
+<0>            "import"      { mkL IMPORT }
+<0>            "primitive"   { mkL PRIMITIVE }
 <0>             :\=          { mkL ASSIGN }
 <0>             \|           { mkL OR }
 <0>             &            { mkL AND }
@@ -172,6 +174,8 @@ data LexemeClass =
       | TRY
       | HANDLE
       | RAISE
+      | IMPORT
+      | PRIMITIVE
       deriving (Show, Eq)
 
 mkL :: LexemeClass -> AlexInput -> Int -> Alex Lexeme
