@@ -1,7 +1,11 @@
 module AbSyn where
 
 type Symbol = [Char]
-type Pos = Int
+type Pos = Int--Pos{absChrOffset :: !Int, lineno :: !Int, colno :: !Int}
+  --deriving (Eq, Show)
+
+data Posn = Posn{absChrOffset :: !Int, lineno :: !Int, colno :: !Int}
+  deriving (Eq, Show)
 
 data Var = SimpleVar Symbol Pos
          | FieldVar Var Symbol Pos

@@ -2,59 +2,59 @@
 module Parser where
 
 import Prelude hiding (GT, LT, EQ, init)
-import Lexer hiding (Pos)
-import AbSyn
+import qualified Lexer as L
+import qualified AbSyn as A
 }
 
 %name calc
-%tokentype { Lexeme }
+%tokentype { L.Lexeme }
 %error     { parseError }
 %monad{ Either String }{ >>= }{ return }
 
 %token
-  id        { Lexeme _ (ID $$) _ }
-  int       { Lexeme _ (INT $$) _ }
-  string    { Lexeme _ (STRING $$) _ }
-  ','       { Lexeme _ COMMA _ }
-  ':'       { Lexeme _ COLON _ }
-  ';'       { Lexeme _ SEMICOLON _ }
-  '('       { Lexeme _ LPAREN _ }
-  ')'       { Lexeme _ RPAREN _ }
-  '['       { Lexeme _ LBRACK _ }
-  ']'       { Lexeme _ RBRACK _ }
-  '{'       { Lexeme _ LBRACE _ }
-  '}'       { Lexeme _ RBRACE _ }
-  '.'       { Lexeme _ DOT _ }
-  '+'       { Lexeme _ PLUS _ }
-  '-'       { Lexeme _ MINUS _ }
-  '*'       { Lexeme _ TIMES _ }
-  '/'       { Lexeme _ DIVIDE _ }
-  nil       { Lexeme _ NIL _ }
-  '>='      { Lexeme _ GE _ }
-  '<='      { Lexeme _ LE _ }
-  '='       { Lexeme _ EQ _ }
-  '<>'      { Lexeme _ NEQ _ }
-  '<'       { Lexeme _ LT _ }
-  '>'       { Lexeme _ GT _ }
-  '|'       { Lexeme _ OR _ }
-  '&'       { Lexeme _ AND _ }
-  while     { Lexeme _ WHILE _ }
-  do        { Lexeme _ DO _ }
-  if        { Lexeme _ IF _ }
-  then      { Lexeme _ THEN _ }
-  else      { Lexeme _ ELSE _ }
-  for       { Lexeme _ FOR _ }
-  ':='      { Lexeme _ ASSIGN _ }
-  to        { Lexeme _ DO _ }
-  break     { Lexeme _ BREAK _ }
-  type      { Lexeme _ TYPE _ }
-  var       { Lexeme _ VAR _ }
-  function  { Lexeme _ FUNCTION _ }
-  --primitive { Lexeme _ FUNCTION _ }
-  let       { Lexeme _ LET _ }
-  in        { Lexeme _ IN _ }
-  end       { Lexeme _ END _ }
-  of        { Lexeme _ OF _ }
+  id        { L.Lexeme _ (L.ID $$) _ }
+  int       { L.Lexeme _ (L.INT $$) _ }
+  string    { L.Lexeme _ (L.STRING $$) _ }
+  ','       { L.Lexeme _ L.COMMA _ }
+  ':'       { L.Lexeme _ L.COLON _ }
+  ';'       { L.Lexeme _ L.SEMICOLON _ }
+  '('       { L.Lexeme _ L.LPAREN _ }
+  ')'       { L.Lexeme _ L.RPAREN _ }
+  '['       { L.Lexeme _ L.LBRACK _ }
+  ']'       { L.Lexeme _ L.RBRACK _ }
+  '{'       { L.Lexeme _ L.LBRACE _ }
+  '}'       { L.Lexeme _ L.RBRACE _ }
+  '.'       { L.Lexeme _ L.DOT _ }
+  '+'       { L.Lexeme _ L.PLUS _ }
+  '-'       { L.Lexeme _ L.MINUS _ }
+  '*'       { L.Lexeme _ L.TIMES _ }
+  '/'       { L.Lexeme _ L.DIVIDE _ }
+  nil       { L.Lexeme _ L.NIL _ }
+  '>='      { L.Lexeme _ L.GE _ }
+  '<='      { L.Lexeme _ L.LE _ }
+  '='       { L.Lexeme _ L.EQ _ }
+  '<>'      { L.Lexeme _ L.NEQ _ }
+  '<'       { L.Lexeme _ L.LT _ }
+  '>'       { L.Lexeme _ L.GT _ }
+  '|'       { L.Lexeme _ L.OR _ }
+  '&'       { L.Lexeme _ L.AND _ }
+  while     { L.Lexeme _ L.WHILE _ }
+  do        { L.Lexeme _ L.DO _ }
+  if        { L.Lexeme _ L.IF _ }
+  then      { L.Lexeme _ L.THEN _ }
+  else      { L.Lexeme _ L.ELSE _ }
+  for       { L.Lexeme _ L.FOR _ }
+  ':='      { L.Lexeme _ L.ASSIGN _ }
+  to        { L.Lexeme _ L.DO _ }
+  break     { L.Lexeme _ L.BREAK _ }
+  type      { L.Lexeme _ L.TYPE _ }
+  var       { L.Lexeme _ L.VAR _ }
+  function  { L.Lexeme _ L.FUNCTION _ }
+  --primitive { L.Lexeme _ L.FUNCTION _ }
+  let       { L.Lexeme _ L.LET _ }
+  in        { L.Lexeme _ L.IN _ }
+  end       { L.Lexeme _ L.END _ }
+  of        { L.Lexeme _ L.OF _ }
 
 %right of
 %nonassoc else
@@ -69,62 +69,62 @@ import AbSyn
 
 %%
 
-program :: { Exp }
+program :: { A.Exp }
   : exp { $1 }
 
-exp :: { Exp }
-  : nil                            { NilExp }
-  | int                            { IntExp $1 }
-  | string                         { StringExp $1 }
-  | lvalue                         { VarExp $1 }
-  | typeId '{' recordFields '}'    { RecordExp{fields=$3, typ=$1} }
-  | typeId '[' exp ']' of exp      { ArrayExp{typ=$1, size=$3, init=$6} }
-  | id '(' callArgs ')'            { CallExp{func=$1, args=$3} }
---| lvalue '.' id '(' callArgs ')' { Method ... }
-  | exp '+' exp                    { OpExp $1 PlusOp $3 }
-  | exp '-' exp                    { OpExp $1 MinusOp $3 }
-  | exp '*' exp                    { OpExp $1 TimesOp $3 }
-  | exp '/' exp                    { OpExp $1 DivideOp $3 }
-  | exp '>=' exp                   { OpExp $1 GeOp $3 }
-  | exp '<=' exp                   { OpExp $1 LeOp $3 }
-  | exp '=' exp                    { OpExp $1 EqOp $3 }
-  | exp '<>' exp                   { OpExp $1 NeqOp $3 }
-  | exp '<' exp                    { OpExp $1 LtOp $3 }
-  | exp '>' exp                    { OpExp $1 GtOp $3 }
-  | exp '|' exp                    { IfExp{test=$1, then'=(IntExp 1), else'=(Just $3)} }
-  | exp '&' exp                    { IfExp{test=$1, then'=$3, else'=Just (IntExp 0)} }
-  | '-' exp %prec UMINUS           { OpExp (IntExp 0) MinusOp $2 }
+exp :: { A.Exp }
+  : nil                            { A.NilExp }
+  | int                            { A.IntExp $1 }
+  | string                         { A.StringExp $1 }
+  | lvalue                         { A.VarExp $1 }
+  | typeId '{' recordFields '}'    { A.RecordExp{A.fields=$3, A.typ=$1} }
+  | typeId '[' exp ']' of exp      { A.ArrayExp{A.typ=$1, A.size=$3, A.init=$6} }
+  | id '(' callArgs ')'            { A.CallExp{A.func=$1, A.args=$3} }
+--| lvalue '.' id '(' callArgs ')' { A.Method ... }
+  | exp '+' exp                    { A.OpExp $1 A.PlusOp $3 }
+  | exp '-' exp                    { A.OpExp $1 A.MinusOp $3 }
+  | exp '*' exp                    { A.OpExp $1 A.TimesOp $3 }
+  | exp '/' exp                    { A.OpExp $1 A.DivideOp $3 }
+  | exp '>=' exp                   { A.OpExp $1 A.GeOp $3 }
+  | exp '<=' exp                   { A.OpExp $1 A.LeOp $3 }
+  | exp '=' exp                    { A.OpExp $1 A.EqOp $3 }
+  | exp '<>' exp                   { A.OpExp $1 A.NeqOp $3 }
+  | exp '<' exp                    { A.OpExp $1 A.LtOp $3 }
+  | exp '>' exp                    { A.OpExp $1 A.GtOp $3 }
+  | exp '|' exp                    { A.IfExp{A.test=$1, A.then'=(A.IntExp 1), A.else'=(Just $3)} }
+  | exp '&' exp                    { A.IfExp{A.test=$1, A.then'=$3, A.else'=Just (A.IntExp 0)} }
+  | '-' exp %prec UMINUS           { A.OpExp (A.IntExp 0) A.MinusOp $2}
   | '(' exps ')'                   { $2 }
-  | if exp then exp elseTail       { IfExp{test=$2, then'=$4, else'=$5} }
-  | while exp do exp               { WhileExp{test=$2, body=$4} }
-  | for id ':=' exp to exp do exp  { ForExp{forVar=$2, lo=$4, hi=$6, body=$8} }
-  | break                          { BreakExp{} }
-  | let decs in exps end           { LetExp{decs=$2, body=$4} }
+  | if exp then exp elseTail       { A.IfExp{A.test=$2, A.then'=$4, A.else'=$5} }
+  | while exp do exp               { A.WhileExp{A.test=$2, A.body=$4} }
+  | for id ':=' exp to exp do exp  { A.ForExp{A.forVar=$2, A.lo=$4, A.hi=$6, A.body=$8} }
+  | break                          { A.BreakExp{} }
+  | let decs in exps end           { A.LetExp{A.decs=$2, A.body=$4} }
 
-lvalue :: { Var }
-  : id          { SimpleVar $1 0 }
+lvalue :: { A.Var }
+  : id          { A.SimpleVar $1 0 }
   | lvaluePrime { $1 }
 
-lvaluePrime :: { Var }
-  : lvaluePrime '.' id      { FieldVar $1 $3 0 }
-  | id '.' id               { FieldVar (SimpleVar $1 0) $3 0 }
-  | lvaluePrime '[' exp ']' { SubscriptVar $1 $3 0 }
-  | id '[' exp ']'          { SubscriptVar (SimpleVar $1 0) $3 0 }
+lvaluePrime :: { A.Var }
+  : lvaluePrime '.' id      { A.FieldVar $1 $3 0 }
+  | id '.' id               { A.FieldVar (A.SimpleVar $1 0) $3 0 }
+  | lvaluePrime '[' exp ']' { A.SubscriptVar $1 $3 0 }
+  | id '[' exp ']'          { A.SubscriptVar (A.SimpleVar $1 0) $3 0 }
 
-recordFields :: { [(Symbol, Exp, Pos)] }
+recordFields :: { [(A.Symbol, A.Exp, A.Pos)] }
   : id '=' exp recordFieldsTail { ($1, $3, 0) : $4 }
   | {- empty -}                 { [] }
 
-recordFieldsTail :: { [(Symbol, Exp, Pos)] }
+recordFieldsTail :: { [(A.Symbol, A.Exp, A.Pos)] }
   : ',' id '=' exp recordFieldsTail { ($2, $4, 0) : $5 }
   | {- empty -}                     { [] }
 
-decs :: { [Dec] }
+decs :: { [A.Dec] }
   : dec decs { $1 : $2 }
   | {- empty -} { [] }
 
-dec :: { Dec }
-  : type id '=' ty                          { TypeDec{name=$2, ty=$4} }
+dec :: { A.Dec }
+  : type id '=' ty                          { A.TypeDec{A.name=$2, A.ty=$4} }
 --| class id [ extends type-id ]            { classfields }
   | vardec                                  { $1 }
   | function id '(' tyFields ')' optTypeId  { funDec $2 $4 $6 }
@@ -141,60 +141,64 @@ dec :: { Dec }
         | method id ( tyfields ) [ : type-id ] = exp
 -}
 
-vardec :: { Dec }
-  : var id optTypeId ':=' exp { VarDec{name=$2, varDecTyp=$3, decInit=$5} }
+vardec :: { A.Dec }
+  : var id optTypeId ':=' exp { A.VarDec{A.name=$2, A.varDecTyp=$3, A.decInit=$5} }
 
-optTypeId :: { Maybe (Symbol, Pos) }
+optTypeId :: { Maybe (A.Symbol, A.Pos) }
   : ':' typeId  { Just ($2, 0) }
   | {- empty -} { Nothing }
 
-ty :: { Ty }
-  : typeId           { NameTy ($1, 0) }
-  | '{' tyFields '}' { RecordTy $2 }
+ty :: { A.Ty }
+  : typeId           { A.NameTy ($1, 0) }
+  | '{' tyFields '}' { A.RecordTy $2 }
 
-tyFields :: { [Field] }
+tyFields :: { [A.Field] }
   : id ':' typeId tyFieldTail { field $1 $3 : $4 }
   | {- empty -}               { [] }
 
-tyFieldTail :: { [Field] }
+tyFieldTail :: { [A.Field] }
   : ',' id ':' typeId tyFieldTail { field $2 $4 : $5 }
   | {- empty -}                   { [] }
 
-typeId :: { Symbol }
+typeId :: { A.Symbol }
   : id { $1 }
 
-exps :: { Exp }
+exps :: { A.Exp }
   : exp expsTail { seqConcat $1 $2 }
-  | {- empty -}  { SeqExp [] }
+  | {- empty -}  { A.SeqExp [] }
 
-expsTail :: { Exp }
+expsTail :: { A.Exp }
   : ';' exp expsTail { seqConcat $2 $3 }
-  | {- empty -}      { SeqExp [] }
+  | {- empty -}      { A.SeqExp [] }
 
-elseTail :: { Maybe Exp }
+elseTail :: { Maybe A.Exp }
   : else exp    { Just $2 }
   | {- empty -} { Nothing }
 
-callArgs :: { [Exp] }
+callArgs :: { [A.Exp] }
   : exp callArgs { $1 : $2 }
   | {- empty -}  { [] }
 
 {
-seqConcat :: Exp -> Exp -> Exp
-seqConcat exp (SeqExp (exp':exps)) = SeqExp ((exp, 0):(exp':exps))
-seqConcat exp (SeqExp []) = SeqExp [(exp, 0)]
+seqConcat :: A.Exp -> A.Exp -> A.Exp
+seqConcat exp (A.SeqExp (exp':exps)) = A.SeqExp ((exp, 0):(exp':exps))
+seqConcat exp (A.SeqExp []) = A.SeqExp [(exp, 0)]
 
-field :: Symbol -> Symbol -> Field
-field fieldName' fieldTyp' = Field{fieldName=fieldName', fieldTyp=fieldTyp'}
+field :: A.Symbol -> A.Symbol -> A.Field
+field fieldName' fieldTyp' = A.Field{A.fieldName=fieldName', A.fieldTyp=fieldTyp'}
 
-funDec :: Symbol -> [Field] -> Maybe(Symbol, Pos) -> Dec
-funDec name fields maybeTy = FunctionDec [FunDec{fundecName=name, params=fields, result=maybeTy}]
+funDec :: A.Symbol -> [A.Field] -> Maybe(A.Symbol, A.Pos) -> A.Dec
+funDec name fields maybeTy = A.FunctionDec [A.FunDec{A.fundecName=name, A.params=fields, A.result=maybeTy}]
 
-parseError :: [Lexeme] -> a
+parseError :: [L.Lexeme] -> a
 parseError [] = error "Parse Error at EOF"
 parseError (x:xs) = error ("Parse Error at token " ++ show x)
 
-parse :: String -> Either String Exp
-parse input = scanner input >>= calc
+posn :: L.Lexeme -> A.Posn
+posn l = case L.tokPosn l of
+           L.AlexPn a b c -> A.Posn{A.absChrOffset=a, A.lineno=b, A.colno=c}
+
+parse :: String -> Either String A.Exp
+parse input = L.scanner input >>= calc
 
 }

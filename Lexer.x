@@ -3,12 +3,7 @@
 
 {
 {-# OPTIONS -w -funbox-strict-fields #-}
-module Lexer ( lexer, Lexeme (..), LexemeClass (..), tokPosn
-                  , Pos, Alex, getCollNameToIdent, getParserCurrentToken, setCollNameToIdent
-                  , getParserPos, setParserPos
-                  , alexError, runAlex, runAlexTable, alexGetInput, showPosn
-                  , line_number, scanner
-                  ) where
+module Lexer where
 
 import Prelude hiding ( GT, LT, EQ )
 import System.Console.GetOpt ( OptDescr(..), ArgOrder(..), getOpt, usageInfo )
