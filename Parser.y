@@ -77,8 +77,8 @@ exp :: { A.Exp }
   | int                            { A.IntExp $1 }
   | string                         { A.StringExp $1 }
   | lvalue                         { A.VarExp $1 }
-  | typeId '{' recordFields '}'    { recordExp $3 $1 }
-  | typeId '[' exp ']' of exp      { arrayExp $1 $3 $6 }
+  | id '{' recordFields '}'        { recordExp $3 $1 }
+  | id '[' exp ']' of exp          { arrayExp $1 $3 $6 }
   | id '(' callArgs ')'            { callExp $1 $3 $4 }
 --| lvalue '.' id '(' callArgs ')' { A.Method ... }
   | exp '+' exp                    { opExp $1 A.PlusOp $3 $2 }
@@ -143,23 +143,23 @@ vardec :: { A.Dec }
                                          A.decPos=(posn $1)} }
 
 optTypeId :: { Maybe (A.Symbol, A.Pos) }
-  : ':' typeId  { Just $2 }
+  : ':' id  { Just (identifier $2, posn $2) }
   | {- empty -} { Nothing }
 
 ty :: { A.Ty }
-  : typeId           { A.NameTy $1 }
+  : id           { A.NameTy (identifier $1, posn $1) }
   | '{' tyFields '}' { A.RecordTy $2 }
 
 tyFields :: { [A.Field] }
-  : id ':' typeId tyFieldTail { field (identifier $1) $3 $2 : $4 }
-  | {- empty -}               { [] }
+  : id ':' id tyFieldTail { field (identifier $1) $3 : $4 }
+  | {- empty -}           { [] }
 
 tyFieldTail :: { [A.Field] }
-  : ',' id ':' typeId tyFieldTail { field (identifier $2) $4 $3 : $5 }
-  | {- empty -}                   { [] }
+  : ',' id ':' id tyFieldTail { field (identifier $2) $4 : $5 }
+  | {- empty -}               { [] }
 
 elseTail :: { Maybe A.Exp }
-  : else exp    { Just $2 }
+  : else exp { Just $2 }
   | %prec do { Nothing }
 
 exps :: { Maybe (A.Exp, [(A.Exp, A.Pos)]) }
@@ -191,13 +191,10 @@ lvalue :: { A.Var }
   | lvaluePrime { $1 }
 
 lvaluePrime :: { A.Var }
-  : lvaluePrime '.' id      { fieldVar $1 $3 }
-  | id '.' id               { fieldVar (simpleVar $1) $3 }
-  | lvaluePrime '[' exp ']' { subscriptVar $1 $3 $4 }
+  : id '.' id               { fieldVar (simpleVar $1) $3 }
+  | lvaluePrime '.' id      { fieldVar $1 $3 }
   | id '[' exp ']'          { subscriptVar (simpleVar $1) $3 $4 }
-
-typeId :: { (A.Symbol, A.Pos) }
-  : id { (identifier $1, posn $1) }
+  | lvaluePrime '[' exp ']' { subscriptVar $1 $3 $4 }
 
 {
 mkSeq :: Maybe (A.Exp, [(A.Exp, A.Pos)]) -> L.Lexeme -> A.Exp
@@ -225,11 +222,11 @@ callExp func args l = A.CallExp{A.func=(identifier func),
                                 A.args=args,
                                 A.pos=(posn l)}
 
-arrayExp :: (A.Symbol, A.Pos) -> A.Exp -> A.Exp -> A.Exp
-arrayExp (typ, pos) size init = A.ArrayExp{A.typ=typ,
-                                           A.size=size,
-                                           A.init=init,
-                                           A.pos=pos}
+arrayExp :: L.Lexeme -> A.Exp -> A.Exp -> A.Exp
+arrayExp l size init = A.ArrayExp{A.typ=(identifier l),
+                                  A.size=size,
+                                  A.init=init,
+                                  A.pos=(posn l)}
 
 identifier :: L.Lexeme -> A.Symbol
 identifier (L.Lexeme _ (L.ID id) _) = id
@@ -237,18 +234,18 @@ identifier (L.Lexeme _ (L.ID id) _) = id
 recordField :: L.Lexeme -> A.Exp -> L.Lexeme -> (A.Symbol, A.Exp, A.Pos)
 recordField id e l = (identifier id, e, posn l)
 
-recordExp :: [(A.Symbol, A.Exp, A.Pos)] -> (A.Symbol, A.Pos) -> A.Exp
-recordExp fields (typ, pos) = A.RecordExp{A.fields=fields,
-                                          A.typ=typ,
-                                          A.pos=pos}
+recordExp :: [(A.Symbol, A.Exp, A.Pos)] -> L.Lexeme -> A.Exp
+recordExp fields l = A.RecordExp{A.fields=fields,
+                                 A.typ=(identifier l),
+                                 A.pos=(posn l)}
 
 simpleVar :: L.Lexeme -> A.Var
 simpleVar l = A.SimpleVar (identifier l) (posn l)
 
-field :: A.Symbol -> (A.Symbol, A.Pos) -> L.Lexeme -> A.Field
-field name (typ, pos) l = A.Field{A.fieldName=name,
-                           A.fieldTyp=typ,
-                           A.fieldPos=pos}
+field :: A.Symbol -> L.Lexeme -> A.Field
+field name l = A.Field{A.fieldName=name,
+                       A.fieldTyp=(identifier l),
+                       A.fieldPos=(posn l)}
 
 fieldVar :: A.Var -> L.Lexeme -> A.Var
 fieldVar var l = A.FieldVar var (identifier l) (posn l)
