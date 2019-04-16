@@ -108,7 +108,7 @@ exp :: { A.Exp }
                                               A.body=$8,
                                               A.pos=(posn $1)} }
   | break                          { A.BreakExp (posn $1) }
-  | let decs in exps end           { A.LetExp{A.decs=$2,
+  | let decs in exps end           { A.LetExp{A.decs=(mergeAdjacent $2),
                                               A.body=(mkSeq $4 $3),
                                               A.pos=(posn $1)} }
 
@@ -197,6 +197,12 @@ lvaluePrime :: { A.Var }
   | lvaluePrime '[' exp ']' { subscriptVar $1 $3 $4 }
 
 {
+mergeAdjacent :: [A.Dec] -> [A.Dec]
+mergeAdjacent declist = fst $ merge ([], []) declist where
+    merge (mergedSoFar, funDecs) (A.FunctionDec(funDecs2) : decls) = merge (mergedSoFar, funDecs ++ funDecs2) decls
+    merge (mergedSoFar, funDecs) (decl : decls) = merge (mergedSoFar ++ [A.FunctionDec funDecs] ++ [decl], []) decls
+    merge (mergedSoFar, funDecs) [] = (mergedSoFar ++ [A.FunctionDec funDecs], [])
+
 mkSeq :: Maybe (A.Exp, [(A.Exp, A.Pos)]) -> L.Lexeme -> A.Exp
 mkSeq m l = case m of
               Just (e, es) -> A.SeqExp $ (e, posn l) : es
