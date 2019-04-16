@@ -103,6 +103,7 @@ exp :: { A.Exp }
                                                 A.body=$4,
                                                 A.pos=(posn $1)} }
   | for id ':=' exp to exp do exp  { A.ForExp{A.forVar=(identifier $2),
+                                              A.escape=True,
                                               A.lo=$4,
                                               A.hi=$6,
                                               A.body=$8,
@@ -136,6 +137,7 @@ dec :: { A.Dec }
 
 vardec :: { A.Dec }
   : var id optTypeId ':=' exp { A.VarDec{A.name=(identifier $2),
+                                         A.vardecEscape=True,
                                          A.varDecTyp=$3,
                                          A.decInit=$5,
                                          A.decPos=(posn $1)} }
@@ -257,6 +259,7 @@ simpleVar l = A.SimpleVar (identifier l) (posn l)
 
 field :: A.Symbol -> L.Lexeme -> A.Field
 field name l = A.Field{A.fieldName=name,
+                       A.fieldEscape=True,
                        A.fieldTyp=(identifier l),
                        A.fieldPos=(posn l)}
 
