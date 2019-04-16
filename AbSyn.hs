@@ -58,9 +58,7 @@ data Dec = FunctionDec [FunDec]
                    varDecTyp :: Maybe (Symbol, Pos),
                    decInit :: Exp,
                    decPos :: Pos}
-         | TypeDec {name :: Symbol,
-                    ty :: Ty,
-                    decPos :: Pos }
+         | TypeDec [TyDec]
          deriving (Eq, Show)
 
 data Ty = NameTy (Symbol, Pos)
@@ -83,4 +81,9 @@ data FunDec = FunDec {fundecName :: Symbol,
                       result :: Maybe (Symbol, Pos),
                       fieldBody :: Exp,
                       fundecPos :: Pos}
+            deriving (Eq, Show)
+
+data TyDec = TyDec {tydecName :: Symbol,
+                    ty :: Ty,
+                    tydecPos :: Pos }
             deriving (Eq, Show)

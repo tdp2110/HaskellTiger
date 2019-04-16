@@ -117,9 +117,7 @@ decs :: { [A.Dec] }
   | {- empty -} { [] }
 
 dec :: { A.Dec }
-  : type id '=' ty                          { A.TypeDec{A.name=(identifier $2),
-                                              A.ty=$4,
-                                              A.decPos=(posn $1)} }
+  : type id '=' ty                          { typeDec $1 $2 $4 }
 --| class id [ extends type-id ]            { classfields }
   | vardec                                  { $1 }
   | function id '(' tyFields ')' optTypeId  { funDec (identifier $2) $4 $6 }
@@ -198,10 +196,19 @@ lvaluePrime :: { A.Var }
 
 {
 mergeAdjacent :: [A.Dec] -> [A.Dec]
-mergeAdjacent declist = fst $ merge ([], []) declist where
+mergeAdjacent decls = mergeAdjacentFuncs $ mergeAdjacentTys decls
+
+mergeAdjacentFuncs :: [A.Dec] -> [A.Dec]
+mergeAdjacentFuncs declist = fst $ merge ([], []) declist where
     merge (mergedSoFar, funDecs) (A.FunctionDec(funDecs2) : decls) = merge (mergedSoFar, funDecs ++ funDecs2) decls
     merge (mergedSoFar, funDecs) (decl : decls) = merge (mergedSoFar ++ [A.FunctionDec funDecs] ++ [decl], []) decls
     merge (mergedSoFar, funDecs) [] = (mergedSoFar ++ [A.FunctionDec funDecs], [])
+
+mergeAdjacentTys :: [A.Dec] -> [A.Dec]
+mergeAdjacentTys declist = fst $ merge ([], []) declist where
+    merge (mergedSoFar, tydecs) (A.TypeDec(tydecs2) : decls) = merge (mergedSoFar, tydecs ++ tydecs2) decls
+    merge (mergedSoFar, tydecs) (decl : decls) = merge (mergedSoFar ++ [A.TypeDec tydecs] ++ [decl], []) decls
+    merge (mergedSoFar, tydecs) [] = (mergedSoFar ++ [A.TypeDec tydecs], [])
 
 mkSeq :: Maybe (A.Exp, [(A.Exp, A.Pos)]) -> L.Lexeme -> A.Exp
 mkSeq m l = case m of
@@ -255,6 +262,11 @@ field name l = A.Field{A.fieldName=name,
 
 fieldVar :: A.Var -> L.Lexeme -> A.Var
 fieldVar var l = A.FieldVar var (identifier l) (posn l)
+
+typeDec :: L.Lexeme -> L.Lexeme -> A.Ty -> A.Dec
+typeDec l1 l2 t = A.TypeDec [A.TyDec {A.tydecName=(identifier l2),
+                                      A.ty=t,
+                                      A.tydecPos=(posn l1)}]
 
 funDec :: A.Symbol -> [A.Field] -> Maybe(A.Symbol, A.Pos) -> A.Dec
 funDec name fields maybeTy = A.FunctionDec [A.FunDec{A.fundecName=name,
