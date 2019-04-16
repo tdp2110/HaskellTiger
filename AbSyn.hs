@@ -79,8 +79,8 @@ data Field = Field {fieldName :: Symbol,
 data FunDec = FunDec {fundecName :: Symbol,
                       params :: [Field],
                       result :: Maybe (Symbol, Pos),
-                      fieldBody :: Exp,
-                      fundecPos :: Pos}
+                      funBody :: Exp,
+                      funPos :: Pos}
             deriving (Eq, Show)
 
 data TyDec = TyDec {tydecName :: Symbol,

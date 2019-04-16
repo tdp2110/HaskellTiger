@@ -45,7 +45,7 @@ import qualified AbSyn as A
   else      { L.Lexeme _ L.ELSE _ }
   for       { L.Lexeme _ L.FOR _ }
   ':='      { L.Lexeme _ L.ASSIGN _ }
-  to        { L.Lexeme _ L.DO _ }
+  to        { L.Lexeme _ L.TO _ }
   break     { L.Lexeme _ L.BREAK _ }
   type      { L.Lexeme _ L.TYPE _ }
   var       { L.Lexeme _ L.VAR _ }
@@ -55,6 +55,7 @@ import qualified AbSyn as A
   in        { L.Lexeme _ L.IN _ }
   end       { L.Lexeme _ L.END _ }
   of        { L.Lexeme _ L.OF _ }
+  array     { L.Lexeme _ L.ARRAY _ }
 
 %right of
 %nonassoc do
@@ -95,6 +96,9 @@ exp :: { A.Exp }
   | exp '&' exp                    { andExp $1 $3 $2 }
   | '-' exp %prec UMINUS           { opExp (A.IntExp 0) A.MinusOp $2 $1 }
   | '(' exps ')'                   { mkSeq $2 $1 }
+  | lvalue ':=' exp                { A.AssignExp{A.var=$1,
+                                                 A.exp=$3,
+                                                 A.pos=(posn $2)} }
   | if exp then exp elseTail       { A.IfExp{A.test=$2,
                                              A.then'=$4,
                                              A.else'=$5,
@@ -118,10 +122,10 @@ decs :: { [A.Dec] }
   | {- empty -} { [] }
 
 dec :: { A.Dec }
-  : type id '=' ty                          { typeDec $1 $2 $4 }
---| class id [ extends type-id ]            { classfields }
-  | vardec                                  { $1 }
-  | function id '(' tyFields ')' optTypeId  { funDec (identifier $2) $4 $6 }
+  : type id '=' ty                                  { typeDec $1 $2 $4 }
+--| class id [ extends type-id ]                    { classfields }
+  | vardec                                          { $1 }
+  | function id '(' tyFields ')' optTypeId '=' exp  { funDec (posn $1) (identifier $2) $4 $6 $8 }
 --| primitive id ( tyfields ) [ : type-id ]
 --| import string
 
@@ -147,8 +151,9 @@ optTypeId :: { Maybe (A.Symbol, A.Pos) }
   | {- empty -} { Nothing }
 
 ty :: { A.Ty }
-  : id           { A.NameTy (identifier $1, posn $1) }
+  : id               { A.NameTy (identifier $1, posn $1) }
   | '{' tyFields '}' { A.RecordTy $2 }
+  | array of id      { A.ArrayTy (identifier $3, posn $1) }
 
 tyFields :: { [A.Field] }
   : id ':' id tyFieldTail { field (identifier $1) $3 : $4 }
@@ -271,10 +276,12 @@ typeDec l1 l2 t = A.TypeDec [A.TyDec {A.tydecName=(identifier l2),
                                       A.ty=t,
                                       A.tydecPos=(posn l1)}]
 
-funDec :: A.Symbol -> [A.Field] -> Maybe(A.Symbol, A.Pos) -> A.Dec
-funDec name fields maybeTy = A.FunctionDec [A.FunDec{A.fundecName=name,
+funDec :: A.Pos -> A.Symbol -> [A.Field] -> Maybe(A.Symbol, A.Pos) -> A.Exp -> A.Dec
+funDec pos name fields maybeTy exp = A.FunctionDec [A.FunDec{A.fundecName=name,
                                                      A.params=fields,
-                                                     A.result=maybeTy}]
+                                                     A.result=maybeTy,
+                                                     A.funBody=exp,
+                                                     A.funPos=pos}]
 
 subscriptVar :: A.Var -> A.Exp -> L.Lexeme -> A.Var
 subscriptVar v e l = A.SubscriptVar v e (posn l)
