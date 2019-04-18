@@ -9,7 +9,7 @@ import qualified AbSyn as A
 %name calc
 %tokentype { L.Lexeme }
 %error     { parseError }
-%monad{ Either String }{ >>= }{ return }
+--%monad{ Either String }{ >>= }{ return }
 
 %token
   id        { L.Lexeme _ (L.ID _) _ }
@@ -295,6 +295,8 @@ posn l = case L.tokPosn l of
            L.AlexPn a b c -> A.Pos{A.absChrOffset=a, A.lineno=b, A.colno=c}
 
 parse :: String -> Either String A.Exp
-parse input = L.scanner input >>= calc
+parse input = case L.scanner input of
+    Left err -> Left err
+    Right lexemes -> Right $ calc lexemes
 
 }

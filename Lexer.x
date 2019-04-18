@@ -1,4 +1,5 @@
 -- Modified very slightly from Simon Marlow's implementation:
+
 -- https://github.com/simonmar/alex/master/examples/tiger.x
 
 {
@@ -351,7 +352,7 @@ scanner str = let loop = do (t, m) <- alexComplementError alexMonadScan
                                then do f1 <- getLexerStringState
                                        d2 <- getLexerCommentDepth
                                        if ((not f1) && (d2 == 0))
-                                          then return [tok]
+                                          then return []
                                           else if (f1)
                                                then alexError "String not closed at end of file"
                                                else alexError "Comment not closed at end of file"
