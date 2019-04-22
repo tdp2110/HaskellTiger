@@ -51,8 +51,6 @@ state:-
 <0>            "array"       { mkL ARRAY }
 <0>            "exception"   { mkL EXCEPTION }
 <0>            "handle"      { mkL HANDLE }
-<0>            "try"         { mkL TRY }
-<0>            "raise"       { mkL RAISE }
 <0>            "import"      { mkL IMPORT }
 <0>            "primitive"   { mkL PRIMITIVE }
 <0>             :\=          { mkL ASSIGN }
