@@ -1,6 +1,7 @@
 {
 module Parser where
 
+import Data.List
 import Prelude hiding (GT, LT, EQ, init)
 import qualified Lexer as L
 import qualified AbSyn as A
@@ -206,16 +207,16 @@ mergeAdjacent :: [A.Dec] -> [A.Dec]
 mergeAdjacent decls = mergeAdjacentFuncs $ mergeAdjacentTys decls
 
 mergeAdjacentFuncs :: [A.Dec] -> [A.Dec]
-mergeAdjacentFuncs declist = fst $ merge ([], []) declist where
-    merge (mergedSoFar, funDecs) (A.FunctionDec(funDecs2) : decls) = merge (mergedSoFar, funDecs ++ funDecs2) decls
-    merge (mergedSoFar, funDecs) (decl : decls) = merge (mergedSoFar ++ [A.FunctionDec funDecs] ++ [decl], []) decls
-    merge (mergedSoFar, funDecs) [] = (mergedSoFar ++ [A.FunctionDec funDecs], [])
+mergeAdjacentFuncs declist = let (mergedSoFar, funDecs) = foldl' step ([], []) declist in
+                                   mergedSoFar ++ [A.FunctionDec funDecs] where
+    step (mergedSoFar, funDecs) (A.FunctionDec(funDecs2)) = (mergedSoFar, funDecs ++ funDecs2)
+    step (mergedSoFar, funDecs) decl = (mergedSoFar ++ [A.FunctionDec funDecs] ++ [decl], [])
 
 mergeAdjacentTys :: [A.Dec] -> [A.Dec]
-mergeAdjacentTys declist = fst $ merge ([], []) declist where
-    merge (mergedSoFar, tydecs) (A.TypeDec(tydecs2) : decls) = merge (mergedSoFar, tydecs ++ tydecs2) decls
-    merge (mergedSoFar, tydecs) (decl : decls) = merge (mergedSoFar ++ [A.TypeDec tydecs] ++ [decl], []) decls
-    merge (mergedSoFar, tydecs) [] = (mergedSoFar ++ [A.TypeDec tydecs], [])
+mergeAdjacentTys declist = let (mergedSoFar, tydecs) = foldl' step ([], []) declist in
+                               mergedSoFar ++ [A.TypeDec tydecs] where
+    step (mergedSoFar, tydecs) (A.TypeDec(tydecs2)) = (mergedSoFar, tydecs ++ tydecs2)
+    step (mergedSoFar, tydecs) decl = (mergedSoFar ++ [A.TypeDec tydecs] ++ [decl], [])
 
 mkSeq :: Maybe (A.Exp, [(A.Exp, A.Pos)]) -> L.Lexeme -> A.Exp
 mkSeq m l = case m of
