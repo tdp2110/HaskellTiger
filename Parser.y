@@ -206,6 +206,8 @@ lvaluePrime :: { A.Var }
 mergeAdjacent :: [A.Dec] -> [A.Dec]
 mergeAdjacent decls = mergeAdjacentFuncs $ mergeAdjacentTys decls
 
+-- I wonder if we can DRY up the following two functions with some
+-- first class patterns ... lenses perhaps?
 mergeAdjacentFuncs :: [A.Dec] -> [A.Dec]
 mergeAdjacentFuncs declist = let (mergedSoFar, funDecs) = foldl' step ([], []) declist in
                                    mergedSoFar ++ [A.FunctionDec funDecs] where
