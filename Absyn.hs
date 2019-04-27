@@ -1,4 +1,4 @@
-module AbSyn where
+module Absyn where
 
 type Symbol = [Char]
 data Pos = Pos {absChrOffset :: !Int,

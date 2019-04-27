@@ -1,6 +1,6 @@
 module Semant where
 
-import qualified AbSyn as A
+import qualified Absyn as A
 import Env
 import Symbol
 import Translate

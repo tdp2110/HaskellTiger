@@ -4,7 +4,7 @@ module Parser where
 import Data.List
 import Prelude hiding (GT, LT, EQ, init)
 import qualified Lexer as L
-import qualified AbSyn as A
+import qualified Absyn as A
 }
 
 %name calc
