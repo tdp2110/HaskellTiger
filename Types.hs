@@ -11,3 +11,4 @@ data Ty = INT
   | NIL
   | UNIT
   | Name (Symbol, Maybe Ty)
+  deriving (Eq, Show)
