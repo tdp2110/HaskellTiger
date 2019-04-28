@@ -29,7 +29,8 @@ isArith _ = False
 
 checkInt :: Types.Ty -> Maybe String-> Either String Translate.Exp
 checkInt Types.INT _ = Right $ Translate.Exp ()
-checkInt nonIntTy maybeCtx = Left $ (convertCtx maybeCtx) ++ "expected type Ty.INT, but found " ++ show nonIntTy
+checkInt nonIntTy maybeCtx = Left $ (convertCtx maybeCtx) ++
+                             "expected type Ty.INT, but found " ++ show nonIntTy
   where
     convertCtx Nothing = ""
     convertCtx (Just str) = str ++ ", "
@@ -38,8 +39,33 @@ transVar venv _ (A.SimpleVar sym pos) =
   case Data.Map.lookup sym venv of
     Just enventry -> case enventry of
                        Env.VarEntry{Env.ty=t} -> Right ExpTy{exp=Translate.Exp(), ty=t}
-                       _ -> Left $ SemantError $ "variable " ++ (show sym) ++ " at " ++ (show pos) ++ " has no non-function bindings."
-    Nothing -> Left $ SemantError $ "unbound free variable: " ++ (show sym) ++ " at " ++ (show pos)
+                       _ -> Left $ SemantError $ "variable " ++
+                         (show sym) ++ " at " ++ (show pos) ++ " has no non-function bindings."
+    Nothing -> Left $ SemantError $ "unbound free variable: " ++
+               (show sym) ++ " at " ++ (show pos)
+transVar venv tenv (A.FieldVar var sym pos) = do
+  ExpTy{exp=_, ty=varTy} <- transVar venv tenv var
+  case varTy of
+    r@(Types.RECORD(sym2ty, _)) -> case lookup sym sym2ty of
+                                 Just t -> return ExpTy{exp=Translate.Exp(), ty=t}
+                                 Nothing -> Left $ SemantError $ "in field expr at" ++
+                                            (show pos) ++ ", record type " ++
+                                            (show r) ++ " has no " ++ (show sym) ++
+                                            " field"
+    t@(_) -> Left $ SemantError $ "in field expr at " ++
+      (show pos) ++ ", only record types have fields. type=" ++ (show t)
+transVar venv tenv (A.SubscriptVar var expr pos) = do
+  ExpTy{exp=_, ty=varTy} <- transVar venv tenv var
+  case varTy of
+    Types.ARRAY(varEltTy, _) -> do
+      ExpTy{exp=_, ty=expTy} <- transExp venv tenv expr
+      case expTy of
+        Types.INT -> return ExpTy{exp=Translate.Exp(), ty=varEltTy}
+        nonIntTy@(_) -> Left $ SemantError $ "in subscript expr at " ++
+          (show pos) ++ ", subscript type is not an INT, is an " ++ (show nonIntTy)
+    nonArrayTy@(_) -> Left $ SemantError $ "in subscript expr at " ++
+      (show pos) ++ ", only arrays may be subscripted -- attempting to subscript type=" ++
+      (show nonArrayTy)
 
 transExp venv tenv (A.VarExp var) = transVar venv tenv var
 transExp _ _ (A.IntExp _) = Right ExpTy{exp=Translate.Exp(), ty=Types.INT}

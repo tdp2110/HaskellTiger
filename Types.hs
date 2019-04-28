@@ -10,5 +10,5 @@ data Ty = INT
   | ARRAY (Ty, TypeId)
   | NIL
   | UNIT
-  | Name (Symbol, Maybe Ty)
+  | NAME (Symbol, Maybe Ty)
   deriving (Eq, Show)
