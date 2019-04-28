@@ -37,10 +37,9 @@ checkInt nonIntTy maybeCtx = Left $ (convertCtx maybeCtx) ++
 
 transVar venv _ (A.SimpleVar sym pos) =
   case Data.Map.lookup sym venv of
-    Just enventry -> case enventry of
-                       Env.VarEntry{Env.ty=t} -> Right ExpTy{exp=Translate.Exp(), ty=t}
-                       _ -> Left $ SemantError $ "variable " ++
-                         (show sym) ++ " at " ++ (show pos) ++ " has no non-function bindings."
+    Just Env.VarEntry{Env.ty=t} -> Right ExpTy{exp=Translate.Exp(), ty=t}
+    Just (Env.FunEntry _ _) -> Left $ SemantError $ "variable " ++
+                               (show sym) ++ " at " ++ (show pos) ++ " has no non-function bindings."
     Nothing -> Left $ SemantError $ "unbound free variable: " ++
                (show sym) ++ " at " ++ (show pos)
 transVar venv tenv (A.FieldVar var sym pos) = do
@@ -68,8 +67,14 @@ transVar venv tenv (A.SubscriptVar var expr pos) = do
       (show nonArrayTy)
 
 transExp venv tenv (A.VarExp var) = transVar venv tenv var
+transExp _ _ A.NilExp = Right ExpTy{exp=Translate.Exp(), ty=Types.NIL}
 transExp _ _ (A.IntExp _) = Right ExpTy{exp=Translate.Exp(), ty=Types.INT}
 transExp _ _ (A.StringExp _) = Right ExpTy{exp=Translate.Exp(), ty=Types.STRING}
+transExp venv tenv (A.CallExp funcSym argExps pos) =
+  case Data.Map.lookup funcSym venv of
+    Just (Env.VarEntry t) -> undefined
+    Just (Env.FunEntry paramTys resultTy) -> undefined
+    Nothing -> undefined
 transExp venv tenv A.OpExp{A.left=leftExp,
                            A.oper=op,
                            A.right=rightExp,
