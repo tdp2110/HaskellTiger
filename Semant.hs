@@ -27,6 +27,14 @@ isArith A.TimesOp = True
 isArith A.DivideOp = True
 isArith _ = False
 
+isCmp :: A.Oper -> Bool
+isCmp A.EqOp = True
+isCmp A.NeqOp = True
+isCmp A.LtOp = True
+isCmp A.GtOp = True
+isCmp A.GeOp = True
+isCmp _ = False
+
 checkInt :: Types.Ty -> Maybe String-> Either String Translate.Exp
 checkInt Types.INT _ = Right $ Translate.Exp ()
 checkInt nonIntTy maybeCtx = Left $ (convertCtx maybeCtx) ++
@@ -117,7 +125,25 @@ transExp venv tenv A.OpExp{A.left=leftExp,
             what="In OpExp, " ++ err,
             at=pos}
           Right _ -> return ExpTy{exp=Translate.Exp(), ty=Types.INT}
-      else undefined
+      else if isCmp op then
+             let cmpReturn = return ExpTy{exp=Translate.Exp(), ty=Types.INT} in
+               case (tyleft, tyright) of
+                 (Types.INT, Types.INT) -> cmpReturn
+                 (Types.STRING, Types.STRING) -> cmpReturn
+                 (r1@(Types.RECORD _), r2@(Types.RECORD _)) ->
+                   if r1 == r2 then cmpReturn
+                   else Left SemantError{
+                     what="only identical record types may be compared",
+                     at=pos}
+                 (arr1@(Types.ARRAY _), arr2@(Types.ARRAY _)) ->
+                   if arr1 == arr2 then cmpReturn
+                   else Left SemantError{
+                     what="only identical array types may be compared",
+                     at=pos}
+                 _ -> Left SemantError{
+                   what="incomparable types " ++ (show tyleft) ++ " and " ++ (show tyright),
+at=pos}
+             else undefined
 transExp _ _ e = error $ "unimplemented transExp " ++ show e
 
 transDec = undefined
