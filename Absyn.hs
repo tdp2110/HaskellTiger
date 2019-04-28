@@ -1,6 +1,7 @@
 module Absyn where
 
-type Symbol = [Char]
+import Symbol
+
 data Pos = Pos {absChrOffset :: !Int,
                 lineno :: !Int,
                 colno :: !Int}

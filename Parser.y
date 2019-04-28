@@ -5,6 +5,7 @@ import Data.List
 import Prelude hiding (GT, LT, EQ, init)
 import qualified Lexer as L
 import qualified Absyn as A
+import Symbol
 }
 
 %name calc
@@ -147,7 +148,7 @@ vardec :: { A.Dec }
                                          A.decInit=$5,
                                          A.decPos=(posn $1)} }
 
-optTypeId :: { Maybe (A.Symbol, A.Pos) }
+optTypeId :: { Maybe (Symbol, A.Pos) }
   : ':' id  { Just (identifier $2, posn $2) }
   | {- empty -} { Nothing }
 
@@ -184,11 +185,11 @@ callArgsTail :: { [A.Exp] }
   : ',' exp callArgsTail { $2 : $3 }
   | {- empty -}  { [] }
 
-recordFields :: { [(A.Symbol, A.Exp, A.Pos)] }
+recordFields :: { [(Symbol, A.Exp, A.Pos)] }
   : id '=' exp recordFieldsTail { (recordField $1 $3 $2) : $4 }
   | {- empty -}                 { [] }
 
-recordFieldsTail :: { [(A.Symbol, A.Exp, A.Pos)] }
+recordFieldsTail :: { [(Symbol, A.Exp, A.Pos)] }
   : ',' id '=' exp recordFieldsTail { (recordField $2 $4 $3) : $5 }
   | {- empty -}                     { [] }
 
@@ -251,13 +252,13 @@ arrayExp l size init = A.ArrayExp{A.typ=(identifier l),
                                   A.init=init,
                                   A.pos=(posn l)}
 
-identifier :: L.Lexeme -> A.Symbol
-identifier (L.Lexeme _ (L.ID id) _) = id
+identifier :: L.Lexeme -> Symbol
+identifier (L.Lexeme _ (L.ID id) _) = Symbol id
 
-recordField :: L.Lexeme -> A.Exp -> L.Lexeme -> (A.Symbol, A.Exp, A.Pos)
+recordField :: L.Lexeme -> A.Exp -> L.Lexeme -> (Symbol, A.Exp, A.Pos)
 recordField id e l = (identifier id, e, posn l)
 
-recordExp :: [(A.Symbol, A.Exp, A.Pos)] -> L.Lexeme -> A.Exp
+recordExp :: [(Symbol, A.Exp, A.Pos)] -> L.Lexeme -> A.Exp
 recordExp fields l = A.RecordExp{A.fields=fields,
                                  A.typ=(identifier l),
                                  A.pos=(posn l)}
@@ -265,7 +266,7 @@ recordExp fields l = A.RecordExp{A.fields=fields,
 simpleVar :: L.Lexeme -> A.Var
 simpleVar l = A.SimpleVar (identifier l) (posn l)
 
-field :: A.Symbol -> L.Lexeme -> A.Field
+field :: Symbol -> L.Lexeme -> A.Field
 field name l = A.Field{A.fieldName=name,
                        A.fieldEscape=True,
                        A.fieldTyp=(identifier l),
@@ -279,7 +280,7 @@ typeDec l1 l2 t = A.TypeDec [A.TyDec {A.tydecName=(identifier l2),
                                       A.ty=t,
                                       A.tydecPos=(posn l1)}]
 
-funDec :: A.Pos -> A.Symbol -> [A.Field] -> Maybe(A.Symbol, A.Pos) -> A.Exp -> A.Dec
+funDec :: A.Pos -> Symbol -> [A.Field] -> Maybe(Symbol, A.Pos) -> A.Exp -> A.Dec
 funDec pos name fields maybeTy exp = A.FunctionDec [A.FunDec{A.fundecName=name,
                                                      A.params=fields,
                                                      A.result=maybeTy,

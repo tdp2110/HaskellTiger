@@ -9,7 +9,7 @@ import Test.HUnit
 import System.Exit
 
 
-parseToSema :: Semant.VEnv -> Semant.TEnv -> String -> Either Semant.SemantError Semant.ExpTy
+parseToSema :: Env.VEnv -> Env.TEnv -> String -> Either Semant.SemantError Semant.ExpTy
 parseToSema venv tenv text = let (Right ast) = Parser.parse text in
                      Semant.transExp venv tenv ast
 
@@ -51,13 +51,13 @@ strLiteral = TestCase (
     assertEqual "str literal" Types.STRING ty
   )
 
-strPlusInt :: Test
-strPlusInt = TestCase (
+strPlusIntIsErr :: Test
+strPlusIntIsErr = TestCase (
   let
     text = "\"hello world\" + 2"
-    (Left (Semant.SemantError _)) = parseToSema Env.baseVEnv Env.baseTEnv text
+    (Left (Semant.SemantError err)) = parseToSema Env.baseVEnv Env.baseTEnv text
  in do
-    assertEqual "str literal" True True
+    assertBool "can't add strings and ints" $ length err > 0
   )
 
 tests :: Test
@@ -65,7 +65,7 @@ tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "int arith 1" intArith1,
                   TestLabel "int arith 2" intArith2,
                   TestLabel "str literal" strLiteral,
-                  TestLabel "str plus int" strPlusInt]
+                  TestLabel "str plus int" strPlusIntIsErr]
 
 main :: IO Counts
 main = do

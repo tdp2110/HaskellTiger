@@ -6,14 +6,18 @@ import Symbol
 import Data.Map (Map)
 import qualified Data.Map as Map
 
-data EnvEntry = VarEntry{ty :: Ty}
+data EnvEntry =
+    VarEntry{ty :: Ty}
   | FunEntry{formals :: [Ty], result :: Ty}
 
-baseTEnv :: Map Symbol Ty
+type VEnv = Map Symbol Env.EnvEntry
+type TEnv = Map Symbol Types.Ty
+
+baseTEnv :: TEnv
 baseTEnv = Map.fromList [(Symbol "string", STRING),
                          (Symbol "int", INT)]
 
-baseVEnv :: Map Symbol EnvEntry
+baseVEnv :: VEnv
 baseVEnv = Map.fromList [
   (Symbol "print", FunEntry{formals=[STRING], result=UNIT}),
   (Symbol "flush", FunEntry{formals=[], result=UNIT}),

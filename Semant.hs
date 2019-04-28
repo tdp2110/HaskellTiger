@@ -2,25 +2,23 @@ module Semant where
 
 import qualified Absyn as A
 import qualified Env as Env
-import Symbol
 import qualified Translate as Translate
 import qualified Types as Types
 
+import qualified Data.Map
 import Prelude hiding (exp)
-import Data.Map (Map)
+
 
 newtype SemantError = SemantError String
 instance Show SemantError where
   show (SemantError err) = "semantic issue: " ++ err
 
-type VEnv = Map Symbol Env.EnvEntry
-type TEnv = Map Symbol Types.Ty
 data ExpTy = ExpTy{exp :: Translate.Exp, ty :: Types.Ty }
 
-transVar :: VEnv -> TEnv -> A.Var -> Either SemantError ExpTy
-transExp :: VEnv -> TEnv -> A.Exp -> Either SemantError ExpTy
-transDec :: VEnv -> TEnv -> A.Dec -> Either SemantError (VEnv, TEnv)
-transTy :: TEnv -> A.Ty -> Either SemantError Types.Ty
+transVar :: Env.VEnv -> Env.TEnv -> A.Var -> Either SemantError ExpTy
+transExp :: Env.VEnv -> Env.TEnv -> A.Exp -> Either SemantError ExpTy
+transDec :: Env.VEnv -> Env.TEnv -> A.Dec -> Either SemantError (Env.VEnv, Env.TEnv)
+transTy :: Env.TEnv -> A.Ty -> Either SemantError Types.Ty
 
 isArith :: A.Oper -> Bool
 isArith A.PlusOp = True
@@ -36,7 +34,12 @@ checkInt nonIntTy maybeCtx = Left $ (convertCtx maybeCtx) ++ "expected type Ty.I
     convertCtx Nothing = ""
     convertCtx (Just str) = str ++ ", "
 
-transVar = undefined
+transVar venv _ (A.SimpleVar sym pos) =
+  case Data.Map.lookup sym venv of
+    Just enventry -> case enventry of
+                       Env.VarEntry{Env.ty=t} -> Right ExpTy{exp=Translate.Exp(), ty=t}
+                       _ -> Left $ SemantError $ "variable " ++ (show sym) ++ " at " ++ (show pos) ++ " has no non-function bindings."
+    Nothing -> Left $ SemantError $ "unbound free variable: " ++ (show sym) ++ " at " ++ (show pos)
 
 transExp venv tenv (A.VarExp var) = transVar venv tenv var
 transExp _ _ (A.IntExp _) = Right ExpTy{exp=Translate.Exp(), ty=Types.INT}
