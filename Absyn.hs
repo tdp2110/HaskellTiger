@@ -5,7 +5,10 @@ import Symbol
 data Pos = Pos {absChrOffset :: !Int,
                 lineno :: !Int,
                 colno :: !Int}
-  deriving (Eq, Show)
+  deriving (Eq)
+
+instance Show Pos where
+  show (Pos _ lineNo colNo) = "line " ++ (show lineNo) ++ ", col " ++ (show colNo)
 
 data Var = SimpleVar Symbol Pos
          | FieldVar Var Symbol Pos

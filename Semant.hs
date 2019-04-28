@@ -9,9 +9,9 @@ import qualified Data.Map
 import Prelude hiding (exp)
 
 
-newtype SemantError = SemantError String
+data SemantError = SemantError{what :: String, at :: A.Pos} deriving (Eq)
 instance Show SemantError where
-  show (SemantError err) = "semantic issue: " ++ err
+  show (SemantError err pos) = "semantic issue at " ++ (show pos) ++ ": " ++ (show err)
 
 data ExpTy = ExpTy{exp :: Translate.Exp, ty :: Types.Ty }
 
@@ -38,21 +38,24 @@ checkInt nonIntTy maybeCtx = Left $ (convertCtx maybeCtx) ++
 transVar venv _ (A.SimpleVar sym pos) =
   case Data.Map.lookup sym venv of
     Just Env.VarEntry{Env.ty=t} -> Right ExpTy{exp=Translate.Exp(), ty=t}
-    Just (Env.FunEntry _ _) -> Left $ SemantError $ "variable " ++
-                               (show sym) ++ " at " ++ (show pos) ++ " has no non-function bindings."
-    Nothing -> Left $ SemantError $ "unbound free variable: " ++
-               (show sym) ++ " at " ++ (show pos)
+    Just (Env.FunEntry _ _) -> Left $ SemantError{
+      what="variable " ++ (show sym) ++ " has no non-function bindings.",
+      at=pos}
+    Nothing -> Left $ SemantError{
+      what="unbound free variable: " ++ (show sym),
+      at=pos}
 transVar venv tenv (A.FieldVar var sym pos) = do
   ExpTy{exp=_, ty=varTy} <- transVar venv tenv var
   case varTy of
     r@(Types.RECORD(sym2ty, _)) -> case lookup sym sym2ty of
                                  Just t -> return ExpTy{exp=Translate.Exp(), ty=t}
-                                 Nothing -> Left $ SemantError $ "in field expr at" ++
-                                            (show pos) ++ ", record type " ++
-                                            (show r) ++ " has no " ++ (show sym) ++
-                                            " field"
-    t@(_) -> Left $ SemantError $ "in field expr at " ++
-      (show pos) ++ ", only record types have fields. type=" ++ (show t)
+                                 Nothing -> Left $ SemantError{
+                                   what="in field expr, record type " ++
+                                        (show r) ++ " has no " ++ (show sym) ++ " field",
+                                   at=pos}
+    t@(_) -> Left $ SemantError{
+      what="in field expr, only record types have fields. type=" ++ (show t),
+      at=pos}
 transVar venv tenv (A.SubscriptVar var expr pos) = do
   ExpTy{exp=_, ty=varTy} <- transVar venv tenv var
   case varTy of
@@ -60,11 +63,13 @@ transVar venv tenv (A.SubscriptVar var expr pos) = do
       ExpTy{exp=_, ty=expTy} <- transExp venv tenv expr
       case expTy of
         Types.INT -> return ExpTy{exp=Translate.Exp(), ty=varEltTy}
-        nonIntTy@(_) -> Left $ SemantError $ "in subscript expr at " ++
-          (show pos) ++ ", subscript type is not an INT, is an " ++ (show nonIntTy)
-    nonArrayTy@(_) -> Left $ SemantError $ "in subscript expr at " ++
-      (show pos) ++ ", only arrays may be subscripted -- attempting to subscript type=" ++
-      (show nonArrayTy)
+        nonIntTy@(_) -> Left $ SemantError{
+          what="in subscript expr, subscript type is not an INT, is an " ++ (show nonIntTy),
+          at=pos}
+    nonArrayTy@(_) -> Left $ SemantError{
+      what="in subscript expr, only arrays may be subscripted -- attempting to subscript type=" ++
+           (show nonArrayTy),
+      at=pos}
 
 transExp venv tenv (A.VarExp var) = transVar venv tenv var
 transExp _ _ A.NilExp = Right ExpTy{exp=Translate.Exp(), ty=Types.NIL}
@@ -87,7 +92,9 @@ transExp venv tenv A.OpExp{A.left=leftExp,
                   checkInt tyleft (Just "in left hand operand")
                   checkInt tyright (Just "in right hand operand") in
         case maybeError of
-          Left err -> Left $ SemantError $ "In OpExp at " ++ show pos ++ ": " ++ err
+          Left err -> Left $ SemantError{
+            what="In OpExp, " ++ err,
+            at=pos}
           Right _ -> return ExpTy{exp=Translate.Exp(), ty=Types.INT}
       else undefined
 transExp _ _ e = error $ "unimplemented transExp " ++ show e

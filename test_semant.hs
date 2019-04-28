@@ -7,6 +7,7 @@ import qualified Env
 
 import Test.HUnit
 import System.Exit
+import Data.Either
 
 
 parseToSema :: Env.VEnv -> Env.TEnv -> String -> Either Semant.SemantError Semant.ExpTy
@@ -55,9 +56,9 @@ strPlusIntIsErr :: Test
 strPlusIntIsErr = TestCase (
   let
     text = "\"hello world\" + 2"
-    (Left (Semant.SemantError err)) = parseToSema Env.baseVEnv Env.baseTEnv text
- in do
-    assertBool "can't add strings and ints" $ length err > 0
+    semaResult = parseToSema Env.baseVEnv Env.baseTEnv text
+  in do
+    assertBool "can't add strings and ints" $ isLeft semaResult
   )
 
 tests :: Test
