@@ -8,13 +8,12 @@ import qualified Env
 import Test.HUnit
 import System.Exit
 import Data.Either
+import Data.List
 
 
 parseToSema :: Env.VEnv -> Env.TEnv -> String -> Either Semant.SemantError Semant.ExpTy
 parseToSema venv tenv text = let (Right ast) = Parser.parse text in
                      Semant.transExp venv tenv ast
-
-
 
 intLiteral :: Test
 intLiteral = TestCase (
@@ -61,12 +60,43 @@ strPlusIntIsErr = TestCase (
     assertBool "can't add strings and ints" $ isLeft semaResult
   )
 
+substringCall1 :: Test
+substringCall1 = TestCase (
+  let
+    text = "substring(\"hello world\", 0, 1)"
+    (Right (Semant.ExpTy _ ty)) = parseToSema Env.baseVEnv Env.baseTEnv text
+  in do
+    assertEqual "substring returns string" Types.STRING ty
+  )
+
+substringCall2 :: Test
+substringCall2 = TestCase (
+  let
+    text = "substring(\"hello world\", nil, 1337)"
+    (Left(Semant.SemantError err _)) = parseToSema Env.baseVEnv Env.baseTEnv text
+  in do
+    assertBool "wrongly typed param" $ isInfixOf "parameter 1" err
+  )
+
+substringCall3 :: Test
+substringCall3 = TestCase (
+  let
+    text = "substring(\"hello world\", 42, 1337, nil)"
+    (Left(Semant.SemantError err _)) = parseToSema Env.baseVEnv Env.baseTEnv text
+  in do
+    assertBool "wrong number of arguments" $ isInfixOf "expects 2 parameters but was passed 3" err
+  )
+
 tests :: Test
 tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "int arith 1" intArith1,
                   TestLabel "int arith 2" intArith2,
                   TestLabel "str literal" strLiteral,
-                  TestLabel "str plus int" strPlusIntIsErr]
+                  TestLabel "str plus int" strPlusIntIsErr,
+                  TestLabel "substring1" substringCall1,
+                  TestLabel "substring2" substringCall2,
+                  TestLabel "substring3" substringCall2
+                 ]
 
 main :: IO Counts
 main = do

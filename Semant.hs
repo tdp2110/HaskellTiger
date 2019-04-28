@@ -38,10 +38,10 @@ checkInt nonIntTy maybeCtx = Left $ (convertCtx maybeCtx) ++
 transVar venv _ (A.SimpleVar sym pos) =
   case Data.Map.lookup sym venv of
     Just Env.VarEntry{Env.ty=t} -> Right ExpTy{exp=Translate.Exp(), ty=t}
-    Just (Env.FunEntry _ _) -> Left $ SemantError{
+    Just (Env.FunEntry _ _) -> Left SemantError{
       what="variable " ++ (show sym) ++ " has no non-function bindings.",
       at=pos}
-    Nothing -> Left $ SemantError{
+    Nothing -> Left SemantError{
       what="unbound free variable: " ++ (show sym),
       at=pos}
 transVar venv tenv (A.FieldVar var sym pos) = do
@@ -49,11 +49,11 @@ transVar venv tenv (A.FieldVar var sym pos) = do
   case varTy of
     r@(Types.RECORD(sym2ty, _)) -> case lookup sym sym2ty of
                                  Just t -> return ExpTy{exp=Translate.Exp(), ty=t}
-                                 Nothing -> Left $ SemantError{
+                                 Nothing -> Left SemantError{
                                    what="in field expr, record type " ++
                                         (show r) ++ " has no " ++ (show sym) ++ " field",
                                    at=pos}
-    t@(_) -> Left $ SemantError{
+    t@(_) -> Left SemantError{
       what="in field expr, only record types have fields. type=" ++ (show t),
       at=pos}
 transVar venv tenv (A.SubscriptVar var expr pos) = do
@@ -63,10 +63,10 @@ transVar venv tenv (A.SubscriptVar var expr pos) = do
       ExpTy{exp=_, ty=expTy} <- transExp venv tenv expr
       case expTy of
         Types.INT -> return ExpTy{exp=Translate.Exp(), ty=varEltTy}
-        nonIntTy@(_) -> Left $ SemantError{
+        nonIntTy@(_) -> Left SemantError{
           what="in subscript expr, subscript type is not an INT, is an " ++ (show nonIntTy),
           at=pos}
-    nonArrayTy@(_) -> Left $ SemantError{
+    nonArrayTy@(_) -> Left SemantError{
       what="in subscript expr, only arrays may be subscripted -- attempting to subscript type=" ++
            (show nonArrayTy),
       at=pos}
@@ -77,9 +77,30 @@ transExp _ _ (A.IntExp _) = Right ExpTy{exp=Translate.Exp(), ty=Types.INT}
 transExp _ _ (A.StringExp _) = Right ExpTy{exp=Translate.Exp(), ty=Types.STRING}
 transExp venv tenv (A.CallExp funcSym argExps pos) =
   case Data.Map.lookup funcSym venv of
-    Just (Env.VarEntry t) -> undefined
-    Just (Env.FunEntry paramTys resultTy) -> undefined
-    Nothing -> undefined
+    Just (Env.FunEntry formalsTys resultTy) ->
+      case sequence $ map (transExp venv tenv) argExps of
+        Left err -> Left err
+        Right paramExpTys ->
+          let paramTys = map ty paramExpTys in
+            if (length formalsTys) /= (length paramTys) then
+              Left SemantError{what="function " ++ (show funcSym) ++
+                                        " expects " ++ (show $ length formalsTys) ++
+                                        " parameters but was passed " ++ (show $ length paramTys),
+                                   at=pos}
+              else case filter (\(ty1, ty2, _) -> ty1 /= ty2)
+                        (zip3 formalsTys paramTys [0 :: Integer ..]) of
+                     [] -> Right ExpTy{exp=Translate.Exp(), ty=resultTy}
+                     ((formalTy, paramTy, ix):_) -> Left SemantError{
+                       what="parameter " ++ (show ix) ++ " of func " ++ (show funcSym) ++
+                            " requires type " ++ (show formalTy) ++ " but was passed a value of type " ++
+                            (show paramTy),
+                       at=pos}
+    Just (Env.VarEntry t) -> Left SemantError{
+      what="only functions are callable -- found type " ++ (show t),
+      at=pos}
+    Nothing -> Left SemantError{
+      what="unbound free variable " ++ (show funcSym),
+      at=pos}
 transExp venv tenv A.OpExp{A.left=leftExp,
                            A.oper=op,
                            A.right=rightExp,
@@ -92,7 +113,7 @@ transExp venv tenv A.OpExp{A.left=leftExp,
                   checkInt tyleft (Just "in left hand operand")
                   checkInt tyright (Just "in right hand operand") in
         case maybeError of
-          Left err -> Left $ SemantError{
+          Left err -> Left SemantError{
             what="In OpExp, " ++ err,
             at=pos}
           Right _ -> return ExpTy{exp=Translate.Exp(), ty=Types.INT}
