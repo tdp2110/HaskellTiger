@@ -6,6 +6,8 @@ import qualified Translate as Translate
 import qualified Types as Types
 
 import qualified Data.Map
+import Data.Either
+import Data.List
 import Prelude hiding (exp)
 
 
@@ -144,6 +146,46 @@ transExp venv tenv A.OpExp{A.left=leftExp,
                    what="incomparable types " ++ (show tyleft) ++ " and " ++ (show tyright),
 at=pos}
              else undefined
+
+transExp venv tenv A.RecordExp{A.fields=fieldSymExpPosns,
+                               A.typ=typSym,
+                               A.pos=pos} =
+  case Data.Map.lookup typSym tenv of
+    Nothing -> Left SemantError{
+      what="unbound free type variable " ++ (show typSym),
+      at=pos}
+    Just maybeRecordTy ->
+      case maybeRecordTy of
+        recordTy@(Types.RECORD(sym2ty, _)) ->
+          let
+            expectedSyms = map fst sym2ty
+            actualSyms = map (\(sym,_,_) -> sym) fieldSymExpPosns
+          in
+            if actualSyms /= expectedSyms then
+              Left SemantError{what="incompatible field names: expected " ++
+                                (show expectedSyms) ++ " but record expression has " ++
+                                (show actualSyms),
+                               at=pos}
+            else
+              case sequence $ map (\(_,expr,_) -> transExp venv tenv expr) fieldSymExpPosns of
+                Left err -> Left err
+                Right actualFieldExpTys ->
+                  let
+                    expectedFieldTys = map snd sym2ty
+                    actualFieldTys = map ty actualFieldExpTys
+                    fieldPosns = map (\(_,_,fieldPos) -> fieldPos) fieldSymExpPosns
+                  in
+                    case filter (\(_,expectedTy,actualTy,_) -> expectedTy == actualTy)
+                         (zip4 expectedSyms expectedFieldTys actualFieldTys fieldPosns) of
+                      [] -> Right ExpTy{exp=Translate.Exp(), ty=recordTy}
+                      ((sym,expectedTy,actualTy,fieldPos):_) ->
+                        Left SemantError{what="in record exp, field " ++ (show sym) ++
+                                              " should have type " ++ (show expectedTy) ++
+                                              " but has type " ++ (show actualTy),
+                                         at=fieldPos}
+        _ -> Left SemantError{
+          what="only record types may appear as the symbol in a record instance declaration",
+          at=pos}
 transExp _ _ e = error $ "unimplemented transExp " ++ show e
 
 transDec = undefined
