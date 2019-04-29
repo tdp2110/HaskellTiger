@@ -203,7 +203,34 @@ transExp venv tenv A.AssignExp{A.var=var, A.exp=expr, A.pos=pos} =
       else Left SemantError{what="in assignExp, variable has type " ++ (show varTy) ++
                                  " but assign target has type " ++ (show exprTy),
                             at=pos}
-
+transExp venv tenv A.IfExp{A.test=testExpr,
+                           A.then'=thenExpr,
+                           A.else'=maybeElseExpr,
+                           A.pos=pos} =
+  let transexp = transExp venv tenv in
+    do
+      testExpTy <- transexp testExpr
+      thenExpTy <- transexp thenExpr
+      let maybeElseExpTy = fmap transexp maybeElseExpr in
+        if (ty testExpTy) /= Types.INT then
+          Left SemantError{what="in ifExp, test expressions must be integral: " ++
+                           "found type=" ++ (show $ ty testExpTy),
+                           at=pos}
+          else case maybeElseExpTy of
+                 Nothing -> return thenExpTy
+                 Just elseExpTyEither -> do
+                   elseExpTy <- elseExpTyEither
+                   let
+                     thenTy = ty thenExpTy
+                     elseTy = ty elseExpTy
+                     in
+                     if thenTy /= elseTy then
+                       Left SemantError{what="in ifExp, thenExp and elseExp must have " ++
+                                             "the same type: found " ++ (show thenTy) ++
+                                             " and " ++ (show elseTy) ++
+                                             ", respectfully",
+                                        at=pos}
+                     else return ExpTy{exp=emptyExp, ty=thenTy}
 transExp _ _ e = error $ "unimplemented transExp " ++ show e
 
 transDec = undefined
