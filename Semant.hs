@@ -130,25 +130,26 @@ transExp venv tenv A.OpExp{A.left=leftExp,
             what="In OpExp, " ++ err,
             at=pos}
           Right _ -> return ExpTy{exp=emptyExp, ty=Types.INT}
-      else if isCmp op then
-             let cmpReturn = return ExpTy{exp=emptyExp, ty=Types.INT} in
-               case (tyleft, tyright) of
-                 (Types.INT, Types.INT) -> cmpReturn
-                 (Types.STRING, Types.STRING) -> cmpReturn
-                 (r1@(Types.RECORD _), r2@(Types.RECORD _)) ->
-                   if r1 == r2 then cmpReturn
-                   else Left SemantError{
-                     what="only identical record types may be compared",
-                     at=pos}
-                 (arr1@(Types.ARRAY _), arr2@(Types.ARRAY _)) ->
-                   if arr1 == arr2 then cmpReturn
-                   else Left SemantError{
-                     what="only identical array types may be compared",
-                     at=pos}
-                 _ -> Left SemantError{
-                   what="incomparable types " ++ (show tyleft) ++ " and " ++ (show tyright),
+      else
+      if isCmp op then
+        let cmpReturn = return ExpTy{exp=emptyExp, ty=Types.INT} in
+          case (tyleft, tyright) of
+            (Types.INT, Types.INT) -> cmpReturn
+            (Types.STRING, Types.STRING) -> cmpReturn
+            (r1@(Types.RECORD _), r2@(Types.RECORD _)) ->
+              if r1 == r2 then cmpReturn
+              else Left SemantError{
+                what="only identical record types may be compared",
+                at=pos}
+            (arr1@(Types.ARRAY _), arr2@(Types.ARRAY _)) ->
+              if arr1 == arr2 then cmpReturn
+              else Left SemantError{
+                what="only identical array types may be compared",
+                at=pos}
+            _ -> Left SemantError{
+              what="incomparable types " ++ (show tyleft) ++ " and " ++ (show tyright),
 at=pos}
-             else undefined
+        else undefined
 
 transExp venv tenv A.RecordExp{A.fields=fieldSymExpPosns,
                                A.typ=typSym,
@@ -186,8 +187,9 @@ transExp venv tenv A.RecordExp{A.fields=fieldSymExpPosns,
                                               " should have type " ++ (show expectedTy) ++
                                               " but has type " ++ (show actualTy),
                                          at=fieldPos}
-        _ -> Left SemantError{
-          what="only record types may appear as the symbol in a record instance declaration",
+        t@(_) -> Left SemantError{
+          what="only record types may appear as the symbol in a record instance " ++
+               "definition. Found type=" ++ (show t),
           at=pos}
 transExp venv tenv (A.SeqExp(expAndPosns)) =
   case sequence $ map (\(expr,_) -> transExp venv tenv expr) expAndPosns of
@@ -236,14 +238,41 @@ transExp venv tenv A.WhileExp{A.test=testExp,
                               A.pos=pos} =
   let transexp = transExp venv tenv in
     do
-      testExpTy <- transexp testExp
+      ExpTy{exp=_, ty=testTy} <- transexp testExp
       _ <- transexp bodyExp
-      let testTy = ty testExpTy in
-        if testTy /= Types.INT then
-          Left SemantError{what="in whileExp, the test expression must be integral: " ++
-                                "found type=" ++ (show testTy),
-                           at=pos}
-          else return ExpTy{exp=emptyExp, ty=Types.UNIT}
+      if testTy /= Types.INT then
+        Left SemantError{what="in whileExp, the test expression must be integral: " ++
+                              "found type=" ++ (show testTy),
+                         at=pos}
+        else return ExpTy{exp=emptyExp, ty=Types.UNIT}
+transExp venv tenv A.ArrayExp{A.typ=arrayTySym,
+                              A.size=sizeExp,
+                              A.init=initExp,
+                              A.pos=pos} =
+  case Data.Map.lookup arrayTySym tenv of
+    Nothing -> Left SemantError{
+      what="unbound free type variable " ++ (show arrayTySym),
+      at=pos}
+    Just maybeArrayTy ->
+      case maybeArrayTy of
+        arrayTy@(Types.ARRAY(arrayEltTy,_)) -> do
+          ExpTy{exp=_, ty=sizeTy} <- transExp venv tenv sizeExp
+          ExpTy{exp=_, ty=initTy} <- transExp venv tenv initExp
+          if sizeTy /= Types.INT then
+            Left SemantError{what="in ArrayExp, sizeExp must be an integer. " ++
+                                  "Found type=" ++ (show sizeTy),
+                             at=pos}
+            else
+            if initTy /= arrayEltTy then
+              Left SemantError{what="in ArrayExp, initExp has actual type " ++
+                                    (show initTy) ++ ", when it must have " ++
+                                    (show arrayEltTy),
+                               at=pos}
+              else return ExpTy{exp=emptyExp, ty=arrayTy}
+        t@(_) -> Left SemantError{
+          what="only array types may appear as the symbol in an array instance " ++
+               "definition. Found type=" ++ (show t),
+          at=pos}
 transExp _ _ e = error $ "unimplemented transExp " ++ show e
 
 transDec = undefined
