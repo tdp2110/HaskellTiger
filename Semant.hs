@@ -194,6 +194,16 @@ transExp venv tenv (A.SeqExp(expAndPosns)) =
     Left err -> Left err
     Right [] -> Right ExpTy{exp=emptyExp, ty=Types.UNIT}
     Right expTys -> Right $ last expTys
+transExp venv tenv A.AssignExp{A.var=var, A.exp=expr, A.pos=pos} =
+  do
+    ExpTy{exp=_, ty=varTy} <- transVar venv tenv var
+    ExpTy{exp=_, ty=exprTy} <- transExp venv tenv expr
+    if varTy == exprTy then
+      return ExpTy{exp=emptyExp, ty=Types.UNIT}
+      else Left SemantError{what="in assignExp, variable has type " ++ (show varTy) ++
+                                 " but assign target has type " ++ (show exprTy),
+                            at=pos}
+
 transExp _ _ e = error $ "unimplemented transExp " ++ show e
 
 transDec = undefined
