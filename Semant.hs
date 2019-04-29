@@ -213,7 +213,7 @@ transExp venv tenv A.IfExp{A.test=testExpr,
       thenExpTy <- transexp thenExpr
       let maybeElseExpTy = fmap transexp maybeElseExpr in
         if (ty testExpTy) /= Types.INT then
-          Left SemantError{what="in ifExp, test expressions must be integral: " ++
+          Left SemantError{what="in ifExp, the test expression must be integral: " ++
                            "found type=" ++ (show $ ty testExpTy),
                            at=pos}
           else case maybeElseExpTy of
@@ -231,6 +231,19 @@ transExp venv tenv A.IfExp{A.test=testExpr,
                                              ", respectfully",
                                         at=pos}
                      else return ExpTy{exp=emptyExp, ty=thenTy}
+transExp venv tenv A.WhileExp{A.test=testExp,
+                              A.body=bodyExp,
+                              A.pos=pos} =
+  let transexp = transExp venv tenv in
+    do
+      testExpTy <- transexp testExp
+      _ <- transexp bodyExp
+      let testTy = ty testExpTy in
+        if testTy /= Types.INT then
+          Left SemantError{what="in whileExp, the test expression must be integral: " ++
+                                "found type=" ++ (show testTy),
+                           at=pos}
+          else return ExpTy{exp=emptyExp, ty=Types.UNIT}
 transExp _ _ e = error $ "unimplemented transExp " ++ show e
 
 transDec = undefined
