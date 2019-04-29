@@ -42,6 +42,15 @@ intArith2 = TestCase (
     assertEqual "int arith 2" Types.INT ty
   )
 
+intArith3 :: Test
+intArith3 = TestCase (
+  let
+    text = "(1 + 2 - (3 / (4 - 5) - 6 *(7 + 8)))"
+    (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema Env.baseVEnv Env.baseTEnv text
+ in do
+    assertEqual "int arith 3" Types.INT ty
+  )
+
 strLiteral :: Test
 strLiteral = TestCase (
   let
@@ -87,15 +96,26 @@ substringCall3 = TestCase (
     assertBool "wrong number of arguments" $ isInfixOf "expects 2 parameters but was passed 3" err
   )
 
+intUncallable :: Test
+intUncallable = TestCase (
+  let
+    text = "let var x := 2 in x(3) end"
+    (Left(Semant.SemantError err _)) = parseToSema Env.baseVEnv Env.baseTEnv text
+  in do
+    assertEqual "integers are not callable" "omg" err
+  )
+
 tests :: Test
 tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "int arith 1" intArith1,
                   TestLabel "int arith 2" intArith2,
+                  TestLabel "int arith 3" intArith3,
                   TestLabel "str literal" strLiteral,
                   TestLabel "str plus int" strPlusIntIsErr,
                   TestLabel "substring1" substringCall1,
                   TestLabel "substring2" substringCall2,
-                  TestLabel "substring3" substringCall2
+                  TestLabel "substring3" substringCall2 --,
+                  --TestLabel "intUncallable" intUncallable
                  ]
 
 main :: IO Counts

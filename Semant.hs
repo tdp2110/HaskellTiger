@@ -45,9 +45,12 @@ checkInt nonIntTy maybeCtx = Left $ (convertCtx maybeCtx) ++
     convertCtx Nothing = ""
     convertCtx (Just str) = str ++ ", "
 
+emptyExp :: Translate.Exp
+emptyExp = Translate.Exp()
+
 transVar venv _ (A.SimpleVar sym pos) =
   case Data.Map.lookup sym venv of
-    Just Env.VarEntry{Env.ty=t} -> Right ExpTy{exp=Translate.Exp(), ty=t}
+    Just Env.VarEntry{Env.ty=t} -> Right ExpTy{exp=emptyExp, ty=t}
     Just (Env.FunEntry _ _) -> Left SemantError{
       what="variable " ++ (show sym) ++ " has no non-function bindings.",
       at=pos}
@@ -58,7 +61,7 @@ transVar venv tenv (A.FieldVar var sym pos) = do
   ExpTy{exp=_, ty=varTy} <- transVar venv tenv var
   case varTy of
     r@(Types.RECORD(sym2ty, _)) -> case lookup sym sym2ty of
-                                 Just t -> return ExpTy{exp=Translate.Exp(), ty=t}
+                                 Just t -> return ExpTy{exp=emptyExp, ty=t}
                                  Nothing -> Left SemantError{
                                    what="in field expr, record type " ++
                                         (show r) ++ " has no " ++ (show sym) ++ " field",
@@ -72,7 +75,7 @@ transVar venv tenv (A.SubscriptVar var expr pos) = do
     Types.ARRAY(varEltTy, _) -> do
       ExpTy{exp=_, ty=expTy} <- transExp venv tenv expr
       case expTy of
-        Types.INT -> return ExpTy{exp=Translate.Exp(), ty=varEltTy}
+        Types.INT -> return ExpTy{exp=emptyExp, ty=varEltTy}
         nonIntTy@(_) -> Left SemantError{
           what="in subscript expr, subscript type is not an INT, is an " ++ (show nonIntTy),
           at=pos}
@@ -82,9 +85,9 @@ transVar venv tenv (A.SubscriptVar var expr pos) = do
       at=pos}
 
 transExp venv tenv (A.VarExp var) = transVar venv tenv var
-transExp _ _ A.NilExp = Right ExpTy{exp=Translate.Exp(), ty=Types.NIL}
-transExp _ _ (A.IntExp _) = Right ExpTy{exp=Translate.Exp(), ty=Types.INT}
-transExp _ _ (A.StringExp _) = Right ExpTy{exp=Translate.Exp(), ty=Types.STRING}
+transExp _ _ A.NilExp = Right ExpTy{exp=emptyExp, ty=Types.NIL}
+transExp _ _ (A.IntExp _) = Right ExpTy{exp=emptyExp, ty=Types.INT}
+transExp _ _ (A.StringExp _) = Right ExpTy{exp=emptyExp, ty=Types.STRING}
 transExp venv tenv (A.CallExp funcSym argExps pos) =
   case Data.Map.lookup funcSym venv of
     Just (Env.FunEntry formalsTys resultTy) ->
@@ -99,7 +102,7 @@ transExp venv tenv (A.CallExp funcSym argExps pos) =
                                    at=pos}
               else case filter (\(ty1, ty2, _) -> ty1 /= ty2)
                         (zip3 formalsTys paramTys [0 :: Integer ..]) of
-                     [] -> Right ExpTy{exp=Translate.Exp(), ty=resultTy}
+                     [] -> Right ExpTy{exp=emptyExp, ty=resultTy}
                      ((formalTy, paramTy, ix):_) -> Left SemantError{
                        what="parameter " ++ (show ix) ++ " of func " ++ (show funcSym) ++
                             " requires type " ++ (show formalTy) ++ " but was passed a value of type " ++
@@ -126,9 +129,9 @@ transExp venv tenv A.OpExp{A.left=leftExp,
           Left err -> Left SemantError{
             what="In OpExp, " ++ err,
             at=pos}
-          Right _ -> return ExpTy{exp=Translate.Exp(), ty=Types.INT}
+          Right _ -> return ExpTy{exp=emptyExp, ty=Types.INT}
       else if isCmp op then
-             let cmpReturn = return ExpTy{exp=Translate.Exp(), ty=Types.INT} in
+             let cmpReturn = return ExpTy{exp=emptyExp, ty=Types.INT} in
                case (tyleft, tyright) of
                  (Types.INT, Types.INT) -> cmpReturn
                  (Types.STRING, Types.STRING) -> cmpReturn
@@ -177,7 +180,7 @@ transExp venv tenv A.RecordExp{A.fields=fieldSymExpPosns,
                   in
                     case filter (\(_,expectedTy,actualTy,_) -> expectedTy == actualTy)
                          (zip4 expectedSyms expectedFieldTys actualFieldTys fieldPosns) of
-                      [] -> Right ExpTy{exp=Translate.Exp(), ty=recordTy}
+                      [] -> Right ExpTy{exp=emptyExp, ty=recordTy}
                       ((sym,expectedTy,actualTy,fieldPos):_) ->
                         Left SemantError{what="in record exp, field " ++ (show sym) ++
                                               " should have type " ++ (show expectedTy) ++
@@ -186,6 +189,11 @@ transExp venv tenv A.RecordExp{A.fields=fieldSymExpPosns,
         _ -> Left SemantError{
           what="only record types may appear as the symbol in a record instance declaration",
           at=pos}
+transExp venv tenv (A.SeqExp(expAndPosns)) =
+  case sequence $ map (\(expr,_) -> transExp venv tenv expr) expAndPosns of
+    Left err -> Left err
+    Right [] -> Right ExpTy{exp=emptyExp, ty=Types.UNIT}
+    Right expTys -> Right $ last expTys
 transExp _ _ e = error $ "unimplemented transExp " ++ show e
 
 transDec = undefined
