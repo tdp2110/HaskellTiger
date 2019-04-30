@@ -100,14 +100,15 @@ transExp venv tenv (A.CallExp funcSym argExps pos) =
                                         " expects " ++ (show $ length formalsTys) ++
                                         " parameters but was passed " ++ (show $ length paramTys),
                                    at=pos}
-              else case filter (\(ty1, ty2, _) -> ty1 /= ty2)
-                        (zip3 formalsTys paramTys [0 :: Integer ..]) of
-                     [] -> Right ExpTy{exp=emptyExp, ty=resultTy}
-                     ((formalTy, paramTy, ix):_) -> Left SemantError{
-                       what="parameter " ++ (show ix) ++ " of func " ++ (show funcSym) ++
-                            " requires type " ++ (show formalTy) ++ " but was passed a value of type " ++
-                            (show paramTy),
-                       at=pos}
+              else
+              case filter (\(ty1, ty2, _) -> ty1 /= ty2)
+                   (zip3 formalsTys paramTys [0 :: Integer ..]) of
+                [] -> Right ExpTy{exp=emptyExp, ty=resultTy}
+                ((formalTy, paramTy, ix):_) -> Left SemantError{
+                  what="parameter " ++ (show ix) ++ " of func " ++ (show funcSym) ++
+                       " requires type " ++ (show formalTy) ++ " but was passed a value of type " ++
+                       (show paramTy),
+                  at=pos}
     Just (Env.VarEntry t) -> Left SemantError{
       what="only functions are callable -- found type " ++ (show t),
       at=pos}
@@ -202,9 +203,10 @@ transExp venv tenv A.AssignExp{A.var=var, A.exp=expr, A.pos=pos} =
     ExpTy{exp=_, ty=exprTy} <- transExp venv tenv expr
     if varTy == exprTy then
       return ExpTy{exp=emptyExp, ty=Types.UNIT}
-      else Left SemantError{what="in assignExp, variable has type " ++ (show varTy) ++
-                                 " but assign target has type " ++ (show exprTy),
-                            at=pos}
+      else
+      Left SemantError{what="in assignExp, variable has type " ++ (show varTy) ++
+                            " but assign target has type " ++ (show exprTy),
+                       at=pos}
 transExp venv tenv A.IfExp{A.test=testExpr,
                            A.then'=thenExpr,
                            A.else'=maybeElseExpr,
@@ -218,21 +220,23 @@ transExp venv tenv A.IfExp{A.test=testExpr,
           Left SemantError{what="in ifExp, the test expression must be integral: " ++
                            "found type=" ++ (show $ ty testExpTy),
                            at=pos}
-          else case maybeElseExpTy of
-                 Nothing -> return thenExpTy
-                 Just elseExpTyEither -> do
-                   elseExpTy <- elseExpTyEither
-                   let
-                     thenTy = ty thenExpTy
-                     elseTy = ty elseExpTy
-                     in
-                     if thenTy /= elseTy then
-                       Left SemantError{what="in ifExp, thenExp and elseExp must have " ++
-                                             "the same type: found " ++ (show thenTy) ++
-                                             " and " ++ (show elseTy) ++
-                                             ", respectfully",
-                                        at=pos}
-                     else return ExpTy{exp=emptyExp, ty=thenTy}
+        else
+          case maybeElseExpTy of
+            Nothing -> return thenExpTy
+            Just elseExpTyEither -> do
+              elseExpTy <- elseExpTyEither
+              let
+                thenTy = ty thenExpTy
+                elseTy = ty elseExpTy
+                in
+                if thenTy /= elseTy then
+                  Left SemantError{what="in ifExp, thenExp and elseExp must have " ++
+                                        "the same type: found " ++ (show thenTy) ++
+                                        " and " ++ (show elseTy) ++
+                                        ", respectfully",
+                                   at=pos}
+                else
+                  return ExpTy{exp=emptyExp, ty=thenTy}
 transExp venv tenv A.WhileExp{A.test=testExp,
                               A.body=bodyExp,
                               A.pos=pos} =
@@ -244,7 +248,8 @@ transExp venv tenv A.WhileExp{A.test=testExp,
         Left SemantError{what="in whileExp, the test expression must be integral: " ++
                               "found type=" ++ (show testTy),
                          at=pos}
-        else return ExpTy{exp=emptyExp, ty=Types.UNIT}
+        else
+        return ExpTy{exp=emptyExp, ty=Types.UNIT}
 transExp venv tenv A.ArrayExp{A.typ=arrayTySym,
                               A.size=sizeExp,
                               A.init=initExp,
@@ -268,7 +273,8 @@ transExp venv tenv A.ArrayExp{A.typ=arrayTySym,
                                     (show initTy) ++ ", when it must have " ++
                                     (show arrayEltTy),
                                at=pos}
-              else return ExpTy{exp=emptyExp, ty=arrayTy}
+            else
+              return ExpTy{exp=emptyExp, ty=arrayTy}
         t@(_) -> Left SemantError{
           what="only array types may appear as the symbol in an array instance " ++
                "definition. Found type=" ++ (show t),
