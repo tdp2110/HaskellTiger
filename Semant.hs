@@ -279,7 +279,29 @@ transExp venv tenv A.ArrayExp{A.typ=arrayTySym,
           what="only array types may appear as the symbol in an array instance " ++
                "definition. Found type=" ++ (show t),
           at=pos}
-transExp _ _ e = error $ "unimplemented transExp " ++ show e
+transExp venv tenv A.ForExp{A.forVar=forVar,
+                            A.escape=_,
+                            A.lo=loExp,
+                            A.hi=hiExp,
+                            A.body=body,
+                            A.pos=pos} =
+  let bodyVEnv = Data.Map.insert forVar Env.VarEntry{Env.ty=Types.INT} venv in
+    do
+      ExpTy{exp=_, ty=loTy} <- transExp venv tenv loExp
+      ExpTy{exp=_, ty=hiTy} <- transExp venv tenv hiExp
+      ExpTy{exp=_, ty=bodyTy} <- transExp bodyVEnv tenv body
+      if (loTy /= Types.INT) || (hiTy /= Types.INT) then
+        Left SemantError{what="only integer expressions may appear as bounds in a ForExp",
+                       at=pos}
+        else
+        if bodyTy /= Types.UNIT then
+          Left SemantError{what="the body of a ForExp must yield no value",
+                           at=pos}
+        else
+          -- TODO must not allow assigning to forVar in body
+          return ExpTy{exp=emptyExp, ty=Types.UNIT}
+
+--transExp _ _ e = error $ "unimplemented transExp " ++ show e
 
 transDec = undefined
 transTy = undefined
