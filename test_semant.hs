@@ -105,6 +105,24 @@ intUncallable = TestCase (
     assertEqual "integers are not callable" "omg" err
   )
 
+forVar1 :: Test
+forVar1 = TestCase (
+  let
+    text = "for j:=0 to 10 do j:=j+1"
+    (Left(Semant.SemantError err _)) = parseToSema Env.baseVEnv Env.baseTEnv text
+  in do
+    assertEqual "can't assign to forVar" "forVar assigned in forBody" err
+  )
+
+forVar2 :: Test
+forVar2 = TestCase (
+  let
+    text = "for j:=0 to 10 do (let var j := 2 in j + 1 end)"
+    (Left(Semant.SemantError err _)) = parseToSema Env.baseVEnv Env.baseTEnv text
+  in do
+    assertEqual "can't assign to forVar" "forVar assigned in forBody" err
+  )
+
 tests :: Test
 tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "int arith 1" intArith1,
@@ -113,6 +131,8 @@ tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "str literal" strLiteral,
                   TestLabel "str plus int" strPlusIntIsErr,
                   TestLabel "substring1" substringCall1,
+                  TestLabel "forVar1" forVar1,
+                  TestLabel "forVar2" forVar2,
                   TestLabel "substring2" substringCall2,
                   TestLabel "substring3" substringCall2 --,
                   --TestLabel "intUncallable" intUncallable

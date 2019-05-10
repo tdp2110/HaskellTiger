@@ -4,12 +4,12 @@ import qualified Absyn as A
 import qualified Env as Env
 import qualified Translate as Translate
 import qualified Types as Types
+import Symbol
 
-import qualified Data.Map
+import qualified Data.Map as Map
 import Data.Either
 import Data.List
 import Prelude hiding (exp)
-
 
 data SemantError = SemantError{what :: String, at :: A.Pos} deriving (Eq)
 instance Show SemantError where
@@ -49,7 +49,7 @@ emptyExp :: Translate.Exp
 emptyExp = Translate.Exp()
 
 transVar venv _ (A.SimpleVar sym pos) =
-  case Data.Map.lookup sym venv of
+  case Map.lookup sym venv of
     Just Env.VarEntry{Env.ty=t} -> Right ExpTy{exp=emptyExp, ty=t}
     Just (Env.FunEntry _ _) -> Left SemantError{
       what="variable " ++ (show sym) ++ " has no non-function bindings.",
@@ -89,7 +89,7 @@ transExp _ _ A.NilExp = Right ExpTy{exp=emptyExp, ty=Types.NIL}
 transExp _ _ (A.IntExp _) = Right ExpTy{exp=emptyExp, ty=Types.INT}
 transExp _ _ (A.StringExp _) = Right ExpTy{exp=emptyExp, ty=Types.STRING}
 transExp venv tenv (A.CallExp funcSym argExps pos) =
-  case Data.Map.lookup funcSym venv of
+  case Map.lookup funcSym venv of
     Just (Env.FunEntry formalsTys resultTy) ->
       case sequence $ map (transExp venv tenv) argExps of
         Left err -> Left err
@@ -155,7 +155,7 @@ at=pos}
 transExp venv tenv A.RecordExp{A.fields=fieldSymExpPosns,
                                A.typ=typSym,
                                A.pos=pos} =
-  case Data.Map.lookup typSym tenv of
+  case Map.lookup typSym tenv of
     Nothing -> Left SemantError{
       what="unbound free type variable " ++ (show typSym),
       at=pos}
@@ -254,7 +254,7 @@ transExp venv tenv A.ArrayExp{A.typ=arrayTySym,
                               A.size=sizeExp,
                               A.init=initExp,
                               A.pos=pos} =
-  case Data.Map.lookup arrayTySym tenv of
+  case Map.lookup arrayTySym tenv of
     Nothing -> Left SemantError{
       what="unbound free type variable " ++ (show arrayTySym),
       at=pos}
@@ -285,7 +285,7 @@ transExp venv tenv A.ForExp{A.forVar=forVar,
                             A.hi=hiExp,
                             A.body=body,
                             A.pos=pos} =
-  let bodyVEnv = Data.Map.insert forVar Env.VarEntry{Env.ty=Types.INT} venv in
+  let bodyVEnv = Map.insert forVar Env.VarEntry{Env.ty=Types.INT} venv in
     do
       ExpTy{exp=_, ty=loTy} <- transExp venv tenv loExp
       ExpTy{exp=_, ty=hiTy} <- transExp venv tenv hiExp
@@ -298,10 +298,61 @@ transExp venv tenv A.ForExp{A.forVar=forVar,
           Left SemantError{what="the body of a ForExp must yield no value",
                            at=pos}
         else
-          -- TODO must not allow assigning to forVar in body
-          return ExpTy{exp=emptyExp, ty=Types.UNIT}
+          case checkForVarNotAssigned forVar body of
+            Left err -> Left err
+            _ -> return ExpTy{exp=emptyExp, ty=Types.UNIT}
 
 --transExp _ _ e = error $ "unimplemented transExp " ++ show e
+
+checkForVarNotAssigned :: Symbol -> A.Exp -> Either SemantError ()
+checkForVarNotAssigned forVar (A.CallExp _ exps _) =
+  case sequence $ map (\e -> checkForVarNotAssigned forVar e) exps of
+    Left err -> Left err
+    Right _ -> Right ()
+checkForVarNotAssigned forVar (A.OpExp leftExp _ rightExp _) = do
+  checkForVarNotAssigned forVar leftExp
+  checkForVarNotAssigned forVar rightExp
+checkForVarNotAssigned forVar (A.RecordExp fields _ _) =
+  case sequence $ map (\(_,e,_) -> checkForVarNotAssigned forVar e) fields of
+    Left err -> Left err
+    Right _ -> Right ()
+checkForVarNotAssigned forVar (A.SeqExp seqElts) =
+  case sequence $ map (\(e,_) -> checkForVarNotAssigned forVar e) seqElts of
+    Left err -> Left err
+    Right _ -> Right ()
+checkForVarNotAssigned forVar (A.AssignExp (A.SimpleVar var _) e pos) =
+  if forVar == var then
+    Left SemantError{what="forVar assigned in forBody",
+                     at=pos}
+  else
+    checkForVarNotAssigned forVar e
+checkForVarNotAssigned forVar (A.IfExp testExp thenExp maybeElseExp _) = do
+  checkForVarNotAssigned forVar testExp
+  checkForVarNotAssigned forVar thenExp
+  case fmap (\e -> checkForVarNotAssigned forVar e) maybeElseExp of
+    Just (Left err) -> Left err
+    _ -> Right ()
+checkForVarNotAssigned forVar (A.WhileExp testExp bodyExp _) = do
+  checkForVarNotAssigned forVar testExp
+  checkForVarNotAssigned forVar bodyExp
+checkForVarNotAssigned forVar (A.ForExp _ _ loExp hiExp bodyExp _) = do
+  checkForVarNotAssigned forVar loExp
+  checkForVarNotAssigned forVar hiExp
+  checkForVarNotAssigned forVar bodyExp
+checkForVarNotAssigned forVar (A.ArrayExp _ sizeExp initExp _) = do
+  checkForVarNotAssigned forVar sizeExp
+  checkForVarNotAssigned forVar initExp
+checkForVarNotAssigned forVar (A.LetExp decs bodyExp _) =
+  let
+    forVarIsRebound = all forVarIsReboundAtDec decs
+    forVarIsReboundAtDec (A.VarDec varName _ _ _ _) = varName == forVar
+    forVarIsReboundAtDec _ = False
+      in
+    if forVarIsRebound then
+      Right ()
+    else
+      checkForVarNotAssigned forVar bodyExp
+checkForVarNotAssigned _ _ = Right ()
 
 transDec = undefined
 transTy = undefined
