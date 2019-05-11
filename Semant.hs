@@ -21,6 +21,7 @@ transVar :: Env.VEnv -> Env.TEnv -> A.Var -> Either SemantError ExpTy
 transExp :: Env.VEnv -> Env.TEnv -> A.Exp -> Either SemantError ExpTy
 transDec :: Env.VEnv -> Env.TEnv -> A.Dec -> Either SemantError (Env.VEnv, Env.TEnv)
 transTy :: Env.TEnv -> A.Ty -> Either SemantError Types.Ty
+transDecs :: Env.VEnv -> Env.TEnv -> [A.Dec] -> Either SemantError (Env.VEnv, Env.TEnv)
 
 isArith :: A.Oper -> Bool
 isArith A.PlusOp = True
@@ -122,17 +123,14 @@ transExp' venv tenv breakContext (A.CallExp funcSym argExps pos) =
     Nothing -> Left SemantError{
       what="unbound free variable " ++ (show funcSym),
       at=pos}
-transExp' venv tenv breakContext A.OpExp{A.left=leftExp,
-                                         A.oper=op,
-                                         A.right=rightExp,
-                                         A.pos=pos} =
+transExp' venv tenv breakContext (A.OpExp leftExp op rightExp pos) =
   do
     ExpTy{exp=_, ty=tyleft} <- transExp' venv tenv breakContext leftExp
     ExpTy{exp=_, ty=tyright} <- transExp' venv tenv breakContext rightExp
     if isArith op then
       let maybeError = do
-                  checkInt tyleft (Just "in left hand operand")
-                  checkInt tyright (Just "in right hand operand") in
+            checkInt tyleft (Just "in left hand operand")
+            checkInt tyright (Just "in right hand operand") in
         case maybeError of
           Left err -> Left SemantError{
             what="In OpExp, " ++ err,
@@ -159,9 +157,7 @@ transExp' venv tenv breakContext A.OpExp{A.left=leftExp,
 at=pos}
         else undefined
 
-transExp' venv tenv breakContext A.RecordExp{A.fields=fieldSymExpPosns,
-                                             A.typ=typSym,
-                                             A.pos=pos} =
+transExp' venv tenv breakContext (A.RecordExp fieldSymExpPosns typSym pos) =
   case Map.lookup typSym tenv of
     Nothing -> Left SemantError{
       what="unbound free type variable " ++ (show typSym),
@@ -199,12 +195,12 @@ transExp' venv tenv breakContext A.RecordExp{A.fields=fieldSymExpPosns,
           what="only record types may appear as the symbol in a record instance " ++
                "definition. Found type=" ++ (show t),
           at=pos}
-transExp' venv tenv breakContext (A.SeqExp(expAndPosns)) =
+transExp' venv tenv breakContext (A.SeqExp expAndPosns) =
   case sequence $ map (\(expr,_) -> transExp' venv tenv breakContext expr) expAndPosns of
     Left err -> Left err
     Right [] -> Right ExpTy{exp=emptyExp, ty=Types.UNIT}
     Right expTys -> Right $ last expTys
-transExp' venv tenv breakContext A.AssignExp{A.var=var, A.exp=expr, A.pos=pos} =
+transExp' venv tenv breakContext (A.AssignExp var expr pos) =
   do
     ExpTy{exp=_, ty=varTy} <- transVar venv tenv var
     ExpTy{exp=_, ty=exprTy} <- transExp' venv tenv breakContext expr
@@ -214,10 +210,8 @@ transExp' venv tenv breakContext A.AssignExp{A.var=var, A.exp=expr, A.pos=pos} =
       Left SemantError{what="in assignExp, variable has type " ++ (show varTy) ++
                             " but assign target has type " ++ (show exprTy),
                        at=pos}
-transExp' venv tenv breakContext A.IfExp{A.test=testExpr,
-                                         A.then'=thenExpr,
-                                         A.else'=maybeElseExpr,
-                                         A.pos=pos} =
+transExp' venv tenv breakContext
+  (A.IfExp testExpr thenExpr maybeElseExpr pos) =
   let transexp = transExp' venv tenv breakContext in
     do
       testExpTy <- transexp testExpr
@@ -244,9 +238,7 @@ transExp' venv tenv breakContext A.IfExp{A.test=testExpr,
                                    at=pos}
                 else
                   return ExpTy{exp=emptyExp, ty=thenTy}
-transExp' venv tenv breakContext A.WhileExp{A.test=testExp,
-                                            A.body=bodyExp,
-                                            A.pos=pos} =
+transExp' venv tenv breakContext (A.WhileExp testExp bodyExp pos) =
   do
     ExpTy{exp=_, ty=testTy} <- transExp' venv tenv breakContext testExp
     _ <- transExp' venv tenv CanBreak bodyExp
@@ -261,10 +253,7 @@ transExp' _ _ breakContext (A.BreakExp pos) =
     CanBreak -> Right ExpTy{exp=emptyExp, ty=Types.UNIT}
     CannotBreak -> Left SemantError{what="break expression  not enclosed in a while or for",
                                     at=pos}
-transExp' venv tenv breakContext A.ArrayExp{A.typ=arrayTySym,
-                                            A.size=sizeExp,
-                                            A.init=initExp,
-                                            A.pos=pos} =
+transExp' venv tenv breakContext (A.ArrayExp arrayTySym sizeExp initExp pos) =
   case Map.lookup arrayTySym tenv of
     Nothing -> Left SemantError{
       what="unbound free type variable " ++ (show arrayTySym),
@@ -290,12 +279,7 @@ transExp' venv tenv breakContext A.ArrayExp{A.typ=arrayTySym,
           what="only array types may appear as the symbol in an array instance " ++
                "definition. Found type=" ++ (show t),
           at=pos}
-transExp' venv tenv breakContext A.ForExp{A.forVar=forVar,
-                                          A.escape=_,
-                                          A.lo=loExp,
-                                          A.hi=hiExp,
-                                          A.body=body,
-                                          A.pos=pos} =
+transExp' venv tenv breakContext (A.ForExp forVar _ loExp hiExp body pos) =
   let bodyVEnv = Map.insert forVar Env.VarEntry{Env.ty=Types.INT} venv in
     do
       ExpTy{exp=_, ty=loTy} <- transExp' venv tenv breakContext loExp
@@ -312,8 +296,22 @@ transExp' venv tenv breakContext A.ForExp{A.forVar=forVar,
           case checkForVarNotAssigned forVar body of
             Left err -> Left err
             _ -> return ExpTy{exp=emptyExp, ty=Types.UNIT}
+transExp' venv tenv breakContext (A.LetExp decs bodyExp _) = do
+  (venv', tenv') <- transDecs venv tenv decs
+  transExp' venv' tenv' breakContext bodyExp
 
---transExp _ _ e = error $ "unimplemented transExp " ++ show e
+transDecs venv tenv decls =
+  case checkDeclNamesDistinct decls of
+    Left err -> Left err
+    _ -> case sequence $ map (transDec venv tenv) decls of
+      Left err -> Left err
+      Right processedDecls -> Right $ mergeEnvs processedDecls
+
+checkDeclNamesDistinct :: [A.Dec] -> Either SemantError ()
+checkDeclNamesDistinct _ = undefined
+
+mergeEnvs :: [(Env.VEnv, Env.TEnv)] -> (Env.VEnv, Env.TEnv)
+mergeEnvs _ = undefined
 
 checkForVarNotAssigned :: Symbol -> A.Exp -> Either SemantError ()
 checkForVarNotAssigned forVar (A.CallExp _ exps _) =
