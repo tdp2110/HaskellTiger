@@ -123,6 +123,24 @@ forVar2 = TestCase (
     assertEqual "can't assign to forVar" "forVar assigned in forBody" err
   )
 
+break1 :: Test
+break1 = TestCase (
+  let
+    text = "for j:=0 to 10 do if j = 5 then break"
+    (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema Env.baseVEnv Env.baseTEnv text
+  in do
+    assertEqual "break in forExp is ok" Types.UNIT ty
+  )
+
+break2 :: Test
+break2 = TestCase (
+  let
+    text = "if 1 then break"
+    (Left(Semant.SemantError err _)) = parseToSema Env.baseVEnv Env.baseTEnv text
+  in do
+    assertEqual "can't assign to forVar" "break expresion not enclosed in a while or for" err
+  )
+
 tests :: Test
 tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "int arith 1" intArith1,
@@ -131,6 +149,8 @@ tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "str literal" strLiteral,
                   TestLabel "str plus int" strPlusIntIsErr,
                   TestLabel "substring1" substringCall1,
+                  TestLabel "break1" break1,
+                  TestLabel "break2" break2,
                   TestLabel "forVar1" forVar1,
                   TestLabel "forVar2" forVar2,
                   TestLabel "substring2" substringCall2,
