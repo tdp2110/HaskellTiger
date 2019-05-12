@@ -431,5 +431,27 @@ transDec venv tenv (A.VarDec name _ maybeTypenameAndPos initExp posn) =
               Nothing -> result
 transDec venv tenv (A.FunctionDec []) = Right (venv, tenv)
 transDec venv tenv (A.TypeDec []) = Right (venv, tenv)
+transDec venv tenv (A.TypeDec ((A.TyDec name typ _):[])) =
+  case transTy tenv typ of
+    Left err -> Left err
+    Right typesTy -> Right (venv, Map.insert name typesTy tenv)
 
-transTy = undefined
+-- TODO need to assign unique type identifiers!!
+transTy tenv (A.NameTy(sym, pos)) =
+  case Map.lookup sym tenv of
+    Nothing -> Left SemantError{what="unbound type variable " ++ (show sym) ++
+                                     " in type declaration",
+                                at=pos}
+    Just typeTy -> Right typeTy
+transTy tenv (A.RecordTy fields) =
+  case sequence $ map fieldTypeFun fields of
+    Left err -> Left err
+    Right symAndTys -> Right $ Types.RECORD(symAndTys, 1337)
+  where
+    fieldTypeFun (A.Field fieldName _ fieldTypSym fieldPos) =
+      case Map.lookup fieldTypSym tenv of
+        Nothing -> Left SemantError{
+          what="unbound type variable used in record field " ++
+               (show fieldName),
+          at=fieldPos}
+        Just typesTy -> Right (fieldName, typesTy)
