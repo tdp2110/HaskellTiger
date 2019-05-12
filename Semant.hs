@@ -6,6 +6,7 @@ import qualified Translate as Translate
 import qualified Types as Types
 import Symbol
 
+import Control.Monad (join)
 import qualified Data.Map as Map
 import Data.Either
 import Data.List
@@ -118,7 +119,7 @@ transExp' venv tenv breakContext (A.CallExp funcSym argExps pos) =
                        (show paramTy),
                   at=pos}
     Just (Env.VarEntry t) -> Left SemantError{
-      what="only functions are callable -- found type " ++ (show t),
+      what="only functions are callable: found type " ++ (show t),
       at=pos}
     Nothing -> Left SemantError{
       what="unbound free variable " ++ (show funcSym),
@@ -405,5 +406,30 @@ checkForVarNotAssigned forVar (A.LetExp decs bodyExp _) =
       checkForVarNotAssigned forVar bodyExp
 checkForVarNotAssigned _ _ = Right ()
 
-transDec = undefined
+transDec venv tenv (A.VarDec name _ maybeTypenameAndPos initExp posn) =
+  let maybeTypeAnnotation =
+        join $ fmap (\(typename,_) -> Map.lookup typename tenv) maybeTypenameAndPos in
+    case transExp venv tenv initExp of
+      Left err -> Left err
+      Right ExpTy{exp=_, ty=actualInitTy} ->
+        let result = Right (Map.insert name (Env.VarEntry actualInitTy) venv, tenv) in
+          if actualInitTy == Types.NIL then
+            case maybeTypeAnnotation of
+              Just (Types.RECORD _) -> result
+              _ -> Left SemantError{
+                what="nil expression declarations must be constrained by a RECORD type",
+                at=posn}
+          else
+            case maybeTypeAnnotation of
+              Just typeAnnotation ->
+                if typeAnnotation /= actualInitTy then
+                  Left SemantError{what="mismatch in type annotation and computed type in varDecl: " ++
+                                        "type annotation " ++ (show typeAnnotation) ++
+                                        ", computed type " ++ (show actualInitTy),
+                                   at=posn}
+                else result
+              Nothing -> result
+transDec venv tenv (A.FunctionDec []) = Right (venv, tenv)
+transDec venv tenv (A.TypeDec []) = Right (venv, tenv)
+
 transTy = undefined

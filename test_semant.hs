@@ -96,13 +96,29 @@ substringCall3 = TestCase (
     assertBool "wrong number of arguments" $ isInfixOf "expects 2 parameters but was passed 3" err
   )
 
+letExp1 :: Test
+letExp1 = TestCase (
+  let
+    text = "let var n := 0\n" ++
+           "    var m := 1 in \n" ++
+           "  let var k := 1 in \n" ++
+           "    n := n + m;\n" ++
+           "    if n = 0 then m - n + 2 * k\n" ++
+           "    else n * (m + k)\n" ++
+           "  end\n" ++
+           "end"
+    (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema Env.baseVEnv Env.baseTEnv text
+  in do
+    assertEqual "letExp example1" Types.INT ty
+  )
+
 intUncallable :: Test
 intUncallable = TestCase (
   let
     text = "let var x := 2 in x(3) end"
     (Left(Semant.SemantError err _)) = parseToSema Env.baseVEnv Env.baseTEnv text
   in do
-    assertEqual "integers are not callable" "omg" err
+    assertEqual "integers are not callable" "only functions are callable: found type INT" err
   )
 
 forVar1 :: Test
@@ -117,7 +133,7 @@ forVar1 = TestCase (
 forVar2 :: Test
 forVar2 = TestCase (
   let
-    text = "for j:=0 to 10 do (let var j := 2 in j + 1 end)"
+    text = "for j:=0 to 10 do (let var k := 2 in j := j + k end)"
     (Left(Semant.SemantError err _)) = parseToSema Env.baseVEnv Env.baseTEnv text
   in do
     assertEqual "can't assign to forVar" "forVar assigned in forBody" err
@@ -167,6 +183,39 @@ illegalDecls2 = TestCase (
       isInfixOf "multiple function or value declarations of symbol N in letExp declarations" err
   )
 
+illegalDecls3 :: Test
+illegalDecls3 = TestCase (
+  let
+    text = "let \n" ++
+           "  var N: string:= 0 \n" ++
+           "in N + 1 end"
+    (Left(Semant.SemantError err _)) = parseToSema Env.baseVEnv Env.baseTEnv text
+  in do
+    assertEqual "annotation error" "mismatch in type annotation and computed type in varDecl: type annotation STRING, computed type INT" err
+  )
+
+illegalDecls4 :: Test
+illegalDecls4 = TestCase (
+  let
+    text = "let \n" ++
+           "  var x:= nil \n" ++
+           "in x end"
+    (Left(Semant.SemantError err _)) = parseToSema Env.baseVEnv Env.baseTEnv text
+  in do
+    assertEqual "nil decls need record annotation 1" "nil expression declarations must be constrained by a RECORD type" err
+  )
+
+illegalDecls5 :: Test
+illegalDecls5 = TestCase (
+  let
+    text = "let \n" ++
+           "  var x:int:= nil \n" ++
+           "in x end"
+    (Left(Semant.SemantError err _)) = parseToSema Env.baseVEnv Env.baseTEnv text
+  in do
+    assertEqual "nil decls need record annotation 2" "nil expression declarations must be constrained by a RECORD type" err
+  )
+
 tests :: Test
 tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "int arith 1" intArith1,
@@ -180,10 +229,13 @@ tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "forVar1" forVar1,
                   TestLabel "forVar2" forVar2,
                   TestLabel "illegalDecls1" illegalDecls1,
-                  TestLabel "illegalDecls1" illegalDecls2,
+                  TestLabel "illegalDecls2" illegalDecls2,
+                  TestLabel "illegalDecls3" illegalDecls3,
+                  TestLabel "illegalDecls4" illegalDecls4,
                   TestLabel "substring2" substringCall2,
-                  TestLabel "substring3" substringCall2 --,
-                  --TestLabel "intUncallable" intUncallable
+                  TestLabel "substring3" substringCall2,
+                  TestLabel "letExp1" letExp1,
+                  TestLabel "intUncallable" intUncallable
                  ]
 
 main :: IO Counts
