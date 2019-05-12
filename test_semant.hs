@@ -99,8 +99,9 @@ substringCall3 = TestCase (
 letExp1 :: Test
 letExp1 = TestCase (
   let
-    text = "let var n := 0\n" ++
-           "    var m := 1 in \n" ++
+    text = "let type Int = int\n" ++
+           "    var n := 0\n" ++
+           "    var m : Int := n + 1 in \n" ++
            "  let var k := 1 in \n" ++
            "    n := n + m;\n" ++
            "    if n = 0 then m - n + 2 * k\n" ++

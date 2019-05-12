@@ -304,15 +304,11 @@ transExp' venv tenv breakContext (A.LetExp decs bodyExp letPos) = do
 transLetDecs venv tenv decls letPos =
   case checkDeclNamesDistinctInLet decls letPos of
     Left err -> Left err
-    _ -> case sequence $ map (transDec venv tenv) decls of
-      Left err -> Left err
-      Right processedDecls -> Right $ mergeEnvs processedDecls
-
-mergeEnvs :: [(Env.VEnv, Env.TEnv)] -> (Env.VEnv, Env.TEnv)
-mergeEnvs listOfEnvs =
-  foldl' step (Map.empty, Map.empty) listOfEnvs
-  where
-    step (venv, tenv) (venv', tenv') = (Map.union venv venv', Map.union tenv tenv')
+    _ -> foldl' step (Right (venv, tenv)) decls
+      where
+        step (Left err) _ = Left err
+        step (Right (venv', tenv')) decl =
+          transDec venv' tenv' decl
 
 checkDeclNamesDistinctInLet :: [A.Dec] -> A.Pos -> Either SemantError ()
 checkDeclNamesDistinctInLet decls letPos =
@@ -455,3 +451,8 @@ transTy tenv (A.RecordTy fields) =
                (show fieldName),
           at=fieldPos}
         Just typesTy -> Right (fieldName, typesTy)
+transTy tenv (A.ArrayTy(arrayEltTypeSym, posn)) =
+  case Map.lookup arrayEltTypeSym tenv of
+    Nothing -> Left SemantError{what="in array decl, unbound array element type symbol",
+                                at=posn}
+    Just typeTy -> Right $ Types.ARRAY (typeTy, 1337)
