@@ -138,7 +138,33 @@ break2 = TestCase (
     text = "if 1 then break"
     (Left(Semant.SemantError err _)) = parseToSema Env.baseVEnv Env.baseTEnv text
   in do
-    assertEqual "can't assign to forVar" "break expresion not enclosed in a while or for" err
+    assertEqual "can't assign to forVar" "break expression not enclosed in a while or for" err
+  )
+
+illegalDecls1 :: Test
+illegalDecls1 = TestCase (
+  let
+    text = "let \n" ++
+           "  var N:= 0 \n" ++
+           "  function N() = nil \n" ++
+           "in N() end"
+    (Left(Semant.SemantError err _)) = parseToSema Env.baseVEnv Env.baseTEnv text
+  in do
+    assertBool "multiple declarations 1" $
+      isInfixOf "multiple function or value declarations of symbol N in letExp declarations" err
+  )
+
+illegalDecls2 :: Test
+illegalDecls2 = TestCase (
+  let
+    text = "let \n" ++
+           "  var N:= 0 \n" ++
+           "  var N := 42 \n" ++
+           "in N + 1 end"
+    (Left(Semant.SemantError err _)) = parseToSema Env.baseVEnv Env.baseTEnv text
+  in do
+    assertBool "multiple declarations 1" $
+      isInfixOf "multiple function or value declarations of symbol N in letExp declarations" err
   )
 
 tests :: Test
@@ -153,6 +179,8 @@ tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "break2" break2,
                   TestLabel "forVar1" forVar1,
                   TestLabel "forVar2" forVar2,
+                  TestLabel "illegalDecls1" illegalDecls1,
+                  TestLabel "illegalDecls1" illegalDecls2,
                   TestLabel "substring2" substringCall2,
                   TestLabel "substring3" substringCall2 --,
                   --TestLabel "intUncallable" intUncallable

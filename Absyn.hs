@@ -89,5 +89,5 @@ data FunDec = FunDec {fundecName :: Symbol,
 
 data TyDec = TyDec {tydecName :: Symbol,
                     ty :: Ty,
-                    tydecPos :: Pos }
+                    tydecPos :: Pos}
             deriving (Eq, Show)

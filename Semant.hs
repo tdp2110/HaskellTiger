@@ -21,7 +21,7 @@ transVar :: Env.VEnv -> Env.TEnv -> A.Var -> Either SemantError ExpTy
 transExp :: Env.VEnv -> Env.TEnv -> A.Exp -> Either SemantError ExpTy
 transDec :: Env.VEnv -> Env.TEnv -> A.Dec -> Either SemantError (Env.VEnv, Env.TEnv)
 transTy :: Env.TEnv -> A.Ty -> Either SemantError Types.Ty
-transDecs :: Env.VEnv -> Env.TEnv -> [A.Dec] -> Either SemantError (Env.VEnv, Env.TEnv)
+transLetDecs :: Env.VEnv -> Env.TEnv -> [A.Dec] -> A.Pos -> Either SemantError (Env.VEnv, Env.TEnv)
 
 isArith :: A.Oper -> Bool
 isArith A.PlusOp = True
@@ -251,7 +251,7 @@ transExp' venv tenv breakContext (A.WhileExp testExp bodyExp pos) =
 transExp' _ _ breakContext (A.BreakExp pos) =
   case breakContext of
     CanBreak -> Right ExpTy{exp=emptyExp, ty=Types.UNIT}
-    CannotBreak -> Left SemantError{what="break expression  not enclosed in a while or for",
+    CannotBreak -> Left SemantError{what="break expression not enclosed in a while or for",
                                     at=pos}
 transExp' venv tenv breakContext (A.ArrayExp arrayTySym sizeExp initExp pos) =
   case Map.lookup arrayTySym tenv of
@@ -296,22 +296,64 @@ transExp' venv tenv breakContext (A.ForExp forVar _ loExp hiExp body pos) =
           case checkForVarNotAssigned forVar body of
             Left err -> Left err
             _ -> return ExpTy{exp=emptyExp, ty=Types.UNIT}
-transExp' venv tenv breakContext (A.LetExp decs bodyExp _) = do
-  (venv', tenv') <- transDecs venv tenv decs
+transExp' venv tenv breakContext (A.LetExp decs bodyExp letPos) = do
+  (venv', tenv') <- transLetDecs venv tenv decs letPos
   transExp' venv' tenv' breakContext bodyExp
 
-transDecs venv tenv decls =
-  case checkDeclNamesDistinct decls of
+transLetDecs venv tenv decls letPos =
+  case checkDeclNamesDistinctInLet decls letPos of
     Left err -> Left err
     _ -> case sequence $ map (transDec venv tenv) decls of
       Left err -> Left err
       Right processedDecls -> Right $ mergeEnvs processedDecls
 
-checkDeclNamesDistinct :: [A.Dec] -> Either SemantError ()
-checkDeclNamesDistinct _ = undefined
-
 mergeEnvs :: [(Env.VEnv, Env.TEnv)] -> (Env.VEnv, Env.TEnv)
-mergeEnvs _ = undefined
+mergeEnvs listOfEnvs =
+  foldl' step (Map.empty, Map.empty) listOfEnvs
+  where
+    step (venv, tenv) (venv', tenv') = (Map.union venv venv', Map.union tenv tenv')
+
+checkDeclNamesDistinctInLet :: [A.Dec] -> A.Pos -> Either SemantError ()
+checkDeclNamesDistinctInLet decls letPos =
+  let flattenedDecls = flattenDecls decls in
+    case foldl' step (Right (Map.empty, Map.empty)) flattenedDecls of
+      Left err -> Left err
+      Right _ -> Right ()
+      where
+        step (Left err) _ = Left err
+        step (Right (funAndVarSyms, tySyms)) (TyDec name decPos) =
+          case Map.lookup name tySyms of
+            Nothing -> Right (funAndVarSyms, Map.insert name decPos tySyms)
+            Just decPos' -> Left SemantError{
+              what="multiple type declarations with name " ++ (show name) ++
+                   " in letExp declarations at " ++ (show decPos') ++
+                   " and " ++ (show decPos),
+              at=letPos}
+        step (Right (funAndVarSyms, tySyms)) decl@_ =
+          let
+            name = declName decl
+            decPos = declPos decl
+          in
+            case Map.lookup name funAndVarSyms of
+              Nothing -> Right (Map.insert name decPos funAndVarSyms, tySyms)
+              Just decPos' -> Left SemantError{
+                what="multiple function or value declarations of symbol " ++
+                     (show name) ++ " in letExp declarations at " ++ (show decPos') ++
+                     " and " ++ (show decPos),
+                at=letPos}
+
+data DeclElt =
+  VarDec{declName :: Symbol, declPos :: A.Pos}
+  | FunDec{declName :: Symbol, declPos :: A.Pos}
+  | TyDec{declName :: Symbol, declPos :: A.Pos}
+
+flattenDecls :: [A.Dec] -> [DeclElt]
+flattenDecls decls = do
+  decl <- decls
+  case decl of
+    A.FunctionDec funDecs -> map (\funDec -> FunDec (A.fundecName funDec) (A.funPos funDec)) funDecs
+    A.VarDec name _ _ _ posn -> return $ VarDec name posn
+    A.TypeDec tydecs -> map (\tyDec -> TyDec (A.tydecName tyDec) (A.tydecPos tyDec)) tydecs
 
 checkForVarNotAssigned :: Symbol -> A.Exp -> Either SemantError ()
 checkForVarNotAssigned forVar (A.CallExp _ exps _) =
