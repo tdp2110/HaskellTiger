@@ -426,6 +426,45 @@ transDec venv tenv (A.VarDec name _ maybeTypenameAndPos initExp posn) =
                 else result
               Nothing -> result
 transDec venv tenv (A.FunctionDec []) = Right (venv, tenv)
+transDec venv tenv (A.FunctionDec ((A.FunDec funName params result bodyExp pos):[])) =
+  let
+    maybeResultTy =
+      join $ fmap (\(typename,_) -> Map.lookup typename tenv) result
+    maybeFormalsTys =
+      sequence $ fmap computeFormalTy params
+  in
+    case maybeFormalsTys of
+      Left err -> Left err
+      Right formalsTys ->
+        let
+          resultTy = case maybeResultTy of
+                       Nothing -> Types.UNIT
+                       Just typ -> typ
+          venv' = Map.insert funName Env.FunEntry{
+            Env.formals=map snd formalsTys,
+            Env.result=resultTy} venv
+          bodyEnv = Map.union venv $ Map.fromList $
+            map (\(sym, typ) -> (sym, Env.VarEntry typ)) formalsTys
+        in
+          case transExp bodyEnv tenv bodyExp of
+            Left err -> Left err
+            Right ExpTy{exp=_, ty=bodyTy} ->
+              if resultTy /= Types.UNIT && resultTy /= bodyTy then
+                Left SemantError{what="computed type of function body " ++
+                                      (show bodyTy) ++ " and annotated type " ++
+                                      (show resultTy) ++ " do not match",
+                                 at=pos}
+              else
+                Right (venv', tenv)
+  where
+    computeFormalTy (A.Field fieldName _ fieldTyp fieldPos) =
+      case Map.lookup fieldTyp tenv of
+        Nothing -> Left SemantError{what="at parameter " ++ (show fieldName) ++
+                                         " in function declaration, unbound type " ++
+                                         "variable " ++ (show fieldTyp),
+                                    at=fieldPos}
+        Just typeTy -> Right (fieldName, typeTy)
+
 transDec venv tenv (A.TypeDec []) = Right (venv, tenv)
 transDec venv tenv (A.TypeDec ((A.TyDec name typ _):[])) =
   case transTy tenv typ of
