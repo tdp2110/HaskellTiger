@@ -217,6 +217,32 @@ illegalDecls5 = TestCase (
     assertEqual "nil decls need record annotation 2" "nil expression declarations must be constrained by a RECORD type" err
   )
 
+illegalDecls6 :: Test
+illegalDecls6 = TestCase (
+  let
+    text = "let\n" ++
+           "  var N := 8\n" ++
+           "  type notAnArrayTy = int\n" ++
+           "  var arr := notAnArrayTy [ N ] of 0" ++
+           " in arr[0] end"
+    (Left(Semant.SemantError err _)) = parseToSema Env.baseVEnv Env.baseTEnv text
+  in do
+    assertEqual "array decls must have an array type" "only array types may appear as the symbol in an array instance definition. Found type=INT" err
+  )
+
+illegalDecls7 :: Test
+illegalDecls7 = TestCase (
+  let
+    text = "let\n" ++
+           "  var N := 8\n" ++
+           "  type intArray = array of int\n" ++
+           "  var arr := intArray [ N ] of \"hello\"" ++
+           " in arr[0] end"
+    (Left(Semant.SemantError err _)) = parseToSema Env.baseVEnv Env.baseTEnv text
+  in do
+    assertEqual "array init expr must have array elt type" "in ArrayExp, initExp has actual type STRING, when it must have INT" err
+  )
+
 tests :: Test
 tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "int arith 1" intArith1,
@@ -233,6 +259,9 @@ tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "illegalDecls2" illegalDecls2,
                   TestLabel "illegalDecls3" illegalDecls3,
                   TestLabel "illegalDecls4" illegalDecls4,
+                  TestLabel "illegalDecls5" illegalDecls5,
+                  TestLabel "illegalDecls6" illegalDecls6,
+                  TestLabel "illegalDecls7" illegalDecls7,
                   TestLabel "substring2" substringCall2,
                   TestLabel "substring3" substringCall2,
                   TestLabel "letExp1" letExp1,
