@@ -243,6 +243,21 @@ illegalDecls7 = TestCase (
     assertEqual "array init expr must have array elt type" "in ArrayExp, initExp has actual type STRING, when it must have INT" err
   )
 
+illegalDecls8 :: Test
+illegalDecls8 = TestCase (
+  let
+    text = "let\n" ++
+           "  type a = b\n" ++
+           "  type b = c\n" ++
+           "  type c = d\n" ++
+           "  type d = a\n" ++
+           "in 0 end"
+    (Left(Semant.SemantError err _)) = parseToSema Env.baseVEnv Env.baseTEnv text
+  in do
+    assertBool "illegal cyclic type decl" $
+      isInfixOf "found illegal type declaration cycle" err
+  )
+
 tests :: Test
 tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "int arith 1" intArith1,
@@ -262,6 +277,7 @@ tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "illegalDecls5" illegalDecls5,
                   TestLabel "illegalDecls6" illegalDecls6,
                   TestLabel "illegalDecls7" illegalDecls7,
+                  TestLabel "illegalDecls8" illegalDecls8,
                   TestLabel "substring2" substringCall2,
                   TestLabel "substring3" substringCall2,
                   TestLabel "letExp1" letExp1,

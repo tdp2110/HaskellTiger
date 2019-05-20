@@ -10,6 +10,7 @@ import Control.Monad (join)
 import qualified Data.Map as Map
 import Data.Either
 import Data.List
+import Data.Graph
 import Prelude hiding (exp)
 
 data SemantError = SemantError{what :: String, at :: A.Pos} deriving (Eq)
@@ -470,6 +471,59 @@ transDec venv tenv (A.TypeDec ((A.TyDec name typ _):[])) =
   case transTy tenv typ of
     Left err -> Left err
     Right typesTy -> Right (venv, Map.insert name typesTy tenv)
+transDec venv tenv (A.TypeDec tydecs) =
+  case checkForIllegalCycles tydecs of
+    Left err -> Left err
+    Right () -> undefined
+
+checkForIllegalCycles :: [A.TyDec] -> Either SemantError ()
+checkForIllegalCycles tydecs =
+  let
+    typeGraph = calcTypeGraph tydecs
+    typeEdges = map (\(sym, _, syms) -> (sym, sym, syms)) typeGraph
+    cyclicComponents = filter isCyclicSCC $ stronglyConnComp typeEdges
+    allNameCyclicComponents = filter (allAreName tydecs) cyclicComponents
+  in
+    case allNameCyclicComponents of
+      [] -> Right ()
+      (CyclicSCC syms) : _ ->
+        let Just (A.TyDec _ _ posn) = lookupTypeSym (head syms) tydecs
+        in
+          Left SemantError{
+          what="found illegal type declaration cycle (each set of mutually " ++
+               "recursive type declarations must pass through a record or array " ++
+               "type). Cycle: " ++ (show syms),
+          at=posn}
+
+allAreName :: [A.TyDec] -> SCC Symbol -> Bool
+allAreName tydecs (AcyclicSCC sym) = isNameTy tydecs sym
+allAreName tydecs (CyclicSCC syms) = all (isNameTy tydecs) syms
+
+lookupTypeSym :: Symbol -> [A.TyDec] -> Maybe A.TyDec
+lookupTypeSym sym tydecs = case filter (\tydec -> A.tydecName tydec == sym) tydecs of
+  [] -> Nothing
+  tydec : _ -> Just tydec
+
+isNameTy :: [A.TyDec] -> Symbol -> Bool
+isNameTy tydecs sym =
+  case lookupTypeSym sym tydecs of
+    Nothing -> error "shouldn't get here"
+    Just (A.TyDec _ (A.NameTy _) _) -> True
+    Just (A.TyDec _ _ _) -> True
+
+calcTypeGraph :: [A.TyDec] -> [(Symbol, A.Pos, [Symbol])]
+calcTypeGraph tydecs = fmap calcNeighbors tydecs
+  where
+    calcNeighbors (A.TyDec name (A.NameTy(name',_)) posn) =
+      (name, posn, [name'])
+    calcNeighbors (A.TyDec name (A.RecordTy fields) posn) =
+      (name, posn, map A.fieldName fields)
+    calcNeighbors (A.TyDec name (A.ArrayTy(name',_)) posn) =
+      (name, posn, [name'])
+
+isCyclicSCC :: SCC vertex -> Bool
+isCyclicSCC (CyclicSCC _) = True
+isCyclicSCC _ = False
 
 -- TODO need to assign unique type identifiers!!
 transTy tenv (A.NameTy(sym, pos)) =
