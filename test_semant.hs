@@ -149,6 +149,19 @@ break1 = TestCase (
     assertEqual "break in forExp is ok" Types.UNIT ty
   )
 
+listTy1 :: Test
+listTy1 = TestCase (
+  let
+    text = "let\n" ++
+           "  type intList = { head: int, tail: intList}\n" ++
+           "  var xs := intList{head = 0, tail = nil}\n" ++
+           "in xs end"
+    res = parseToSema Env.baseVEnv Env.baseTEnv text
+    str = show res
+  in do
+    assertEqual "intList" str "omg"
+  )
+
 break2 :: Test
 break2 = TestCase (
   let
@@ -266,6 +279,7 @@ tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "str literal" strLiteral,
                   TestLabel "str plus int" strPlusIntIsErr,
                   TestLabel "substring1" substringCall1,
+                  TestLabel "listTy1" listTy1,
                   TestLabel "break1" break1,
                   TestLabel "break2" break2,
                   TestLabel "forVar1" forVar1,

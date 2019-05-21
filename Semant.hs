@@ -17,7 +17,7 @@ data SemantError = SemantError{what :: String, at :: A.Pos} deriving (Eq)
 instance Show SemantError where
   show (SemantError err pos) = "semantic issue at " ++ (show pos) ++ ": " ++ (show err)
 
-data ExpTy = ExpTy{exp :: Translate.Exp, ty :: Types.Ty }
+data ExpTy = ExpTy{exp :: Translate.Exp, ty :: Types.Ty } deriving (Show)
 
 transVar :: Env.VEnv -> Env.TEnv -> A.Var -> Either SemantError ExpTy
 transExp :: Env.VEnv -> Env.TEnv -> A.Exp -> Either SemantError ExpTy
@@ -185,7 +185,7 @@ transExp' venv tenv breakContext (A.RecordExp fieldSymExpPosns typSym pos) =
                     actualFieldTys = map ty actualFieldExpTys
                     fieldPosns = map (\(_,_,fieldPos) -> fieldPos) fieldSymExpPosns
                   in
-                    case filter (\(_,expectedTy,actualTy,_) -> expectedTy == actualTy)
+                    case filter (\(_,expectedTy,actualTy,_) -> expectedTy /= actualTy)
                          (zip4 expectedSyms expectedFieldTys actualFieldTys fieldPosns) of
                       [] -> Right ExpTy{exp=emptyExp, ty=recordTy}
                       ((sym,expectedTy,actualTy,fieldPos):_) ->
@@ -466,28 +466,53 @@ transDec venv tenv (A.FunctionDec ((A.FunDec funName params result bodyExp pos):
                                     at=fieldPos}
         Just typeTy -> Right (fieldName, typeTy)
 
-transDec venv tenv (A.TypeDec []) = Right (venv, tenv)
-transDec venv tenv (A.TypeDec ((A.TyDec name typ _):[])) =
-  case transTy tenv typ of
-    Left err -> Left err
-    Right typesTy -> Right (venv, Map.insert name typesTy tenv)
 transDec venv tenv (A.TypeDec tydecs) =
-  case checkForIllegalCycles tydecs of
-    Left err -> Left err
-    Right () -> undefined
-
-checkForIllegalCycles :: [A.TyDec] -> Either SemantError ()
-checkForIllegalCycles tydecs =
   let
-    typeGraph = calcTypeGraph tydecs
-    typeEdges = map (\(sym, _, syms) -> (sym, sym, syms)) typeGraph
-    cyclicComponents = filter isCyclicSCC $ stronglyConnComp typeEdges
+    stronglyConnComps = typeSCCs tydecs
+  in
+    case checkForIllegalCycles tydecs stronglyConnComps of
+      Left err -> Left err
+      Right () ->
+        case foldl' step (Right tenv) stronglyConnComps of
+          Left err -> Left err
+          Right tenv' -> Right (venv, tenv')
+        where
+          step (Left err) _ = Left err
+          step (Right tenv') (CyclicSCC syms) = transCyclicDecls tenv' tydecs syms
+          step (Right tenv') (AcyclicSCC sym) = transAcyclicDecl tenv' tydecs sym
+
+transCyclicDecls :: Env.TEnv -> [A.TyDec] -> [Symbol] -> Either SemantError Env.TEnv
+transCyclicDecls tenv tydecs syms =
+  let
+    headers = map (\sym -> (sym, Types.NAME(sym, Nothing))) syms
+    bodies = map (\sym -> let (A.TyDec _ typ _) = lookupTypeSym sym tydecs
+                          in typ) syms
+    tenv' = Map.union tenv $ Map.fromList headers
+    maybeTranslatedBodies = sequence $ map (transTy tenv') bodies
+  in
+    case maybeTranslatedBodies of
+      Left err -> Left err
+      Right translatedBodies ->
+        Right $ Map.union (Map.fromList $ zip syms translatedBodies) tenv
+
+transAcyclicDecl :: Env.TEnv -> [A.TyDec] -> Symbol -> Either SemantError Env.TEnv
+transAcyclicDecl tenv tydecs sym =
+  let (A.TyDec _ typ _) = lookupTypeSym sym tydecs
+  in
+    case transTy tenv typ of
+      Left err -> Left err
+      Right typesTy -> Right $ Map.insert sym typesTy tenv
+
+checkForIllegalCycles :: [A.TyDec] -> [SCC Symbol] -> Either SemantError ()
+checkForIllegalCycles tydecs stronglyConnectedComponents =
+  let
+    cyclicComponents = filter isCyclicSCC stronglyConnectedComponents
     allNameCyclicComponents = filter (allAreName tydecs) cyclicComponents
   in
     case allNameCyclicComponents of
       [] -> Right ()
       (CyclicSCC syms) : _ ->
-        let Just (A.TyDec _ _ posn) = lookupTypeSym (head syms) tydecs
+        let (A.TyDec _ _ posn) = lookupTypeSym (head syms) tydecs
         in
           Left SemantError{
           what="found illegal type declaration cycle (each set of mutually " ++
@@ -495,21 +520,29 @@ checkForIllegalCycles tydecs =
                "type). Cycle: " ++ (show syms),
           at=posn}
 
+typeSCCs :: [A.TyDec] -> [SCC Symbol]
+typeSCCs tydecs =
+  let
+    typeGraph = calcTypeGraph tydecs
+    typeEdges = map (\(sym, _, syms) -> (sym, sym, syms)) typeGraph
+  in
+    reverse $ stronglyConnComp typeEdges
+
+
 allAreName :: [A.TyDec] -> SCC Symbol -> Bool
 allAreName tydecs (AcyclicSCC sym) = isNameTy tydecs sym
 allAreName tydecs (CyclicSCC syms) = all (isNameTy tydecs) syms
 
-lookupTypeSym :: Symbol -> [A.TyDec] -> Maybe A.TyDec
+lookupTypeSym :: Symbol -> [A.TyDec] -> A.TyDec
 lookupTypeSym sym tydecs = case filter (\tydec -> A.tydecName tydec == sym) tydecs of
-  [] -> Nothing
-  tydec : _ -> Just tydec
+  [] -> error "shouldn't get here"
+  tydec : _ -> tydec
 
 isNameTy :: [A.TyDec] -> Symbol -> Bool
 isNameTy tydecs sym =
   case lookupTypeSym sym tydecs of
-    Nothing -> error "shouldn't get here"
-    Just (A.TyDec _ (A.NameTy _) _) -> True
-    Just (A.TyDec _ _ _) -> True
+    (A.TyDec _ (A.NameTy _) _) -> True
+    (A.TyDec _ _ _) -> False
 
 calcTypeGraph :: [A.TyDec] -> [(Symbol, A.Pos, [Symbol])]
 calcTypeGraph tydecs = fmap calcNeighbors tydecs
@@ -517,7 +550,7 @@ calcTypeGraph tydecs = fmap calcNeighbors tydecs
     calcNeighbors (A.TyDec name (A.NameTy(name',_)) posn) =
       (name, posn, [name'])
     calcNeighbors (A.TyDec name (A.RecordTy fields) posn) =
-      (name, posn, map A.fieldName fields)
+      (name, posn, map A.fieldTyp fields)
     calcNeighbors (A.TyDec name (A.ArrayTy(name',_)) posn) =
       (name, posn, [name'])
 
