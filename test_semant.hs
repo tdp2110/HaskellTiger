@@ -149,12 +149,28 @@ break1 = TestCase (
     assertEqual "break in forExp is ok" Types.UNIT ty
   )
 
+nilRecord :: Test
+nilRecord = TestCase (
+  let
+    text = "let\n" ++
+           "  type intPair = { fst: int, snd: int }\n" ++
+           "  var nilPair : intPair := nil\n" ++
+           "in nilPair end"
+    (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema Env.baseVEnv Env.baseTEnv text
+    isRecord = case ty of
+                 Types.RECORD _ -> True
+                 _ -> False
+  in do
+    assertBool "nil record has record type" isRecord
+  )
+
 listTy1 :: Test
 listTy1 = TestCase (
   let
     text = "let\n" ++
            "  type intList = { head: int, tail: intList}\n" ++
-           "  var xs := intList{head = 0, tail = nil}\n" ++
+           "  var nilIntList : intList := nil\n" ++
+           "  var xs := intList{head = 0, tail = nilIntList}\n" ++
            "in xs end"
     res = parseToSema Env.baseVEnv Env.baseTEnv text
     str = show res
@@ -279,7 +295,8 @@ tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "str literal" strLiteral,
                   TestLabel "str plus int" strPlusIntIsErr,
                   TestLabel "substring1" substringCall1,
-                  TestLabel "listTy1" listTy1,
+                  TestLabel "nilRecord" nilRecord,
+                  --TestLabel "listTy1" listTy1,
                   TestLabel "break1" break1,
                   TestLabel "break2" break2,
                   TestLabel "forVar1" forVar1,

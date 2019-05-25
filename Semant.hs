@@ -40,6 +40,10 @@ isCmp A.GtOp = True
 isCmp A.GeOp = True
 isCmp _ = False
 
+actualTy :: Types.Ty -> Types.Ty
+actualTy typ = typ
+
+
 checkInt :: Types.Ty -> Maybe String-> Either String Translate.Exp
 checkInt Types.INT _ = Right $ Translate.Exp ()
 checkInt nonIntTy maybeCtx = Left $ (convertCtx maybeCtx) ++
@@ -181,17 +185,17 @@ transExp' venv tenv breakContext (A.RecordExp fieldSymExpPosns typSym pos) =
                 Left err -> Left err
                 Right actualFieldExpTys ->
                   let
-                    expectedFieldTys = map snd sym2ty
+                    expectedFieldTys = map (actualTy . snd) sym2ty
                     actualFieldTys = map ty actualFieldExpTys
                     fieldPosns = map (\(_,_,fieldPos) -> fieldPos) fieldSymExpPosns
                   in
-                    case filter (\(_,expectedTy,actualTy,_) -> expectedTy /= actualTy)
+                    case filter (\(_,expectedTy,actualTy',_) -> expectedTy /= actualTy')
                          (zip4 expectedSyms expectedFieldTys actualFieldTys fieldPosns) of
                       [] -> Right ExpTy{exp=emptyExp, ty=recordTy}
-                      ((sym,expectedTy,actualTy,fieldPos):_) ->
+                      ((sym,expectedTy,actualTy',fieldPos):_) ->
                         Left SemantError{what="in record exp, field " ++ (show sym) ++
                                               " should have type " ++ (show expectedTy) ++
-                                              " but has type " ++ (show actualTy),
+                                              " but has type " ++ (show actualTy'),
                                          at=fieldPos}
         t@(_) -> Left SemantError{
           what="only record types may appear as the symbol in a record instance " ++
@@ -409,14 +413,17 @@ transDec venv tenv (A.VarDec name _ maybeTypenameAndPos initExp posn) =
     case transExp venv tenv initExp of
       Left err -> Left err
       Right ExpTy{exp=_, ty=actualInitTy} ->
-        let result = Right (Map.insert name (Env.VarEntry actualInitTy) venv, tenv) in
-          if actualInitTy == Types.NIL then
-            case maybeTypeAnnotation of
-              Just (Types.RECORD _) -> result
-              _ -> Left SemantError{
-                what="nil expression declarations must be constrained by a RECORD type",
-                at=posn}
-          else
+        if actualInitTy == Types.NIL
+        then
+          case maybeTypeAnnotation of
+            Just recTy@(Types.RECORD _) ->
+              Right (Map.insert name (Env.VarEntry recTy) venv, tenv)
+            _ -> Left SemantError{
+              what="nil expression declarations must be constrained by a RECORD type",
+              at=posn}
+        else
+          let result = Right (Map.insert name (Env.VarEntry actualInitTy) venv, tenv)
+          in
             case maybeTypeAnnotation of
               Just typeAnnotation ->
                 if typeAnnotation /= actualInitTy then
@@ -487,13 +494,37 @@ transCyclicDecls tenv tydecs syms =
     headers = map (\sym -> (sym, Types.NAME(sym, Nothing))) syms
     bodies = map (\sym -> let (A.TyDec _ typ _) = lookupTypeSym sym tydecs
                           in typ) syms
-    tenv' = Map.union tenv $ Map.fromList headers
+    headerMap = Map.fromList headers
+    tenv' = Map.union tenv headerMap
     maybeTranslatedBodies = sequence $ map (transTy tenv') bodies
   in
     case maybeTranslatedBodies of
       Left err -> Left err
       Right translatedBodies ->
-        Right $ Map.union (Map.fromList $ zip syms translatedBodies) tenv
+        Right $ tieTheKnot tenv (Map.fromList $ zip syms translatedBodies)
+  where
+    tieTheKnot :: Env.TEnv -> Map.Map Symbol Types.Ty -> Env.TEnv
+    tieTheKnot tenv' bodyMap =
+      let
+        newTyMap = Map.fromList newTyList
+        newTyList = [tieEntry elt | elt <- Map.toList bodyMap]
+        tieEntry (sym, Types.RECORD (fieldMap, recordId)) =
+          let
+            tieFieldEntry :: (Symbol, Types.Ty) -> (Symbol, Types.Ty)
+            tieFieldEntry (fieldName, Types.NAME(sym',_)) =
+              (fieldName, newTyMap Map.! sym')
+            tieFieldEntry (fieldName, typ) =
+              (fieldName, typ)
+          in
+            (sym, Types.RECORD(map tieFieldEntry fieldMap, recordId))
+        tieEntry (sym, Types.ARRAY (Types.NAME(sym',_), arrayId)) =
+          (sym, Types.ARRAY (newTyMap Map.! sym', arrayId))
+        tieEntry (sym, Types.NAME(sym', _)) =
+          (sym, newTyMap Map.! sym')
+        tieEntry (sym, typ) =
+          (sym, typ)
+      in
+        Map.union newTyMap tenv'
 
 transAcyclicDecl :: Env.TEnv -> [A.TyDec] -> Symbol -> Either SemantError Env.TEnv
 transAcyclicDecl tenv tydecs sym =
@@ -519,6 +550,7 @@ checkForIllegalCycles tydecs stronglyConnectedComponents =
                "recursive type declarations must pass through a record or array " ++
                "type). Cycle: " ++ (show syms),
           at=posn}
+      _ -> error "shouldn't get here: we filtered on isCyclciSCC"
 
 typeSCCs :: [A.TyDec] -> [SCC Symbol]
 typeSCCs tydecs =
