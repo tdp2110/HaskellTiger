@@ -157,25 +157,25 @@ nilRecord = TestCase (
            "  var nilPair : intPair := nil\n" ++
            "in nilPair end"
     (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema Env.baseVEnv Env.baseTEnv text
-    isRecord = case ty of
-                 Types.RECORD _ -> True
-                 _ -> False
   in do
-    assertBool "nil record has record type" isRecord
+    assertBool "nil record has record type" $ isRecord ty
   )
+
+isRecord :: Types.Ty -> Bool
+isRecord (Types.RECORD _) = True
+isRecord _ = False
 
 listTy1 :: Test
 listTy1 = TestCase (
   let
     text = "let\n" ++
            "  type intList = { head: int, tail: intList}\n" ++
-           --"  var nilIntList : intList := nil\n" ++
-           --"  var xs := intList{head = 0, tail = nilIntList}\n" ++
-           "in 0 end"
-    res = parseToSema Env.baseVEnv Env.baseTEnv text
-    str = show res
+           "  var nilIntList : intList := nil\n" ++
+           "  var xs := intList{head = 0, tail = nilIntList}\n" ++
+           "in xs end"
+    (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema Env.baseVEnv Env.baseTEnv text
   in do
-    assertEqual "intList" str "omg"
+    assertBool "instance of mutrec record has record ty" $ isRecord ty
   )
 
 break2 :: Test

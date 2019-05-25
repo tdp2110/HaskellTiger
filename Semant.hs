@@ -109,7 +109,8 @@ transExp' venv tenv breakContext (A.CallExp funcSym argExps pos) =
         Left err -> Left err
         Right paramExpTys ->
           let paramTys = map ty paramExpTys in
-            if (length formalsTys) /= (length paramTys) then
+            if (length formalsTys) /= (length paramTys)
+            then
               Left SemantError{what="function " ++ (show funcSym) ++
                                         " expects " ++ (show $ length formalsTys) ++
                                         " parameters but was passed " ++ (show $ length paramTys),
@@ -143,7 +144,8 @@ transExp' venv tenv breakContext (A.OpExp leftExp op rightExp pos) =
             at=pos}
           Right _ -> return ExpTy{exp=emptyExp, ty=Types.INT}
       else
-      if isCmp op then
+      if isCmp op
+      then
         let cmpReturn = return ExpTy{exp=emptyExp, ty=Types.INT} in
           case (tyleft, tyright) of
             (Types.INT, Types.INT) -> cmpReturn
@@ -175,7 +177,8 @@ transExp' venv tenv breakContext (A.RecordExp fieldSymExpPosns typSym pos) =
             expectedSyms = map fst sym2ty
             actualSyms = map (\(sym,_,_) -> sym) fieldSymExpPosns
           in
-            if actualSyms /= expectedSyms then
+            if actualSyms /= expectedSyms
+            then
               Left SemantError{what="incompatible field names: expected " ++
                                 (show expectedSyms) ++ " but record expression has " ++
                                 (show actualSyms),
@@ -210,7 +213,8 @@ transExp' venv tenv breakContext (A.AssignExp var expr pos) =
   do
     ExpTy{exp=_, ty=varTy} <- transVar venv tenv var
     ExpTy{exp=_, ty=exprTy} <- transExp' venv tenv breakContext expr
-    if varTy == exprTy then
+    if varTy == exprTy
+    then
       return ExpTy{exp=emptyExp, ty=Types.UNIT}
       else
       Left SemantError{what="in assignExp, variable has type " ++ (show varTy) ++
@@ -223,7 +227,8 @@ transExp' venv tenv breakContext
       testExpTy <- transexp testExpr
       thenExpTy <- transexp thenExpr
       let maybeElseExpTy = fmap transexp maybeElseExpr in
-        if (ty testExpTy) /= Types.INT then
+        if (ty testExpTy) /= Types.INT
+        then
           Left SemantError{what="in ifExp, the test expression must be integral: " ++
                            "found type=" ++ (show $ ty testExpTy),
                            at=pos}
@@ -236,7 +241,8 @@ transExp' venv tenv breakContext
                 thenTy = ty thenExpTy
                 elseTy = ty elseExpTy
                 in
-                if thenTy /= elseTy then
+                if thenTy /= elseTy
+                then
                   Left SemantError{what="in ifExp, thenExp and elseExp must have " ++
                                         "the same type: found " ++ (show thenTy) ++
                                         " and " ++ (show elseTy) ++
@@ -248,7 +254,8 @@ transExp' venv tenv breakContext (A.WhileExp testExp bodyExp pos) =
   do
     ExpTy{exp=_, ty=testTy} <- transExp' venv tenv breakContext testExp
     _ <- transExp' venv tenv CanBreak bodyExp
-    if testTy /= Types.INT then
+    if testTy /= Types.INT
+    then
       Left SemantError{what="in whileExp, the test expression must be integral: " ++
                             "found type=" ++ (show testTy),
                        at=pos}
@@ -269,7 +276,8 @@ transExp' venv tenv breakContext (A.ArrayExp arrayTySym sizeExp initExp pos) =
         arrayTy@(Types.ARRAY(arrayEltTy,_)) -> do
           ExpTy{exp=_, ty=sizeTy} <- transExp' venv tenv breakContext sizeExp
           ExpTy{exp=_, ty=initTy} <- transExp' venv tenv breakContext initExp
-          if sizeTy /= Types.INT then
+          if sizeTy /= Types.INT
+          then
             Left SemantError{what="in ArrayExp, sizeExp must be an integer. " ++
                                   "Found type=" ++ (show sizeTy),
                              at=pos}
@@ -291,7 +299,8 @@ transExp' venv tenv breakContext (A.ForExp forVar _ loExp hiExp body pos) =
       ExpTy{exp=_, ty=loTy} <- transExp' venv tenv breakContext loExp
       ExpTy{exp=_, ty=hiTy} <- transExp' venv tenv breakContext hiExp
       ExpTy{exp=_, ty=bodyTy} <- transExp' bodyVEnv tenv CanBreak body
-      if (loTy /= Types.INT) || (hiTy /= Types.INT) then
+      if (loTy /= Types.INT) || (hiTy /= Types.INT)
+      then
         Left SemantError{what="only integer expressions may appear as bounds in a ForExp",
                        at=pos}
         else
@@ -374,7 +383,8 @@ checkForVarNotAssigned forVar (A.SeqExp seqElts) =
     Left err -> Left err
     Right _ -> Right ()
 checkForVarNotAssigned forVar (A.AssignExp (A.SimpleVar var _) e pos) =
-  if forVar == var then
+  if forVar == var
+  then
     Left SemantError{what="forVar assigned in forBody",
                      at=pos}
   else
@@ -401,7 +411,8 @@ checkForVarNotAssigned forVar (A.LetExp decs bodyExp _) =
     forVarIsReboundAtDec (A.VarDec varName _ _ _ _) = varName == forVar
     forVarIsReboundAtDec _ = False
       in
-    if forVarIsRebound then
+    if forVarIsRebound
+    then
       Right ()
     else
       checkForVarNotAssigned forVar bodyExp
@@ -426,7 +437,8 @@ transDec venv tenv (A.VarDec name _ maybeTypenameAndPos initExp posn) =
           in
             case maybeTypeAnnotation of
               Just typeAnnotation ->
-                if typeAnnotation /= actualInitTy then
+                if typeAnnotation /= actualInitTy
+                then
                   Left SemantError{what="mismatch in type annotation and computed type in varDecl: " ++
                                         "type annotation " ++ (show typeAnnotation) ++
                                         ", computed type " ++ (show actualInitTy),
@@ -457,7 +469,8 @@ transDec venv tenv (A.FunctionDec ((A.FunDec funName params result bodyExp pos):
           case transExp bodyEnv tenv bodyExp of
             Left err -> Left err
             Right ExpTy{exp=_, ty=bodyTy} ->
-              if resultTy /= Types.UNIT && resultTy /= bodyTy then
+              if resultTy /= Types.UNIT && resultTy /= bodyTy
+              then
                 Left SemantError{what="computed type of function body " ++
                                       (show bodyTy) ++ " and annotated type " ++
                                       (show resultTy) ++ " do not match",
