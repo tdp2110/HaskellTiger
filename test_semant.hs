@@ -169,9 +169,9 @@ listTy1 = TestCase (
   let
     text = "let\n" ++
            "  type intList = { head: int, tail: intList}\n" ++
-           "  var nilIntList : intList := nil\n" ++
-           "  var xs := intList{head = 0, tail = nilIntList}\n" ++
-           "in xs end"
+           --"  var nilIntList : intList := nil\n" ++
+           --"  var xs := intList{head = 0, tail = nilIntList}\n" ++
+           "in 0 end"
     res = parseToSema Env.baseVEnv Env.baseTEnv text
     str = show res
   in do
@@ -296,7 +296,7 @@ tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "str plus int" strPlusIntIsErr,
                   TestLabel "substring1" substringCall1,
                   TestLabel "nilRecord" nilRecord,
-                  --TestLabel "listTy1" listTy1,
+                  TestLabel "listTy1" listTy1,
                   TestLabel "break1" break1,
                   TestLabel "break2" break2,
                   TestLabel "forVar1" forVar1,
