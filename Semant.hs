@@ -19,6 +19,18 @@ instance Show SemantError where
 
 data ExpTy = ExpTy{exp :: Translate.Exp, ty :: Types.Ty } deriving (Show)
 
+transProg :: A.Exp -> Either SemantError ExpTy
+transProg expr =
+  let
+    startState = SemantState{valEnv=Env.baseVEnv,
+                             typEnv=Env.baseTEnv,
+                             canBreak=False,
+                             counter=0}
+  in
+    case transExp startState expr of
+      Left err -> Left err
+      Right(expTy,_) -> Right expTy
+
 data SemantState = SemantState {valEnv :: Env.VEnv,
                                 typEnv :: Env.TEnv,
                                 canBreak :: Bool,
@@ -36,16 +48,16 @@ pushCannotBreak (SemantState v t _ c) = SemantState{valEnv=v,
                                                     canBreak=True,
                                                     counter=c}
 
-incrCounter :: SemantState -> SemantState
-incrCounter (SemantState v t b c) = SemantState{valEnv=v,
-                                                typEnv=t,
-                                                canBreak=b,
-                                                counter=c+1}
+incrCounter :: SemantState -> (Integer, SemantState)
+incrCounter (SemantState v t b c) = (c, SemantState{valEnv=v,
+                                                    typEnv=t,
+                                                    canBreak=b,
+                                                    counter=c+1})
 
 transVar :: SemantState -> A.Var -> Either SemantError (ExpTy, SemantState)
 transExp :: SemantState -> A.Exp -> Either SemantError (ExpTy, SemantState)
 transDec :: SemantState -> A.Dec -> Either SemantError SemantState
-transTy :: Env.TEnv -> A.Ty -> Either SemantError (Types.Ty, SemantState)
+transTy :: SemantState -> A.Ty -> Either SemantError (Types.Ty, SemantState)
 transLetDecs :: SemantState -> [A.Dec] -> A.Pos -> Either SemantError SemantState
 
 isArith :: A.Oper -> Bool
@@ -246,17 +258,17 @@ transExp state (A.SeqExp expAndPosns) =
   -- TODO replace with fold
   case
     foldl'
-    (\acc (exp,_) -> case acc of
+    (\acc (expr,_) -> case acc of
                    Left err -> Left err
                    Right(expTys,state') ->
-                     case transExp state' exp of
+                     case transExp state' expr of
                        Left err -> Left err
                        Right(expTy,state'') -> Right(expTys ++ [expTy],state''))
     (Right ([],state))
     expAndPosns
   of
     Left err -> Left err
-    Right [] -> Right (ExpTy{exp=emptyExp, ty=Types.UNIT},state)
+    Right ([],state') -> Right (ExpTy{exp=emptyExp, ty=Types.UNIT},state')
     Right (expTys, state') -> Right (last expTys, state')
 transExp state (A.AssignExp var expr pos) =
   do
@@ -300,17 +312,17 @@ transExp state
 transExp state (A.WhileExp testExp bodyExp pos) =
   do
     (ExpTy{exp=_, ty=testTy}, state') <- transExp state testExp
-    (_, state') <- transExp (state{canBreak=True}) bodyExp
+    (_, state'') <- transExp (state'{canBreak=True}) bodyExp
     if testTy /= Types.INT
     then
       Left SemantError{what="in whileExp, the test expression must be integral: " ++
                             "found type=" ++ (show testTy),
                        at=pos}
       else
-      return (ExpTy{exp=emptyExp, ty=Types.UNIT}, state')
+      return (ExpTy{exp=emptyExp, ty=Types.UNIT}, state'')
 transExp st@(SemantState _ _ True _) (A.BreakExp _) =
     Right (ExpTy{exp=emptyExp, ty=Types.UNIT}, st)
-transExp st@(SemantState _ _ False _) (A.BreakExp pos) =
+transExp (SemantState _ _ False _) (A.BreakExp pos) =
     Left SemantError{what="break expression not enclosed in a while or for",
                      at=pos}
 transExp state (A.ArrayExp arrayTySym sizeExp initExp pos) =
@@ -341,11 +353,14 @@ transExp state (A.ArrayExp arrayTySym sizeExp initExp pos) =
                "definition. Found type=" ++ (show t),
           at=pos}
 transExp state (A.ForExp forVar _ loExp hiExp body pos) =
-  let bodyVEnv = Map.insert forVar Env.VarEntry{Env.ty=Types.INT} (valEnv state) in
+  let
+    bodyVEnv = Map.insert forVar Env.VarEntry{Env.ty=Types.INT} (valEnv state)
+    state' = state{valEnv=bodyVEnv}
+  in
     do
-      (ExpTy{exp=_, ty=loTy}, state') <- transExp state loExp
-      (ExpTy{exp=_, ty=hiTy}, state'') <- transExp state' hiExp
-      (ExpTy{exp=_, ty=bodyTy}, state''') <- transExp (state''{canBreak=True}) body
+      (ExpTy{exp=_, ty=loTy}, state'') <- transExp state' loExp
+      (ExpTy{exp=_, ty=hiTy}, state''') <- transExp state'' hiExp
+      (ExpTy{exp=_, ty=bodyTy}, state'''') <- transExp (state'''{canBreak=True}) body
       if (loTy /= Types.INT) || (hiTy /= Types.INT)
       then
         Left SemantError{what="only integer expressions may appear as bounds in a ForExp",
@@ -357,7 +372,7 @@ transExp state (A.ForExp forVar _ loExp hiExp body pos) =
         else
           case checkForVarNotAssigned forVar body of
             Left err -> Left err
-            _ -> return (ExpTy{exp=emptyExp, ty=Types.UNIT}, state''')
+            _ -> return (ExpTy{exp=emptyExp, ty=Types.UNIT}, state'''')
 transExp state (A.LetExp decs bodyExp letPos) = do
   state' <- transLetDecs state decs letPos
   transExp state' bodyExp
@@ -475,13 +490,13 @@ transDec state (A.VarDec name _ maybeTypenameAndPos initExp posn) =
         then
           case maybeTypeAnnotation of
             Just recTy@(Types.RECORD _) ->
-              Right state{valEnv=Map.insert name (Env.VarEntry recTy) (valEnv state)}
+              Right state'{valEnv=Map.insert name (Env.VarEntry recTy) (valEnv state')}
             _ -> Left SemantError{
               what="nil expression declarations must be constrained by a RECORD type",
               at=posn}
         else
-          let result = Right state{
-                valEnv=Map.insert name (Env.VarEntry actualInitTy) (valEnv state)}
+          let result = Right state'{
+                valEnv=Map.insert name (Env.VarEntry actualInitTy) (valEnv state')}
           in
             case maybeTypeAnnotation of
               Just typeAnnotation ->
@@ -512,12 +527,13 @@ transDec state (A.FunctionDec ((A.FunDec funName params result bodyExp pos):[]))
           venv' = Map.insert funName Env.FunEntry{
             Env.formals=map snd formalsTys,
             Env.result=resultTy} venv
-          bodyEnv = Map.union venv $ Map.fromList $
+          bodyEnv = Map.union venv' $ Map.fromList $
             map (\(sym, typ) -> (sym, Env.VarEntry typ)) formalsTys
+          state' = state{valEnv=bodyEnv}
         in
-          case transExp state bodyExp of
+          case transExp state' bodyExp of
             Left err -> Left err
-            Right (ExpTy{exp=_, ty=bodyTy}, state') ->
+            Right (ExpTy{exp=_, ty=bodyTy}, state'') ->
               if resultTy /= Types.UNIT && resultTy /= bodyTy
               then
                 Left SemantError{what="computed type of function body " ++
@@ -525,7 +541,7 @@ transDec state (A.FunctionDec ((A.FunDec funName params result bodyExp pos):[]))
                                       (show resultTy) ++ " do not match",
                                  at=pos}
               else
-                Right state'
+                Right state''
   where
     computeFormalTy (A.Field fieldName _ fieldTyp fieldPos) =
       case Map.lookup fieldTyp (typEnv state) of
@@ -557,15 +573,25 @@ transCyclicDecls state tydecs syms =
     headerMap = Map.fromList headers
     tenv' = Map.union tenv headerMap
     state' = state{typEnv=tenv'}
-    maybeTranslatedBodies = sequence $ map (transTy state') bodies
+    maybeTranslatedBodies =
+      foldl'
+      (\acc typ -> case acc of
+                     Left err -> Left err
+                     Right (translatedBodies, state'') ->
+                       case transTy state'' typ of
+                         Left err -> Left err
+                         Right (typeTy,state''') ->
+                           Right (translatedBodies ++ [typeTy], state'''))
+      (Right ([], state'))
+      bodies
   in
     case maybeTranslatedBodies of
       Left err -> Left err
-      Right (translatedBodies, state') ->
+      Right (translatedBodies, state'') ->
         let
-          venv' = tieTheKnot (typEnv state') (Map.fromList $ zip syms translatedBodies)
+          tenv'' = tieTheKnot (typEnv state'') (Map.fromList $ zip syms translatedBodies)
         in
-          state'{valEnv=venv'}
+          Right state''{typEnv=tenv''}
   where
     tieTheKnot :: Env.TEnv -> Map.Map Symbol Types.Ty -> Env.TEnv
     tieTheKnot tenv' bodyMap =
@@ -590,13 +616,14 @@ transCyclicDecls state tydecs syms =
       in
         Map.union newTyMap tenv'
 
-transAcyclicDecl :: Env.TEnv -> [A.TyDec] -> Symbol -> Either SemantError Env.TEnv
-transAcyclicDecl tenv tydecs sym =
+transAcyclicDecl :: SemantState -> [A.TyDec] -> Symbol -> Either SemantError SemantState
+transAcyclicDecl state tydecs sym =
   let (A.TyDec _ typ _) = lookupTypeSym sym tydecs
   in
-    case transTy tenv typ of
+    case transTy state typ of
       Left err -> Left err
-      Right typesTy -> Right $ Map.insert sym typesTy tenv
+      Right (typesTy, state') -> Right
+        state'{typEnv=Map.insert sym typesTy (typEnv state)}
 
 checkForIllegalCycles :: [A.TyDec] -> [SCC Symbol] -> Either SemantError ()
 checkForIllegalCycles tydecs stronglyConnectedComponents =
@@ -655,26 +682,34 @@ isCyclicSCC (CyclicSCC _) = True
 isCyclicSCC _ = False
 
 -- TODO need to assign unique type identifiers!!
-transTy tenv (A.NameTy(sym, pos)) =
-  case Map.lookup sym tenv of
+transTy state (A.NameTy(sym, pos)) =
+  case Map.lookup sym (typEnv state) of
     Nothing -> Left SemantError{what="unbound type variable " ++ (show sym) ++
                                      " in type declaration",
                                 at=pos}
-    Just typeTy -> Right typeTy
-transTy tenv (A.RecordTy fields) =
+    Just typeTy -> Right (typeTy,state)
+transTy state (A.RecordTy fields) =
   case sequence $ map fieldTypeFun fields of
     Left err -> Left err
-    Right symAndTys -> Right $ Types.RECORD(symAndTys, 1337)
+    Right symAndTys ->
+      let
+        (typeId, state') = incrCounter state
+      in
+        Right (Types.RECORD(symAndTys, typeId), state')
   where
     fieldTypeFun (A.Field fieldName _ fieldTypSym fieldPos) =
-      case Map.lookup fieldTypSym tenv of
+      case Map.lookup fieldTypSym (typEnv state) of
         Nothing -> Left SemantError{
           what="unbound type variable used in record field " ++
                (show fieldName),
           at=fieldPos}
         Just typesTy -> Right (fieldName, typesTy)
-transTy tenv (A.ArrayTy(arrayEltTypeSym, posn)) =
-  case Map.lookup arrayEltTypeSym tenv of
+transTy state (A.ArrayTy(arrayEltTypeSym, posn)) =
+  case Map.lookup arrayEltTypeSym (typEnv state) of
     Nothing -> Left SemantError{what="in array decl, unbound array element type symbol",
                                 at=posn}
-    Just typeTy -> Right $ Types.ARRAY (typeTy, 1337)
+    Just typeTy ->
+      let
+        (typeId,state') = incrCounter state
+      in
+        Right (Types.ARRAY(typeTy, typeId), state')
