@@ -19,11 +19,34 @@ instance Show SemantError where
 
 data ExpTy = ExpTy{exp :: Translate.Exp, ty :: Types.Ty } deriving (Show)
 
-transVar :: Env.VEnv -> Env.TEnv -> A.Var -> Either SemantError ExpTy
-transExp :: Env.VEnv -> Env.TEnv -> A.Exp -> Either SemantError ExpTy
-transDec :: Env.VEnv -> Env.TEnv -> A.Dec -> Either SemantError (Env.VEnv, Env.TEnv)
-transTy :: Env.TEnv -> A.Ty -> Either SemantError Types.Ty
-transLetDecs :: Env.VEnv -> Env.TEnv -> [A.Dec] -> A.Pos -> Either SemantError (Env.VEnv, Env.TEnv)
+data SemantState = SemantState {valEnv :: Env.VEnv,
+                                typEnv :: Env.TEnv,
+                                canBreak :: Bool,
+                                counter :: Integer}
+
+pushCanBreak :: SemantState -> SemantState
+pushCanBreak (SemantState v t _ c) = SemantState{valEnv=v,
+                                                 typEnv=t,
+                                                 canBreak=True,
+                                                 counter=c}
+
+pushCannotBreak :: SemantState -> SemantState
+pushCannotBreak (SemantState v t _ c) = SemantState{valEnv=v,
+                                                    typEnv=t,
+                                                    canBreak=True,
+                                                    counter=c}
+
+incrCounter :: SemantState -> SemantState
+incrCounter (SemantState v t b c) = SemantState{valEnv=v,
+                                                typEnv=t,
+                                                canBreak=b,
+                                                counter=c+1}
+
+transVar :: SemantState -> A.Var -> Either SemantError (ExpTy, SemantState)
+transExp :: SemantState -> A.Exp -> Either SemantError (ExpTy, SemantState)
+transDec :: SemantState -> A.Dec -> Either SemantError SemantState
+transTy :: Env.TEnv -> A.Ty -> Either SemantError (Types.Ty, SemantState)
+transLetDecs :: SemantState -> [A.Dec] -> A.Pos -> Either SemantError SemantState
 
 isArith :: A.Oper -> Bool
 isArith A.PlusOp = True
@@ -55,20 +78,20 @@ checkInt nonIntTy maybeCtx = Left $ (convertCtx maybeCtx) ++
 emptyExp :: Translate.Exp
 emptyExp = Translate.Exp()
 
-transVar venv _ (A.SimpleVar sym pos) =
-  case Map.lookup sym venv of
-    Just Env.VarEntry{Env.ty=t} -> Right ExpTy{exp=emptyExp, ty=t}
+transVar state (A.SimpleVar sym pos) =
+  case Map.lookup sym (valEnv state)  of
+    Just Env.VarEntry{Env.ty=t} -> Right (ExpTy{exp=emptyExp, ty=t}, state)
     Just (Env.FunEntry _ _) -> Left SemantError{
       what="variable " ++ (show sym) ++ " has no non-function bindings.",
       at=pos}
     Nothing -> Left SemantError{
       what="unbound free variable: " ++ (show sym),
       at=pos}
-transVar venv tenv (A.FieldVar var sym pos) = do
-  ExpTy{exp=_, ty=varTy} <- transVar venv tenv var
+transVar state (A.FieldVar var sym pos) = do
+  (ExpTy{exp=_, ty=varTy}, state') <- transVar state var
   case varTy of
     r@(Types.RECORD(sym2ty, _)) -> case lookup sym sym2ty of
-                                 Just t -> return ExpTy{exp=emptyExp, ty=t}
+                                 Just t -> return (ExpTy{exp=emptyExp, ty=t}, state')
                                  Nothing -> Left SemantError{
                                    what="in field expr, record type " ++
                                         (show r) ++ " has no " ++ (show sym) ++ " field",
@@ -76,13 +99,13 @@ transVar venv tenv (A.FieldVar var sym pos) = do
     t@(_) -> Left SemantError{
       what="in field expr, only record types have fields. type=" ++ (show t),
       at=pos}
-transVar venv tenv (A.SubscriptVar var expr pos) = do
-  ExpTy{exp=_, ty=varTy} <- transVar venv tenv var
+transVar state (A.SubscriptVar var expr pos) = do
+  (ExpTy{exp=_, ty=varTy}, state') <- transVar state var
   case varTy of
     Types.ARRAY(varEltTy, _) -> do
-      ExpTy{exp=_, ty=expTy} <- transExp venv tenv expr
+      (ExpTy{exp=_, ty=expTy}, state'') <- transExp state' expr
       case expTy of
-        Types.INT -> return ExpTy{exp=emptyExp, ty=varEltTy}
+        Types.INT -> return (ExpTy{exp=emptyExp, ty=varEltTy}, state'')
         nonIntTy@(_) -> Left SemantError{
           what="in subscript expr, subscript type is not an INT, is an " ++ (show nonIntTy),
           at=pos}
@@ -91,23 +114,27 @@ transVar venv tenv (A.SubscriptVar var expr pos) = do
            (show nonArrayTy),
       at=pos}
 
-data BreakContext = CanBreak | CannotBreak
-
-transExp venv tenv expr =
-  transExp' venv tenv CannotBreak expr
-
-transExp' :: Env.VEnv -> Env.TEnv -> BreakContext -> A.Exp -> Either SemantError ExpTy
-
-transExp' venv tenv _ (A.VarExp var) = transVar venv tenv var
-transExp' _ _ _ A.NilExp = Right ExpTy{exp=emptyExp, ty=Types.NIL}
-transExp' _ _ _ (A.IntExp _) = Right ExpTy{exp=emptyExp, ty=Types.INT}
-transExp' _ _ _ (A.StringExp _) = Right ExpTy{exp=emptyExp, ty=Types.STRING}
-transExp' venv tenv breakContext (A.CallExp funcSym argExps pos) =
-  case Map.lookup funcSym venv of
+transExp state (A.VarExp var) = transVar state var
+transExp state A.NilExp = Right (ExpTy{exp=emptyExp, ty=Types.NIL}, state)
+transExp state (A.IntExp _) = Right (ExpTy{exp=emptyExp, ty=Types.INT}, state)
+transExp state (A.StringExp _) = Right (ExpTy{exp=emptyExp, ty=Types.STRING}, state)
+transExp state (A.CallExp funcSym argExps pos) =
+  case Map.lookup funcSym (valEnv state) of
     Just (Env.FunEntry formalsTys resultTy) ->
-      case sequence $ map (transExp' venv tenv breakContext) argExps of
+      case
+        foldl'
+        (\acc argExp -> case acc of
+            Left err -> Left err
+            Right(paramExpTys,state') ->
+              case transExp state' argExp of
+                Left err -> Left err
+                Right(expTy,state'') -> Right (paramExpTys ++ [expTy],state'')
+        )
+        (Right ([], state))
+        argExps
+      of
         Left err -> Left err
-        Right paramExpTys ->
+        Right (paramExpTys, state') ->
           let paramTys = map ty paramExpTys in
             if (length formalsTys) /= (length paramTys)
             then
@@ -118,7 +145,7 @@ transExp' venv tenv breakContext (A.CallExp funcSym argExps pos) =
               else
               case filter (\(ty1, ty2, _) -> ty1 /= ty2)
                    (zip3 formalsTys paramTys [0 :: Integer ..]) of
-                [] -> Right ExpTy{exp=emptyExp, ty=resultTy}
+                [] -> Right (ExpTy{exp=emptyExp, ty=resultTy}, state')
                 ((formalTy, paramTy, ix):_) -> Left SemantError{
                   what="parameter " ++ (show ix) ++ " of func " ++ (show funcSym) ++
                        " requires type " ++ (show formalTy) ++ " but was passed a value of type " ++
@@ -130,10 +157,10 @@ transExp' venv tenv breakContext (A.CallExp funcSym argExps pos) =
     Nothing -> Left SemantError{
       what="unbound free variable " ++ (show funcSym),
       at=pos}
-transExp' venv tenv breakContext (A.OpExp leftExp op rightExp pos) =
+transExp state (A.OpExp leftExp op rightExp pos) =
   do
-    ExpTy{exp=_, ty=tyleft} <- transExp' venv tenv breakContext leftExp
-    ExpTy{exp=_, ty=tyright} <- transExp' venv tenv breakContext rightExp
+    (ExpTy{exp=_, ty=tyleft}, state') <- transExp state leftExp
+    (ExpTy{exp=_, ty=tyright}, state'') <- transExp state' rightExp
     if isArith op then
       let maybeError = do
             checkInt tyleft (Just "in left hand operand")
@@ -142,11 +169,11 @@ transExp' venv tenv breakContext (A.OpExp leftExp op rightExp pos) =
           Left err -> Left SemantError{
             what="In OpExp, " ++ err,
             at=pos}
-          Right _ -> return ExpTy{exp=emptyExp, ty=Types.INT}
+          Right _ -> return (ExpTy{exp=emptyExp, ty=Types.INT}, state'')
       else
       if isCmp op
       then
-        let cmpReturn = return ExpTy{exp=emptyExp, ty=Types.INT} in
+        let cmpReturn = return (ExpTy{exp=emptyExp, ty=Types.INT}, state'') in
           case (tyleft, tyright) of
             (Types.INT, Types.INT) -> cmpReturn
             (Types.STRING, Types.STRING) -> cmpReturn
@@ -164,9 +191,8 @@ transExp' venv tenv breakContext (A.OpExp leftExp op rightExp pos) =
               what="incomparable types " ++ (show tyleft) ++ " and " ++ (show tyright),
 at=pos}
         else undefined
-
-transExp' venv tenv breakContext (A.RecordExp fieldSymExpPosns typSym pos) =
-  case Map.lookup typSym tenv of
+transExp state (A.RecordExp fieldSymExpPosns typSym pos) =
+  case Map.lookup typSym (typEnv state) of
     Nothing -> Left SemantError{
       what="unbound free type variable " ++ (show typSym),
       at=pos}
@@ -184,9 +210,21 @@ transExp' venv tenv breakContext (A.RecordExp fieldSymExpPosns typSym pos) =
                                 (show actualSyms),
                                at=pos}
             else
-              case sequence $ map (\(_,expr,_) -> transExp' venv tenv breakContext expr) fieldSymExpPosns of
+              case
+                foldl'
+                (\acc (_,expr,_) -> case acc of
+                    Left err -> Left err
+                    Right(fieldExpTys,state') ->
+                      case transExp state' expr of
+                        Left err -> Left err
+                        Right (fieldExpTy,state'') ->
+                          Right (fieldExpTys ++ [fieldExpTy],state'')
+                )
+                (Right ([], state))
+                fieldSymExpPosns
+              of
                 Left err -> Left err
-                Right actualFieldExpTys ->
+                Right (actualFieldExpTys, state') ->
                   let
                     expectedFieldTys = map (actualTy . snd) sym2ty
                     actualFieldTys = map ty actualFieldExpTys
@@ -194,7 +232,7 @@ transExp' venv tenv breakContext (A.RecordExp fieldSymExpPosns typSym pos) =
                   in
                     case filter (\(_,expectedTy,actualTy',_) -> expectedTy /= actualTy')
                          (zip4 expectedSyms expectedFieldTys actualFieldTys fieldPosns) of
-                      [] -> Right ExpTy{exp=emptyExp, ty=recordTy}
+                      [] -> Right (ExpTy{exp=emptyExp, ty=recordTy}, state')
                       ((sym,expectedTy,actualTy',fieldPos):_) ->
                         Left SemantError{what="in record exp, field " ++ (show sym) ++
                                               " should have type " ++ (show expectedTy) ++
@@ -204,78 +242,87 @@ transExp' venv tenv breakContext (A.RecordExp fieldSymExpPosns typSym pos) =
           what="only record types may appear as the symbol in a record instance " ++
                "definition. Found type=" ++ (show t),
           at=pos}
-transExp' venv tenv breakContext (A.SeqExp expAndPosns) =
-  case sequence $ map (\(expr,_) -> transExp' venv tenv breakContext expr) expAndPosns of
+transExp state (A.SeqExp expAndPosns) =
+  -- TODO replace with fold
+  case
+    foldl'
+    (\acc (exp,_) -> case acc of
+                   Left err -> Left err
+                   Right(expTys,state') ->
+                     case transExp state' exp of
+                       Left err -> Left err
+                       Right(expTy,state'') -> Right(expTys ++ [expTy],state''))
+    (Right ([],state))
+    expAndPosns
+  of
     Left err -> Left err
-    Right [] -> Right ExpTy{exp=emptyExp, ty=Types.UNIT}
-    Right expTys -> Right $ last expTys
-transExp' venv tenv breakContext (A.AssignExp var expr pos) =
+    Right [] -> Right (ExpTy{exp=emptyExp, ty=Types.UNIT},state)
+    Right (expTys, state') -> Right (last expTys, state')
+transExp state (A.AssignExp var expr pos) =
   do
-    ExpTy{exp=_, ty=varTy} <- transVar venv tenv var
-    ExpTy{exp=_, ty=exprTy} <- transExp' venv tenv breakContext expr
-    if varTy == exprTy
-    then
-      return ExpTy{exp=emptyExp, ty=Types.UNIT}
+    (ExpTy{exp=_, ty=varTy}, state') <- transVar state var
+    (ExpTy{exp=_, ty=exprTy}, state'') <- transExp state' expr
+    if varTy == exprTy then
+      return (ExpTy{exp=emptyExp, ty=Types.UNIT}, state'')
       else
       Left SemantError{what="in assignExp, variable has type " ++ (show varTy) ++
                             " but assign target has type " ++ (show exprTy),
                        at=pos}
-transExp' venv tenv breakContext
+transExp state
   (A.IfExp testExpr thenExpr maybeElseExpr pos) =
-  let transexp = transExp' venv tenv breakContext in
-    do
-      testExpTy <- transexp testExpr
-      thenExpTy <- transexp thenExpr
-      let maybeElseExpTy = fmap transexp maybeElseExpr in
-        if (ty testExpTy) /= Types.INT
-        then
-          Left SemantError{what="in ifExp, the test expression must be integral: " ++
-                           "found type=" ++ (show $ ty testExpTy),
-                           at=pos}
-        else
-          case maybeElseExpTy of
-            Nothing -> return thenExpTy
-            Just elseExpTyEither -> do
-              elseExpTy <- elseExpTyEither
-              let
-                thenTy = ty thenExpTy
-                elseTy = ty elseExpTy
-                in
-                if thenTy /= elseTy
-                then
-                  Left SemantError{what="in ifExp, thenExp and elseExp must have " ++
-                                        "the same type: found " ++ (show thenTy) ++
-                                        " and " ++ (show elseTy) ++
-                                        ", respectfully",
-                                   at=pos}
-                else
-                  return ExpTy{exp=emptyExp, ty=thenTy}
-transExp' venv tenv breakContext (A.WhileExp testExp bodyExp pos) =
   do
-    ExpTy{exp=_, ty=testTy} <- transExp' venv tenv breakContext testExp
-    _ <- transExp' venv tenv CanBreak bodyExp
+    (testExpTy, state') <- transExp state testExpr
+    (thenExpTy, state'') <- transExp state' thenExpr
+    let maybeElseExpTy = fmap (transExp state'') maybeElseExpr in
+      if (ty testExpTy) /= Types.INT
+      then
+        Left SemantError{what="in ifExp, the test expression must be integral: " ++
+                              "found type=" ++ (show $ ty testExpTy),
+                         at=pos}
+      else
+        case maybeElseExpTy of
+          Nothing -> return (thenExpTy, state'')
+          Just elseExpTyEither -> do
+            (elseExpTy, state''') <- elseExpTyEither
+            let
+              thenTy = ty thenExpTy
+              elseTy = ty elseExpTy
+              in
+              if thenTy /= elseTy
+              then
+                Left SemantError{what="in ifExp, thenExp and elseExp must have " ++
+                                      "the same type: found " ++ (show thenTy) ++
+                                      " and " ++ (show elseTy) ++
+                                      ", respectfully",
+                                  at=pos}
+              else
+                return (ExpTy{exp=emptyExp, ty=thenTy}, state''')
+transExp state (A.WhileExp testExp bodyExp pos) =
+  do
+    (ExpTy{exp=_, ty=testTy}, state') <- transExp state testExp
+    (_, state') <- transExp (state{canBreak=True}) bodyExp
     if testTy /= Types.INT
     then
       Left SemantError{what="in whileExp, the test expression must be integral: " ++
                             "found type=" ++ (show testTy),
                        at=pos}
       else
-      return ExpTy{exp=emptyExp, ty=Types.UNIT}
-transExp' _ _ breakContext (A.BreakExp pos) =
-  case breakContext of
-    CanBreak -> Right ExpTy{exp=emptyExp, ty=Types.UNIT}
-    CannotBreak -> Left SemantError{what="break expression not enclosed in a while or for",
-                                    at=pos}
-transExp' venv tenv breakContext (A.ArrayExp arrayTySym sizeExp initExp pos) =
-  case Map.lookup arrayTySym tenv of
+      return (ExpTy{exp=emptyExp, ty=Types.UNIT}, state')
+transExp st@(SemantState _ _ True _) (A.BreakExp _) =
+    Right (ExpTy{exp=emptyExp, ty=Types.UNIT}, st)
+transExp st@(SemantState _ _ False _) (A.BreakExp pos) =
+    Left SemantError{what="break expression not enclosed in a while or for",
+                     at=pos}
+transExp state (A.ArrayExp arrayTySym sizeExp initExp pos) =
+  case Map.lookup arrayTySym (typEnv state) of
     Nothing -> Left SemantError{
       what="unbound free type variable " ++ (show arrayTySym),
       at=pos}
     Just maybeArrayTy ->
       case maybeArrayTy of
         arrayTy@(Types.ARRAY(arrayEltTy,_)) -> do
-          ExpTy{exp=_, ty=sizeTy} <- transExp' venv tenv breakContext sizeExp
-          ExpTy{exp=_, ty=initTy} <- transExp' venv tenv breakContext initExp
+          (ExpTy{exp=_, ty=sizeTy}, state') <- transExp state sizeExp
+          (ExpTy{exp=_, ty=initTy}, state'') <- transExp state' initExp
           if sizeTy /= Types.INT
           then
             Left SemantError{what="in ArrayExp, sizeExp must be an integer. " ++
@@ -288,17 +335,17 @@ transExp' venv tenv breakContext (A.ArrayExp arrayTySym sizeExp initExp pos) =
                                     (show arrayEltTy),
                                at=pos}
             else
-              return ExpTy{exp=emptyExp, ty=arrayTy}
+              return (ExpTy{exp=emptyExp, ty=arrayTy}, state'')
         t@(_) -> Left SemantError{
           what="only array types may appear as the symbol in an array instance " ++
                "definition. Found type=" ++ (show t),
           at=pos}
-transExp' venv tenv breakContext (A.ForExp forVar _ loExp hiExp body pos) =
-  let bodyVEnv = Map.insert forVar Env.VarEntry{Env.ty=Types.INT} venv in
+transExp state (A.ForExp forVar _ loExp hiExp body pos) =
+  let bodyVEnv = Map.insert forVar Env.VarEntry{Env.ty=Types.INT} (valEnv state) in
     do
-      ExpTy{exp=_, ty=loTy} <- transExp' venv tenv breakContext loExp
-      ExpTy{exp=_, ty=hiTy} <- transExp' venv tenv breakContext hiExp
-      ExpTy{exp=_, ty=bodyTy} <- transExp' bodyVEnv tenv CanBreak body
+      (ExpTy{exp=_, ty=loTy}, state') <- transExp state loExp
+      (ExpTy{exp=_, ty=hiTy}, state'') <- transExp state' hiExp
+      (ExpTy{exp=_, ty=bodyTy}, state''') <- transExp (state''{canBreak=True}) body
       if (loTy /= Types.INT) || (hiTy /= Types.INT)
       then
         Left SemantError{what="only integer expressions may appear as bounds in a ForExp",
@@ -310,19 +357,19 @@ transExp' venv tenv breakContext (A.ForExp forVar _ loExp hiExp body pos) =
         else
           case checkForVarNotAssigned forVar body of
             Left err -> Left err
-            _ -> return ExpTy{exp=emptyExp, ty=Types.UNIT}
-transExp' venv tenv breakContext (A.LetExp decs bodyExp letPos) = do
-  (venv', tenv') <- transLetDecs venv tenv decs letPos
-  transExp' venv' tenv' breakContext bodyExp
+            _ -> return (ExpTy{exp=emptyExp, ty=Types.UNIT}, state''')
+transExp state (A.LetExp decs bodyExp letPos) = do
+  state' <- transLetDecs state decs letPos
+  transExp state' bodyExp
 
-transLetDecs venv tenv decls letPos =
+transLetDecs state decls letPos =
   case checkDeclNamesDistinctInLet decls letPos of
     Left err -> Left err
-    _ -> foldl' step (Right (venv, tenv)) decls
+    _ -> foldl' step (Right state) decls
       where
         step (Left err) _ = Left err
-        step (Right (venv', tenv')) decl =
-          transDec venv' tenv' decl
+        step (Right state') decl =
+          transDec state' decl
 
 checkDeclNamesDistinctInLet :: [A.Dec] -> A.Pos -> Either SemantError ()
 checkDeclNamesDistinctInLet decls letPos =
@@ -418,22 +465,23 @@ checkForVarNotAssigned forVar (A.LetExp decs bodyExp _) =
       checkForVarNotAssigned forVar bodyExp
 checkForVarNotAssigned _ _ = Right ()
 
-transDec venv tenv (A.VarDec name _ maybeTypenameAndPos initExp posn) =
+transDec state (A.VarDec name _ maybeTypenameAndPos initExp posn) =
   let maybeTypeAnnotation =
-        join $ fmap (\(typename,_) -> Map.lookup typename tenv) maybeTypenameAndPos in
-    case transExp venv tenv initExp of
+        join $ fmap (\(typename,_) -> Map.lookup typename (typEnv state)) maybeTypenameAndPos in
+    case transExp state initExp of
       Left err -> Left err
-      Right ExpTy{exp=_, ty=actualInitTy} ->
+      Right (ExpTy{exp=_, ty=actualInitTy}, state') ->
         if actualInitTy == Types.NIL
         then
           case maybeTypeAnnotation of
             Just recTy@(Types.RECORD _) ->
-              Right (Map.insert name (Env.VarEntry recTy) venv, tenv)
+              Right state{valEnv=Map.insert name (Env.VarEntry recTy) (valEnv state)}
             _ -> Left SemantError{
               what="nil expression declarations must be constrained by a RECORD type",
               at=posn}
         else
-          let result = Right (Map.insert name (Env.VarEntry actualInitTy) venv, tenv)
+          let result = Right state{
+                valEnv=Map.insert name (Env.VarEntry actualInitTy) (valEnv state)}
           in
             case maybeTypeAnnotation of
               Just typeAnnotation ->
@@ -445,11 +493,11 @@ transDec venv tenv (A.VarDec name _ maybeTypenameAndPos initExp posn) =
                                    at=posn}
                 else result
               Nothing -> result
-transDec venv tenv (A.FunctionDec []) = Right (venv, tenv)
-transDec venv tenv (A.FunctionDec ((A.FunDec funName params result bodyExp pos):[])) =
+transDec state (A.FunctionDec []) = Right state
+transDec state (A.FunctionDec ((A.FunDec funName params result bodyExp pos):[])) =
   let
     maybeResultTy =
-      join $ fmap (\(typename,_) -> Map.lookup typename tenv) result
+      join $ fmap (\(typename,_) -> Map.lookup typename (typEnv state)) result
     maybeFormalsTys =
       sequence $ fmap computeFormalTy params
   in
@@ -460,15 +508,16 @@ transDec venv tenv (A.FunctionDec ((A.FunDec funName params result bodyExp pos):
           resultTy = case maybeResultTy of
                        Nothing -> Types.UNIT
                        Just typ -> typ
+          venv = valEnv state
           venv' = Map.insert funName Env.FunEntry{
             Env.formals=map snd formalsTys,
             Env.result=resultTy} venv
           bodyEnv = Map.union venv $ Map.fromList $
             map (\(sym, typ) -> (sym, Env.VarEntry typ)) formalsTys
         in
-          case transExp bodyEnv tenv bodyExp of
+          case transExp state bodyExp of
             Left err -> Left err
-            Right ExpTy{exp=_, ty=bodyTy} ->
+            Right (ExpTy{exp=_, ty=bodyTy}, state') ->
               if resultTy /= Types.UNIT && resultTy /= bodyTy
               then
                 Left SemantError{what="computed type of function body " ++
@@ -476,45 +525,47 @@ transDec venv tenv (A.FunctionDec ((A.FunDec funName params result bodyExp pos):
                                       (show resultTy) ++ " do not match",
                                  at=pos}
               else
-                Right (venv', tenv)
+                Right state'
   where
     computeFormalTy (A.Field fieldName _ fieldTyp fieldPos) =
-      case Map.lookup fieldTyp tenv of
+      case Map.lookup fieldTyp (typEnv state) of
         Nothing -> Left SemantError{what="at parameter " ++ (show fieldName) ++
                                          " in function declaration, unbound type " ++
                                          "variable " ++ (show fieldTyp),
                                     at=fieldPos}
         Just typeTy -> Right (fieldName, typeTy)
-
-transDec venv tenv (A.TypeDec tydecs) =
+transDec state (A.TypeDec tydecs) =
   let
     stronglyConnComps = typeSCCs tydecs
   in
     case checkForIllegalCycles tydecs stronglyConnComps of
       Left err -> Left err
       Right () ->
-        case foldl' step (Right tenv) stronglyConnComps of
-          Left err -> Left err
-          Right tenv' -> Right (venv, tenv')
+        foldl' step (Right state) stronglyConnComps
         where
           step (Left err) _ = Left err
-          step (Right tenv') (CyclicSCC syms) = transCyclicDecls tenv' tydecs syms
-          step (Right tenv') (AcyclicSCC sym) = transAcyclicDecl tenv' tydecs sym
+          step (Right state') (CyclicSCC syms) = transCyclicDecls state' tydecs syms
+          step (Right state') (AcyclicSCC sym) = transAcyclicDecl state' tydecs sym
 
-transCyclicDecls :: Env.TEnv -> [A.TyDec] -> [Symbol] -> Either SemantError Env.TEnv
-transCyclicDecls tenv tydecs syms =
+transCyclicDecls :: SemantState -> [A.TyDec] -> [Symbol] -> Either SemantError SemantState
+transCyclicDecls state tydecs syms =
   let
+    tenv = typEnv state
     headers = map (\sym -> (sym, Types.NAME(sym, Nothing))) syms
     bodies = map (\sym -> let (A.TyDec _ typ _) = lookupTypeSym sym tydecs
                           in typ) syms
     headerMap = Map.fromList headers
     tenv' = Map.union tenv headerMap
-    maybeTranslatedBodies = sequence $ map (transTy tenv') bodies
+    state' = state{typEnv=tenv'}
+    maybeTranslatedBodies = sequence $ map (transTy state') bodies
   in
     case maybeTranslatedBodies of
       Left err -> Left err
-      Right translatedBodies ->
-        Right $ tieTheKnot tenv (Map.fromList $ zip syms translatedBodies)
+      Right (translatedBodies, state') ->
+        let
+          venv' = tieTheKnot (typEnv state') (Map.fromList $ zip syms translatedBodies)
+        in
+          state'{valEnv=venv'}
   where
     tieTheKnot :: Env.TEnv -> Map.Map Symbol Types.Ty -> Env.TEnv
     tieTheKnot tenv' bodyMap =
