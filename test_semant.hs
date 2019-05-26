@@ -191,6 +191,20 @@ similarRecordDecs = TestCase (
     assertEqual "similar records" Types.INT ty
   )
 
+arrayOfTypeAlias :: Test
+arrayOfTypeAlias = TestCase (
+  let
+    text = "let\n" ++
+           "  var N:= 16\n" ++
+           "  type intAlias = int\n" ++
+           "  type intArray = array of int\n" ++
+           "  var xs := intArray [N] of 0\n" ++
+           "in xs[8] end"
+    (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema text
+  in do
+    assertEqual "similar records" Types.INT ty
+  )
+
 break2 :: Test
 break2 = TestCase (
   let
@@ -326,6 +340,7 @@ tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "substring2" substringCall2,
                   TestLabel "substring3" substringCall2,
                   TestLabel "letExp1" letExp1,
+                  TestLabel "arrayOfTypeAlias" arrayOfTypeAlias,
                   TestLabel "intUncallable" intUncallable
                  ]
 
