@@ -49,10 +49,7 @@ pushCannotBreak (SemantState v t _ c) = SemantState{valEnv=v,
                                                     counter=c}
 
 incrCounter :: SemantState -> (Integer, SemantState)
-incrCounter (SemantState v t b c) = (c, SemantState{valEnv=v,
-                                                    typEnv=t,
-                                                    canBreak=b,
-                                                    counter=c+1})
+incrCounter st@(SemantState _ _ _ c) = (c, st{counter=c+1})
 
 transVar :: SemantState -> A.Var -> Either SemantError (ExpTy, SemantState)
 transExp :: SemantState -> A.Exp -> Either SemantError (ExpTy, SemantState)
@@ -523,10 +520,9 @@ transDec state (A.FunctionDec ((A.FunDec funName params result bodyExp pos):[]))
           resultTy = case maybeResultTy of
                        Nothing -> Types.UNIT
                        Just typ -> typ
-          venv = valEnv state
           venv' = Map.insert funName Env.FunEntry{
             Env.formals=map snd formalsTys,
-            Env.result=resultTy} venv
+            Env.result=resultTy} (valEnv state)
           bodyEnv = Map.union venv' $ Map.fromList $
             map (\(sym, typ) -> (sym, Env.VarEntry typ)) formalsTys
           state' = state{valEnv=bodyEnv}
@@ -541,7 +537,50 @@ transDec state (A.FunctionDec ((A.FunDec funName params result bodyExp pos):[]))
                                       (show resultTy) ++ " do not match",
                                  at=pos}
               else
-                Right state''
+                Right state''{valEnv=venv'}
+  where
+    computeFormalTy (A.Field fieldName _ fieldTyp fieldPos) =
+      case Map.lookup fieldTyp (typEnv state) of
+        Nothing -> Left SemantError{what="at parameter " ++ (show fieldName) ++
+                                         " in function declaration, unbound type " ++
+                                         "variable " ++ (show fieldTyp),
+                                    at=fieldPos}
+        Just typeTy -> Right (fieldName, typeTy)
+transDec state (A.FunctionDec fundecs) =
+  let
+    resultMaybeTys =
+      map (\fundec ->
+              (join $ fmap (\(typename,_) ->
+                              Map.lookup
+                              typename
+                              (typEnv state))
+                (A.result fundec)))
+      fundecs
+    maybeFormalsTys =
+      sequence $ map (\fundec -> sequence $
+                                 fmap
+                                 computeFormalTy
+                                 (A.params fundec)) fundecs
+  in
+    case maybeFormalsTys of
+      Left err -> Left err
+      Right formalsTys ->
+        let
+          resultTyFn = (\maybeResultTy -> case maybeResultTy of
+                                            Nothing -> Types.UNIT
+                                            Just typ -> typ)
+          venv' =
+            foldl'
+            (\venv (fundec,paramTys,maybeResultTy) ->
+               Map.insert
+               (A.fundecName fundec)
+               Env.FunEntry{Env.formals=map snd paramTys,
+                            Env.result=resultTyFn maybeResultTy}
+               venv)
+            (valEnv state)
+            (zip3 fundecs formalsTys resultMaybeTys)
+        in
+          undefined
   where
     computeFormalTy (A.Field fieldName _ fieldTyp fieldPos) =
       case Map.lookup fieldTyp (typEnv state) of
