@@ -314,6 +314,20 @@ illegalDecls8 = TestCase (
       isInfixOf "found illegal type declaration cycle" err
   )
 
+mutuallyRecFuns :: Test
+mutuallyRecFuns = TestCase (
+  let
+    text = "let\n" ++
+           "  function isOdd(x:int) : int = \n" ++
+           "    if x = 1 then 1 else isEven(x-1)\n" ++
+           "  function isEven(x:int) : int = \n" ++
+           "    if x = 0 then 1 else isOdd(x-1)\n" ++
+           "in isEven(140) end"
+    (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema text
+  in do
+    assertEqual "mutrec isEven/Odd" Types.INT ty
+  )
+
 tests :: Test
 tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "int arith 1" intArith1,
@@ -341,7 +355,8 @@ tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "substring3" substringCall2,
                   TestLabel "letExp1" letExp1,
                   TestLabel "arrayOfTypeAlias" arrayOfTypeAlias,
-                  TestLabel "intUncallable" intUncallable
+                  TestLabel "intUncallable" intUncallable,
+                  TestLabel "mutuallyRecFuns" mutuallyRecFuns
                  ]
 
 main :: IO Counts

@@ -9,6 +9,7 @@ import qualified Data.Map as Map
 data EnvEntry =
     VarEntry{ty :: Ty}
   | FunEntry{formals :: [Ty], result :: Ty}
+  deriving (Show)
 
 type VEnv = Map Symbol Env.EnvEntry
 type TEnv = Map Symbol Types.Ty
