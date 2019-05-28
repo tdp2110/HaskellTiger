@@ -252,7 +252,6 @@ transExp state (A.RecordExp fieldSymExpPosns typSym pos) =
                "definition. Found type=" ++ (show t),
           at=pos}
 transExp state (A.SeqExp expAndPosns) =
-  -- TODO replace with fold
   case
     foldl'
     (\acc (expr,_) -> case acc of
@@ -720,7 +719,6 @@ isCyclicSCC :: SCC vertex -> Bool
 isCyclicSCC (CyclicSCC _) = True
 isCyclicSCC _ = False
 
--- TODO need to assign unique type identifiers!!
 transTy state (A.NameTy(sym, pos)) =
   case Map.lookup sym (typEnv state) of
     Nothing -> Left SemantError{what="unbound type variable " ++ (show sym) ++
