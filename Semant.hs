@@ -73,9 +73,6 @@ isCmp A.GtOp = True
 isCmp A.GeOp = True
 isCmp _ = False
 
-actualTy :: Types.Ty -> Types.Ty
-actualTy typ = typ
-
 
 checkInt :: Types.Ty -> Maybe String-> Either String Translate.Exp
 checkInt Types.INT _ = Right $ Translate.Exp ()
@@ -236,17 +233,17 @@ transExp state (A.RecordExp fieldSymExpPosns typSym pos) =
                 Left err -> Left err
                 Right (actualFieldExpTys, state') ->
                   let
-                    expectedFieldTys = map (actualTy . snd) sym2ty
+                    expectedFieldTys = map snd sym2ty
                     actualFieldTys = map ty actualFieldExpTys
                     fieldPosns = map (\(_,_,fieldPos) -> fieldPos) fieldSymExpPosns
                   in
-                    case filter (\(_,expectedTy,actualTy',_) -> expectedTy /= actualTy')
+                    case filter (\(_,expectedTy,actualTy,_) -> expectedTy /= actualTy)
                          (zip4 expectedSyms expectedFieldTys actualFieldTys fieldPosns) of
                       [] -> Right (ExpTy{exp=emptyExp, ty=recordTy}, state')
-                      ((sym,expectedTy,actualTy',fieldPos):_) ->
+                      ((sym,expectedTy,actualTy,fieldPos):_) ->
                         Left SemantError{what="in record exp, field " ++ (show sym) ++
                                               " should have type " ++ (show expectedTy) ++
-                                              " but has type " ++ (show actualTy'),
+                                              " but has type " ++ (show actualTy),
                                          at=fieldPos}
         t@(_) -> Left SemantError{
           what="only record types may appear as the symbol in a record instance " ++
