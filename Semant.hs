@@ -6,7 +6,12 @@ import qualified Translate as Translate
 import qualified Types as Types
 import Symbol
 
+import Control.Monad.Trans.Class
 import Control.Monad (join)
+import Control.Monad.Trans.Except (ExceptT, throwE)
+import Control.Monad.Trans.Reader (ReaderT, asks)
+import Control.Monad.Trans.State (StateT, get, put)
+import Data.Functor.Identity
 import qualified Data.Map as Map
 import Data.Either
 import Data.List
@@ -57,6 +62,37 @@ transExp :: SemantState -> A.Exp -> Either SemantError (ExpTy, SemantState)
 transDec :: SemantState -> A.Dec -> Either SemantError SemantState
 transTy :: SemantState -> A.Ty -> Either SemantError (Types.Ty, SemantState)
 transLetDecs :: SemantState -> [A.Dec] -> A.Pos -> Either SemantError SemantState
+
+data SemantEnv = SemantEnv {venv'::Env.VEnv, tenv2 :: Env.TEnv}
+data SemantState' = SemantState' {canBreak' :: Bool, counter' :: Integer }
+
+type Translator = StateT SemantState' (ReaderT SemantEnv (ExceptT SemantError Identity))
+
+throwT :: A.Pos -> String -> Translator a
+throwT posn str = lift . lift . throwE $ SemantError{what=str, at=posn}
+
+lookupT :: A.Pos -> (SemantEnv -> Map.Map Symbol a) -> Symbol -> Translator a
+lookupT posn f sym = do
+  env <- lift (asks f)
+  case Map.lookup sym env of
+    Nothing -> throwT posn $ "unbound variable " ++ (show sym)
+    Just x -> return x
+
+nextId :: Translator Integer
+nextId = do
+  st@(SemantState' _ currId) <- get
+  put st{counter'=currId + 1}
+  return currId
+
+transTy' :: A.Ty -> Translator Types.Ty
+transTy' (A.NameTy(sym, pos)) = do
+  typ <- lookupT pos tenv2 sym
+  return typ
+--transTy' (A.RecordTy fields) = do
+transTy' (A.ArrayTy(arrayEltTypeSym, posn)) = do
+  typ <- lookupT posn tenv2 arrayEltTypeSym
+  typeId <- nextId
+  return $ Types.ARRAY(typ, typeId)
 
 isArith :: A.Oper -> Bool
 isArith A.PlusOp = True
