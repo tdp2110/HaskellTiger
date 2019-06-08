@@ -85,10 +85,18 @@ nextId = do
   return currId
 
 transTy' :: A.Ty -> Translator Types.Ty
-transTy' (A.NameTy(sym, pos)) = do
-  typ <- lookupT pos tenv2 sym
+transTy' (A.NameTy(sym, posn)) = do
+  typ <- lookupT posn tenv2 sym
   return typ
---transTy' (A.RecordTy fields) = do
+transTy' (A.RecordTy fields) =  do
+  symAndTys <- mapM mapFunc fields
+  typeId <- nextId
+  return $ Types.RECORD(symAndTys, typeId)
+  where
+    mapFunc (A.Field fieldName _ fieldTypSym fieldPos) = do
+      typ <- lookupT fieldPos tenv2 fieldTypSym
+      return (fieldName, typ)
+
 transTy' (A.ArrayTy(arrayEltTypeSym, posn)) = do
   typ <- lookupT posn tenv2 arrayEltTypeSym
   typeId <- nextId
