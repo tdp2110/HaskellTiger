@@ -9,7 +9,7 @@ import Symbol
 import Control.Monad.Trans.Class
 import Control.Monad (join)
 import Control.Monad.Trans.Except (ExceptT, throwE, runExceptT)
-import Control.Monad.Trans.Reader (ReaderT, asks, runReaderT)
+import Control.Monad.Trans.Reader (ReaderT, ask, asks, runReaderT)
 import Control.Monad.Trans.State (StateT, get, put, evalStateT, runStateT)
 import Data.Functor.Identity
 import qualified Data.Map as Map
@@ -59,8 +59,11 @@ incrCounter st@(SemantState _ _ _ c) = (c, st{counter=c+1})
 -- TODO learn me some monad transformers!
 transVar :: SemantState -> A.Var -> Either SemantError (ExpTy, SemantState)
 transExp :: SemantState -> A.Exp -> Either SemantError (ExpTy, SemantState)
+transTy :: A.Ty -> Translator Types.Ty
 transDec :: SemantState -> A.Dec -> Either SemantError SemantState
 transLetDecs :: SemantState -> [A.Dec] -> A.Pos -> Either SemantError SemantState
+
+transDec' :: A.Dec -> Translator SemantEnv
 
 data SemantEnv = SemantEnv {venv'::Env.VEnv, tenv2 :: Env.TEnv}
 data SemantState' = SemantState' {canBreak' :: Bool, counter' :: Integer }
@@ -84,7 +87,7 @@ throwT posn str = lift . lift . throwE $ SemantError{what=str, at=posn}
 
 lookupT :: A.Pos -> (SemantEnv -> Map.Map Symbol a) -> Symbol -> Translator a
 lookupT posn f sym = do
-  env <- lift (asks f)
+  env <- lift $ asks f
   case Map.lookup sym env of
     Nothing -> throwT posn $ "unbound variable " ++ (show sym)
     Just x -> return x
@@ -103,7 +106,6 @@ nextId = do
   put st{counter'=currId + 1}
   return currId
 
-transTy :: A.Ty -> Translator Types.Ty
 transTy (A.NameTy(sym, posn)) = do
   typ <- lookupT posn tenv2 sym
   return typ
@@ -536,6 +538,44 @@ checkForVarNotAssigned forVar (A.LetExp decs bodyExp _) =
     else
       checkForVarNotAssigned forVar bodyExp
 checkForVarNotAssigned _ _ = Right ()
+
+transDec' (A.VarDec name _ maybeTypenameAndPos initExp posn) = do
+  maybeTypeAnnotation <- mapM
+                         (\(typename,_) -> lookupT posn tenv2 typename)
+                         maybeTypenameAndPos
+  newStyleState <- get
+  newStyleEnv <- lift ask
+  let
+    oldStyleState = newStateToOld newStyleState newStyleEnv
+    in
+    case transExp oldStyleState initExp of
+      Left err -> (lift . lift . throwE) err
+      Right (ExpTy{exp=_, ty=actualInitTy}, state') ->
+        if actualInitTy == Types.NIL
+        then
+          case maybeTypeAnnotation of
+            Just recTy@(Types.RECORD _) ->
+              return $ newEnvFromOld $ state'{
+                valEnv=Map.insert name (Env.VarEntry recTy) (valEnv state')}
+            _ -> lift . lift . throwE $ SemantError{
+              what="nil expression declarations must be constrained by a RECORD type",
+              at=posn}
+        else
+          let result = return $ newEnvFromOld $ state'{
+                valEnv=Map.insert name (Env.VarEntry actualInitTy) (valEnv state')}
+          in
+            case maybeTypeAnnotation of
+              Just typeAnnotation ->
+                if typeAnnotation /= actualInitTy
+                then
+                  lift . lift . throwE $ SemantError{
+                  what="mismatch in type annotation and computed type in varDecl: " ++
+                       "type annotation " ++ (show typeAnnotation) ++
+                       ", computed type " ++ (show actualInitTy),
+                  at=posn}
+                else result
+              Nothing -> result
+
 
 transDec state (A.VarDec name _ maybeTypenameAndPos initExp posn) =
   let maybeTypeAnnotation =
