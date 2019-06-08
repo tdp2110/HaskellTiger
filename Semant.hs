@@ -703,12 +703,17 @@ transCyclicDecls state tydecs syms =
 
 transAcyclicDecl :: SemantState -> [A.TyDec] -> Symbol -> Either SemantError SemantState
 transAcyclicDecl state tydecs sym =
-  let (A.TyDec _ typ _) = lookupTypeSym sym tydecs
+  let
+    (A.TyDec _ typ _) = lookupTypeSym sym tydecs
+    newStyleEnv = newEnvFromOld state
   in
-    case transTy state typ of
+    case runTransT
+         (oldStateToNew state)
+         newStyleEnv
+         (transTy' typ) of
       Left err -> Left err
       Right (typesTy, state') -> Right
-        state'{typEnv=Map.insert sym typesTy (typEnv state)}
+        (newStateToOld state' newStyleEnv){typEnv=Map.insert sym typesTy (typEnv state)}
 
 checkForIllegalCycles :: [A.TyDec] -> [SCC Symbol] -> Either SemantError ()
 checkForIllegalCycles tydecs stronglyConnectedComponents =
