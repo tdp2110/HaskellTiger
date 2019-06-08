@@ -60,7 +60,6 @@ incrCounter st@(SemantState _ _ _ c) = (c, st{counter=c+1})
 transVar :: SemantState -> A.Var -> Either SemantError (ExpTy, SemantState)
 transExp :: SemantState -> A.Exp -> Either SemantError (ExpTy, SemantState)
 transDec :: SemantState -> A.Dec -> Either SemantError SemantState
-transTy :: SemantState -> A.Ty -> Either SemantError (Types.Ty, SemantState)
 transLetDecs :: SemantState -> [A.Dec] -> A.Pos -> Either SemantError SemantState
 
 data SemantEnv = SemantEnv {venv'::Env.VEnv, tenv2 :: Env.TEnv}
@@ -104,11 +103,11 @@ nextId = do
   put st{counter'=currId + 1}
   return currId
 
-transTy' :: A.Ty -> Translator Types.Ty
-transTy' (A.NameTy(sym, posn)) = do
+transTy :: A.Ty -> Translator Types.Ty
+transTy (A.NameTy(sym, posn)) = do
   typ <- lookupT posn tenv2 sym
   return typ
-transTy' (A.RecordTy fields) =  do
+transTy (A.RecordTy fields) =  do
   symAndTys <- mapM mapFunc fields
   typeId <- nextId
   return $ Types.RECORD(symAndTys, typeId)
@@ -117,7 +116,7 @@ transTy' (A.RecordTy fields) =  do
       typ <- lookupT fieldPos tenv2 fieldTypSym
       return (fieldName, typ)
 
-transTy' (A.ArrayTy(arrayEltTypeSym, posn)) = do
+transTy (A.ArrayTy(arrayEltTypeSym, posn)) = do
   typ <- lookupT posn tenv2 arrayEltTypeSym
   typeId <- nextId
   return $ Types.ARRAY(typ, typeId)
@@ -662,7 +661,7 @@ transCyclicDecls state tydecs syms =
                          case runTransT
                               (oldStateToNew state'')
                               newEnv
-                              (transTy' typ) of
+                              (transTy typ) of
                            Left err -> Left err
                            Right (typeTy,state''') ->
                              Right (translatedBodies ++ [typeTy],
@@ -710,7 +709,7 @@ transAcyclicDecl state tydecs sym =
     case runTransT
          (oldStateToNew state)
          newStyleEnv
-         (transTy' typ) of
+         (transTy typ) of
       Left err -> Left err
       Right (typesTy, state') -> Right
         (newStateToOld state' newStyleEnv){typEnv=Map.insert sym typesTy (typEnv state)}
@@ -770,35 +769,3 @@ calcTypeGraph tydecs = fmap calcNeighbors tydecs
 isCyclicSCC :: SCC vertex -> Bool
 isCyclicSCC (CyclicSCC _) = True
 isCyclicSCC _ = False
-
-transTy state (A.NameTy(sym, pos)) =
-  case Map.lookup sym (typEnv state) of
-    Nothing -> Left SemantError{what="unbound type variable " ++ (show sym) ++
-                                     " in type declaration",
-                                at=pos}
-    Just typeTy -> Right (typeTy,state)
-transTy state (A.RecordTy fields) =
-  case sequence $ map fieldTypeFun fields of
-    Left err -> Left err
-    Right symAndTys ->
-      let
-        (typeId, state') = incrCounter state
-      in
-        Right (Types.RECORD(symAndTys, typeId), state')
-  where
-    fieldTypeFun (A.Field fieldName _ fieldTypSym fieldPos) =
-      case Map.lookup fieldTypSym (typEnv state) of
-        Nothing -> Left SemantError{
-          what="unbound type variable used in record field " ++
-               (show fieldName),
-          at=fieldPos}
-        Just typesTy -> Right (fieldName, typesTy)
-transTy state (A.ArrayTy(arrayEltTypeSym, posn)) =
-  case Map.lookup arrayEltTypeSym (typEnv state) of
-    Nothing -> Left SemantError{what="in array decl, unbound array element type symbol",
-                                at=posn}
-    Just typeTy ->
-      let
-        (typeId,state') = incrCounter state
-      in
-        Right (Types.ARRAY(typeTy, typeId), state')
