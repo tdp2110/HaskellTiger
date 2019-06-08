@@ -8,9 +8,9 @@ import Symbol
 
 import Control.Monad.Trans.Class
 import Control.Monad (join)
-import Control.Monad.Trans.Except (ExceptT, throwE)
-import Control.Monad.Trans.Reader (ReaderT, asks)
-import Control.Monad.Trans.State (StateT, get, put)
+import Control.Monad.Trans.Except (ExceptT, throwE, runExceptT)
+import Control.Monad.Trans.Reader (ReaderT, asks, runReaderT)
+import Control.Monad.Trans.State (StateT, get, put, evalStateT, runStateT)
 import Data.Functor.Identity
 import qualified Data.Map as Map
 import Data.Either
@@ -66,6 +66,18 @@ transLetDecs :: SemantState -> [A.Dec] -> A.Pos -> Either SemantError SemantStat
 data SemantEnv = SemantEnv {venv'::Env.VEnv, tenv2 :: Env.TEnv}
 data SemantState' = SemantState' {canBreak' :: Bool, counter' :: Integer }
 
+oldStateToNew :: SemantState -> SemantState'
+oldStateToNew st = SemantState'{canBreak'=canBreak st, counter'=counter st}
+
+newEnvFromOld ::SemantState -> SemantEnv
+newEnvFromOld st = SemantEnv{venv'=valEnv st, tenv2=typEnv st}
+
+newStateToOld :: SemantState' -> SemantEnv -> SemantState
+newStateToOld st env = SemantState{valEnv=venv' env,
+                                   typEnv=tenv2 env,
+                                   canBreak=canBreak' st,
+                                   counter=counter' st}
+
 type Translator = StateT SemantState' (ReaderT SemantEnv (ExceptT SemantError Identity))
 
 throwT :: A.Pos -> String -> Translator a
@@ -77,6 +89,14 @@ lookupT posn f sym = do
   case Map.lookup sym env of
     Nothing -> throwT posn $ "unbound variable " ++ (show sym)
     Just x -> return x
+
+runTransT :: SemantState' -> SemantEnv -> Translator a -> Either SemantError (a, SemantState')
+runTransT st env =
+  runIdentity . runExceptT . flip runReaderT env . flip runStateT st
+
+evalTransT :: SemantState' -> SemantEnv -> Translator a -> Either SemantError a
+evalTransT st env =
+  runIdentity . runExceptT . flip runReaderT env . flip evalStateT st
 
 nextId :: Translator Integer
 nextId = do
@@ -638,10 +658,15 @@ transCyclicDecls state tydecs syms =
       (\acc typ -> case acc of
                      Left err -> Left err
                      Right (translatedBodies, state'') ->
-                       case transTy state'' typ of
-                         Left err -> Left err
-                         Right (typeTy,state''') ->
-                           Right (translatedBodies ++ [typeTy], state'''))
+                       let newEnv = newEnvFromOld state'' in
+                         case runTransT
+                              (oldStateToNew state'')
+                              newEnv
+                              (transTy' typ) of
+                           Left err -> Left err
+                           Right (typeTy,state''') ->
+                             Right (translatedBodies ++ [typeTy],
+                                    newStateToOld state''' newEnv))
       (Right ([], state'))
       bodies
   in
