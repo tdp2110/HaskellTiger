@@ -57,8 +57,7 @@ incrCounter :: SemantState -> (Integer, SemantState)
 incrCounter st@(SemantState _ _ _ c) = (c, st{counter=c+1})
 
 -- TODO learn me some monad transformers!
-transVar :: SemantState -> A.Var -> Either SemantError (ExpTy, SemantState)
-transVar' :: A.Var -> Translator ExpTy
+transVar :: A.Var -> Translator ExpTy
 transExp :: SemantState -> A.Exp -> Either SemantError (ExpTy, SemantState)
 transTy :: A.Ty -> Translator Types.Ty
 transLetDecs :: SemantState -> [A.Dec] -> A.Pos -> Either SemantError SemantState
@@ -150,15 +149,15 @@ checkInt nonIntTy maybeCtx = Left $ (convertCtx maybeCtx) ++
 emptyExp :: Translate.Exp
 emptyExp = Translate.Exp()
 
-transVar' (A.SimpleVar sym pos) = do
+transVar (A.SimpleVar sym pos) = do
   val <- lookupT pos venv' sym
   case val of
     Env.VarEntry{Env.ty=t} -> return ExpTy{exp=emptyExp, ty=t}
     (Env.FunEntry _ _) -> (lift . lift . throwE) SemantError{
       what="variable " ++ (show sym) ++ " has no non-function bindings.",
       at=pos}
-transVar' (A.FieldVar var sym pos) = do
-  ExpTy{exp=_, ty=varTy} <- transVar' var
+transVar (A.FieldVar var sym pos) = do
+  ExpTy{exp=_, ty=varTy} <- transVar var
   case varTy of
     r@(Types.RECORD(sym2ty, _)) ->
       case lookup sym sym2ty of
@@ -170,8 +169,8 @@ transVar' (A.FieldVar var sym pos) = do
     t@(_) -> (lift . lift . throwE) SemantError{
       what="in field expr, only record types have fields. type=" ++ (show t),
       at=pos}
-transVar' (A.SubscriptVar var expr pos) = do
-  ExpTy{exp=_, ty=varTy} <- transVar' var
+transVar (A.SubscriptVar var expr pos) = do
+  ExpTy{exp=_, ty=varTy} <- transVar var
   newStyleState <- get
   env <- lift ask
   case varTy of
@@ -196,43 +195,20 @@ transVar' (A.SubscriptVar var expr pos) = do
            (show nonArrayTy),
       at=pos}
 
-transVar state (A.SimpleVar sym pos) =
-  case Map.lookup sym (valEnv state) of
-    Just Env.VarEntry{Env.ty=t} -> Right (ExpTy{exp=emptyExp, ty=t}, state)
-    Just (Env.FunEntry _ _) -> Left SemantError{
-      what="variable " ++ (show sym) ++ " has no non-function bindings.",
-      at=pos}
-    Nothing -> Left SemantError{
-      what="unbound free variable: " ++ (show sym),
-      at=pos}
-transVar state (A.FieldVar var sym pos) = do
-  (ExpTy{exp=_, ty=varTy}, state') <- transVar state var
-  case varTy of
-    r@(Types.RECORD(sym2ty, _)) -> case lookup sym sym2ty of
-                                 Just t -> return (ExpTy{exp=emptyExp, ty=t}, state')
-                                 Nothing -> Left SemantError{
-                                   what="in field expr, record type " ++
-                                        (show r) ++ " has no " ++ (show sym) ++ " field",
-                                   at=pos}
-    t@(_) -> Left SemantError{
-      what="in field expr, only record types have fields. type=" ++ (show t),
-      at=pos}
-transVar state (A.SubscriptVar var expr pos) = do
-  (ExpTy{exp=_, ty=varTy}, state') <- transVar state var
-  case varTy of
-    Types.ARRAY(varEltTy, _) -> do
-      (ExpTy{exp=_, ty=expTy}, state'') <- transExp state' expr
-      case expTy of
-        Types.INT -> return (ExpTy{exp=emptyExp, ty=varEltTy}, state'')
-        nonIntTy@(_) -> Left SemantError{
-          what="in subscript expr, subscript type is not an INT, is an " ++ (show nonIntTy),
-          at=pos}
-    nonArrayTy@(_) -> Left SemantError{
-      what="in subscript expr, only arrays may be subscripted -- attempting to subscript type=" ++
-           (show nonArrayTy),
-      at=pos}
+transExp state (A.VarExp var) =
+  let
+    newStyleState = oldStateToNew state
+    newStyleEnv = newEnvFromOld state
+    translatedVar = runTransT
+      newStyleState
+      newStyleEnv
+      (transVar var)
+  in
+    case translatedVar of
+      Left err -> Left err
+      Right (expr, semantState') ->
+        Right (expr, newStateToOld semantState' newStyleEnv)
 
-transExp state (A.VarExp var) = transVar state var
 transExp state A.NilExp = Right (ExpTy{exp=emptyExp, ty=Types.NIL}, state)
 transExp state (A.IntExp _) = Right (ExpTy{exp=emptyExp, ty=Types.INT}, state)
 transExp state (A.StringExp _) = Right (ExpTy{exp=emptyExp, ty=Types.STRING}, state)
@@ -376,8 +352,19 @@ transExp state (A.SeqExp expAndPosns) =
     Right ([],state') -> Right (ExpTy{exp=emptyExp, ty=Types.UNIT},state')
     Right (expTys, state') -> Right (last expTys, state')
 transExp state (A.AssignExp var expr pos) =
-  do
-    (ExpTy{exp=_, ty=varTy}, state') <- transVar state var
+  let
+    newStyleState = oldStateToNew state
+    newStyleEnv = newEnvFromOld state
+    translatedVar = runTransT
+      newStyleState
+      newStyleEnv
+      (transVar var)
+    translatedVarOldStyle = case translatedVar of
+      Left err -> Left err
+      Right (expr', newStyleState') ->
+        Right (expr', newStateToOld newStyleState' newStyleEnv)
+  in do
+    (ExpTy{exp=_, ty=varTy}, state') <- translatedVarOldStyle
     (ExpTy{exp=_, ty=exprTy}, state'') <- transExp state' expr
     if varTy == exprTy then
       return (ExpTy{exp=emptyExp, ty=Types.UNIT}, state'')
