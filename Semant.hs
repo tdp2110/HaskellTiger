@@ -321,6 +321,19 @@ transExp' (A.IfExp testExpr thenExpr maybeElseExpr pos) = do
                           ", respectfully")
             else
               return ExpTy{exp=emptyExp, ty=thenTy}
+transExp' (A.WhileExp testExp bodyExp pos) = do
+  ExpTy{exp=_, ty=testTy} <- transExp' testExp
+  st <- get
+  put st{canBreak'=True}
+  ExpTy{exp=_, ty=bodyTy} <- transExp' bodyExp
+  if testTy /= Types.INT then
+    throwT pos ("in whileExp, the test expression must be integral: " ++
+                "found type=" ++ (show testTy))
+    else if bodyTy /= Types.UNIT then
+    throwT pos ("in a whileExp, the body expression must yield no value: " ++
+                "found type=" ++ (show bodyTy)) -- TODO add a test for me!
+    else
+    return ExpTy{exp=emptyExp, ty=Types.UNIT}
 
 transExp state (A.VarExp var) =
   let
