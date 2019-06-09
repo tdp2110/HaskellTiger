@@ -193,12 +193,6 @@ transExp' (A.IntExp _) = do
   return ExpTy{exp=emptyExp, ty=Types.INT}
 transExp' (A.StringExp _) = do
   return ExpTy{exp=emptyExp, ty=Types.STRING}
-transExp' (A.BreakExp pos) = do
-  (SemantState' canBreak'' _) <- get
-  if canBreak'' then
-    return ExpTy{exp=emptyExp, ty=Types.UNIT}
-    else
-    throwT pos "break expression not enclosed in a while or for"
 transExp' (A.CallExp funcSym argExps pos) = do
   funEntry <- lookupT pos venv' funcSym
   case funEntry of
@@ -334,6 +328,31 @@ transExp' (A.WhileExp testExp bodyExp pos) = do
                 "found type=" ++ (show bodyTy)) -- TODO add a test for me!
     else
     return ExpTy{exp=emptyExp, ty=Types.UNIT}
+transExp' (A.BreakExp pos) = do
+  (SemantState' canBreak'' _) <- get
+  if canBreak'' then
+    return ExpTy{exp=emptyExp, ty=Types.UNIT}
+    else
+    throwT pos "break expression not enclosed in a while or for"
+transExp' (A.ArrayExp arrayTySym sizeExp initExp pos) = do
+  maybeArrayTy <- lookupT pos tenv2 arrayTySym
+  case maybeArrayTy of
+    arrayTy@(Types.ARRAY(arrayEltTy,_)) -> do
+      ExpTy{exp=_, ty=sizeTy} <- transExp' sizeExp
+      ExpTy{exp=_, ty=initTy} <- transExp' initExp
+      if sizeTy /= Types.INT then
+        throwT pos ("in ArrayExp, sizeExp must be an integer. " ++
+                    "Found type=" ++ (show sizeTy))
+        else if initTy /= arrayEltTy then
+        throwT pos ("in ArrayExp, initExp has actual type " ++
+                    (show initTy) ++ ", when it must have " ++
+                    (show arrayEltTy))
+        else
+        return ExpTy{exp=emptyExp, ty=arrayTy}
+    t@(_) ->
+          throwT pos ("only array types may appear as the symbol in an " ++
+                      "array instance " ++
+                      "definition. Found type=" ++ (show t))
 
 transExp state (A.VarExp var) =
   let
