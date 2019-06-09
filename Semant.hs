@@ -250,6 +250,38 @@ transExp' (A.OpExp leftExp op rightExp pos) = do
           _ -> throwT pos ("incomparable types " ++ (show tyleft) ++
                            " and " ++ (show tyright))
     else undefined
+transExp' (A.RecordExp fieldSymExpPosns typSym pos) = do
+  maybeRecordTy <- lookupT pos tenv2 typSym
+  case maybeRecordTy of
+    recordTy@(Types.RECORD(sym2ty, _)) ->
+      let
+        expectedSyms = map fst sym2ty
+        actualSyms = map (\(sym,_,_) -> sym) fieldSymExpPosns
+      in
+        if actualSyms /= expectedSyms
+        then
+          throwT pos ("incompatible field names: expected " ++
+                       (show expectedSyms) ++ " but record expression has " ++
+                       (show actualSyms))
+        else do
+          actualFieldExpTys <- mapM (\(_,expr,_) -> transExp' expr) fieldSymExpPosns
+          let
+            expectedFieldTys = map snd sym2ty
+            actualFieldTys = map ty actualFieldExpTys
+            fieldPosns = map (\(_,_,fieldPos) -> fieldPos) fieldSymExpPosns
+            in
+            case filter (\(_,expectedTy,actualTy,_) -> expectedTy /= actualTy)
+                 (zip4 expectedSyms expectedFieldTys actualFieldTys fieldPosns)
+            of
+              [] -> return ExpTy{exp=emptyExp, ty=recordTy}
+              ((sym,expectedTy,actualTy,fieldPos):_) ->
+                throwT fieldPos ("in record exp, field " ++ (show sym) ++
+                                 " should have type " ++ (show expectedTy) ++
+                                 " but has type " ++ (show actualTy))
+    t@(_) ->
+          throwT pos ("only record types may appear as the symbol in a " ++
+                      "record instance " ++
+                      "definition. Found type=" ++ (show t))
 
 transExp state (A.VarExp var) =
   let
