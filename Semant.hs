@@ -199,6 +199,27 @@ transExp' (A.BreakExp pos) = do
     return ExpTy{exp=emptyExp, ty=Types.UNIT}
     else
     throwT pos "break expression not enclosed in a while or for"
+transExp' (A.CallExp funcSym argExps pos) = do
+  funEntry <- lookupT pos venv' funcSym
+  case funEntry of
+    (Env.FunEntry formalsTys resultTy) -> do
+      paramExpTys <- mapM transExp' argExps
+      let paramTys = map ty paramExpTys in
+        if (length formalsTys) /= (length paramTys)
+        then
+          throwT pos ("function " ++ (show funcSym) ++
+                      " expects " ++ (show $ length formalsTys) ++
+                      " parameters but was passed " ++ (show $ length paramTys))
+        else
+          case filter (\(ty1, ty2, _) -> ty1 /= ty2)
+               (zip3 formalsTys paramTys [0 :: Integer ..]) of
+            [] -> return ExpTy{exp=emptyExp, ty=resultTy}
+            ((formalTy, paramTy, ix):_) ->
+              throwT pos ("parameter " ++ (show ix) ++ " of func " ++ (show funcSym) ++
+                          " requires type " ++ (show formalTy) ++
+                          " but was passed a value of type " ++ (show paramTy))
+    (Env.VarEntry t) -> throwT pos ("only functions are callable: found type " ++
+                                   (show t))
 
 transExp state (A.VarExp var) =
   let
