@@ -43,6 +43,7 @@ data SemantState = SemantState {valEnv :: Env.VEnv,
 
 transVar :: A.Var -> Translator ExpTy
 transExp :: SemantState -> A.Exp -> Either SemantError (ExpTy, SemantState)
+transExp' :: A.Exp -> Translator ExpTy
 transTy :: A.Ty -> Translator Types.Ty
 transLetDecs :: SemantState -> [A.Dec] -> A.Pos -> Either SemantError SemantState
 
@@ -66,7 +67,7 @@ newStateToOld st env = SemantState{valEnv=venv' env,
 type Translator = StateT SemantState' (ReaderT SemantEnv (ExceptT SemantError Identity))
 
 throwT :: A.Pos -> String -> Translator a
-throwT posn str = lift . lift . throwE $ SemantError{what=str, at=posn}
+throwT posn str = (lift . lift . throwE) SemantError{what=str, at=posn}
 
 lookupT :: A.Pos -> (SemantEnv -> Map.Map Symbol a) -> Symbol -> Translator a
 lookupT posn f sym = do
@@ -178,6 +179,26 @@ transVar (A.SubscriptVar var expr pos) = do
       what="in subscript expr, only arrays may be subscripted -- attempting to subscript type=" ++
            (show nonArrayTy),
       at=pos}
+
+transExp' (A.VarExp var) = do
+  st <- get
+  env <- lift ask
+  case  runTransT st env (transVar var) of
+    Left err -> (lift . lift . throwE) err
+    Right (res, newState) ->
+      put newState >> return res
+transExp' A.NilExp = do
+  return ExpTy{exp=emptyExp, ty=Types.NIL}
+transExp' (A.IntExp _) = do
+  return ExpTy{exp=emptyExp, ty=Types.INT}
+transExp' (A.StringExp _) = do
+  return ExpTy{exp=emptyExp, ty=Types.STRING}
+transExp' (A.BreakExp pos) = do
+  (SemantState' canBreak'' _) <- get
+  if canBreak'' then
+    return ExpTy{exp=emptyExp, ty=Types.UNIT}
+    else
+    throwT pos "break expression not enclosed in a while or for"
 
 transExp state (A.VarExp var) =
   let
