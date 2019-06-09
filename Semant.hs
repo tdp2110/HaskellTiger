@@ -297,6 +297,30 @@ transExp' (A.AssignExp var expr pos) = do
     else
     throwT pos ("in assignExp, variable has type " ++ (show varTy) ++
                 " but assign target has type " ++ (show exprTy))
+transExp' (A.IfExp testExpr thenExpr maybeElseExpr pos) = do
+  testExpTy <- transExp' testExpr
+  thenExpTy <- transExp' thenExpr
+  let
+    maybeElseExpTy = fmap transExp' maybeElseExpr in
+    if (ty testExpTy) /= Types.INT then
+      throwT pos ("in ifExp, the test expression must be integral: " ++
+                  "found type=" ++ (show $ ty testExpTy))
+    else
+      case maybeElseExpTy of
+        Nothing -> return thenExpTy
+        Just elseExpTyM -> do
+          elseExpTy <- elseExpTyM
+          let
+            thenTy = ty thenExpTy
+            elseTy = ty elseExpTy
+            in
+            if thenTy /= elseTy then
+              throwT pos ("in ifExp, thenExp and elseExp must have " ++
+                          "the same type: found " ++ (show thenTy) ++
+                          " and " ++ (show elseTy) ++
+                          ", respectfully")
+            else
+              return ExpTy{exp=emptyExp, ty=thenTy}
 
 transExp state (A.VarExp var) =
   let
