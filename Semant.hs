@@ -220,6 +220,36 @@ transExp' (A.CallExp funcSym argExps pos) = do
                           " but was passed a value of type " ++ (show paramTy))
     (Env.VarEntry t) -> throwT pos ("only functions are callable: found type " ++
                                    (show t))
+transExp' (A.OpExp leftExp op rightExp pos) = do
+  ExpTy{exp=_, ty=tyleft} <- transExp' leftExp
+  ExpTy{exp=_, ty=tyright} <- transExp' rightExp
+  if isArith op then
+    let maybeError = do
+          checkInt tyleft (Just "in left hand operand")
+          checkInt tyright (Just "in right hand operand")
+    in
+      case maybeError of
+        Left err -> throwT pos ("In OpExp, " ++ err)
+        Right _ -> return ExpTy{exp=emptyExp, ty=Types.INT}
+    else
+    if isCmp op then
+      let
+        res = return ExpTy{exp=emptyExp, ty=Types.INT}
+      in
+        case (tyleft, tyright) of
+          (Types.INT, Types.INT) -> res
+          (Types.STRING, Types.STRING) -> res
+          (r1@(Types.RECORD _), r2@(Types.RECORD _)) ->
+            if r1 == r2 then res
+              else
+              throwT pos "only identical record types may be compared"
+          (arr1@(Types.ARRAY _), arr2@(Types.ARRAY _)) ->
+            if arr1 == arr2 then res
+            else
+              throwT pos "only identical array types may be compared"
+          _ -> throwT pos ("incomparable types " ++ (show tyleft) ++
+                           " and " ++ (show tyright))
+    else undefined
 
 transExp state (A.VarExp var) =
   let
