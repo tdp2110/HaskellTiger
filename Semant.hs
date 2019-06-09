@@ -7,7 +7,7 @@ import qualified Types as Types
 import Symbol
 
 import Control.Monad.Trans.Class
-import Control.Monad (join)
+import Control.Monad (join, foldM)
 import Control.Monad.Trans.Except (ExceptT, throwE, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, ask, asks, runReaderT)
 import Control.Monad.Trans.State (StateT, get, put, evalStateT, runStateT)
@@ -575,7 +575,73 @@ transDec' (A.VarDec name _ maybeTypenameAndPos initExp posn) = do
                   at=posn}
                 else result
               Nothing -> result
-
+transDec' (A.FunctionDec fundecs) = do
+  newStyleEnv <- lift ask
+  let
+    resultMaybeTys =
+      map (\fundec ->
+              (join $ fmap (\(typename,_) ->
+                              Map.lookup
+                              typename
+                              (tenv2 newStyleEnv))
+                (A.result fundec)))
+      fundecs
+    maybeFormalsTys =
+      sequence $ map (\fundec -> sequence $
+                                 fmap
+                                 (computeFormalTy newStyleEnv)
+                                 (A.params fundec)) fundecs
+    in
+    case maybeFormalsTys of
+      Left err -> (lift . lift . throwE) err
+      Right formalsTys ->
+        let
+          resultTys = map resultTyFun resultMaybeTys
+          headerVEnv =
+            foldl'
+            (\venv (fundec,paramTys,resultTy) ->
+               Map.insert
+               (A.fundecName fundec)
+               Env.FunEntry{Env.formals=map snd paramTys,
+                            Env.result=resultTy}
+               venv)
+            (venv' newStyleEnv)
+            (zip3 fundecs formalsTys resultTys)
+          headerNewStyleEnv = newStyleEnv{venv'=headerVEnv}
+        in
+          foldM
+          transBody
+          headerNewStyleEnv
+          (zip3 fundecs formalsTys resultTys)
+  where
+    computeFormalTy newStyleEnv (A.Field fieldName _ fieldTyp fieldPos) =
+      case Map.lookup fieldTyp (tenv2 newStyleEnv) of
+        Nothing -> Left SemantError{what="at parameter " ++ (show fieldName) ++
+                                         " in function declaration, unbound type " ++
+                                         "variable " ++ (show fieldTyp),
+                                    at=fieldPos}
+        Just typeTy -> Right (fieldName, typeTy)
+    resultTyFun maybeResultTy = case maybeResultTy of
+                                  Nothing -> Types.UNIT
+                                  Just typ -> typ
+    transBody newStyleEnv (fundec,formalsTys,resultTy) = do
+      st <- get
+      let
+        venv = venv' newStyleEnv
+        bodyVEnv = Map.union venv $ Map.fromList $
+          map (\(sym,typ) -> (sym, Env.VarEntry typ)) formalsTys
+        in
+        case transExp (newStateToOld st newStyleEnv){valEnv=bodyVEnv} (A.funBody fundec) of
+          Left err -> (lift . lift . throwE) err
+          Right (ExpTy{exp=_, ty=bodyTy}, state') ->
+            if resultTy /= Types.UNIT && resultTy /= bodyTy
+            then
+              lift . lift . throwE $ SemantError{what="computed type of function body " ++
+                                    (show bodyTy) ++ " and annotated type " ++
+                                    (show resultTy) ++ " do not match",
+                               at=(A.funPos fundec)}
+            else
+              return $ newEnvFromOld state'
 
 transDec state (A.VarDec name _ maybeTypenameAndPos initExp posn) =
   let maybeTypeAnnotation =
