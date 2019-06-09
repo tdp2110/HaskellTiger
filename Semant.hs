@@ -60,10 +60,9 @@ incrCounter st@(SemantState _ _ _ c) = (c, st{counter=c+1})
 transVar :: SemantState -> A.Var -> Either SemantError (ExpTy, SemantState)
 transExp :: SemantState -> A.Exp -> Either SemantError (ExpTy, SemantState)
 transTy :: A.Ty -> Translator Types.Ty
-transDec :: SemantState -> A.Dec -> Either SemantError SemantState
 transLetDecs :: SemantState -> [A.Dec] -> A.Pos -> Either SemantError SemantState
 
-transDec' :: A.Dec -> Translator SemantEnv
+transDec :: A.Dec -> Translator SemantEnv
 
 data SemantEnv = SemantEnv {venv'::Env.VEnv, tenv2 :: Env.TEnv}
 data SemantState' = SemantState' {canBreak' :: Bool, counter' :: Integer }
@@ -439,11 +438,19 @@ transExp state (A.LetExp decs bodyExp letPos) = do
 transLetDecs state decls letPos =
   case checkDeclNamesDistinctInLet decls letPos of
     Left err -> Left err
-    _ -> foldl' step (Right state) decls
+    Right () -> foldl' step (Right state) decls
       where
         step (Left err) _ = Left err
         step (Right state') decl =
-          transDec state' decl
+          case
+            runTransT
+            (oldStateToNew state')
+            (newEnvFromOld state')
+            (transDec decl)
+          of
+            Left err -> Left err
+            Right (newEnv, semantState') ->
+              Right $ newStateToOld semantState' newEnv
 
 checkDeclNamesDistinctInLet :: [A.Dec] -> A.Pos -> Either SemantError ()
 checkDeclNamesDistinctInLet decls letPos =
@@ -539,7 +546,7 @@ checkForVarNotAssigned forVar (A.LetExp decs bodyExp _) =
       checkForVarNotAssigned forVar bodyExp
 checkForVarNotAssigned _ _ = Right ()
 
-transDec' (A.VarDec name _ maybeTypenameAndPos initExp posn) = do
+transDec (A.VarDec name _ maybeTypenameAndPos initExp posn) = do
   maybeTypeAnnotation <- mapM
                          (\(typename,_) -> lookupT posn tenv2 typename)
                          maybeTypenameAndPos
@@ -575,7 +582,7 @@ transDec' (A.VarDec name _ maybeTypenameAndPos initExp posn) = do
                   at=posn}
                 else result
               Nothing -> result
-transDec' (A.FunctionDec fundecs) = do
+transDec (A.FunctionDec fundecs) = do
   newStyleEnv <- lift ask
   let
     resultMaybeTys =
@@ -642,111 +649,25 @@ transDec' (A.FunctionDec fundecs) = do
                                at=(A.funPos fundec)}
             else
               return $ newEnvFromOld state'
-
-transDec state (A.VarDec name _ maybeTypenameAndPos initExp posn) =
-  let maybeTypeAnnotation =
-        join $ fmap (\(typename,_) -> Map.lookup typename (typEnv state)) maybeTypenameAndPos in
-    case transExp state initExp of
-      Left err -> Left err
-      Right (ExpTy{exp=_, ty=actualInitTy}, state') ->
-        if actualInitTy == Types.NIL
-        then
-          case maybeTypeAnnotation of
-            Just recTy@(Types.RECORD _) ->
-              Right state'{valEnv=Map.insert name (Env.VarEntry recTy) (valEnv state')}
-            _ -> Left SemantError{
-              what="nil expression declarations must be constrained by a RECORD type",
-              at=posn}
-        else
-          let result = Right state'{
-                valEnv=Map.insert name (Env.VarEntry actualInitTy) (valEnv state')}
-          in
-            case maybeTypeAnnotation of
-              Just typeAnnotation ->
-                if typeAnnotation /= actualInitTy
-                then
-                  Left SemantError{what="mismatch in type annotation and computed type in varDecl: " ++
-                                        "type annotation " ++ (show typeAnnotation) ++
-                                        ", computed type " ++ (show actualInitTy),
-                                   at=posn}
-                else result
-              Nothing -> result
-transDec state (A.FunctionDec fundecs) =
-  let
-    resultMaybeTys =
-      map (\fundec ->
-              (join $ fmap (\(typename,_) ->
-                              Map.lookup
-                              typename
-                              (typEnv state))
-                (A.result fundec)))
-      fundecs
-    maybeFormalsTys =
-      sequence $ map (\fundec -> sequence $
-                                 fmap
-                                 computeFormalTy
-                                 (A.params fundec)) fundecs
-  in
-    case maybeFormalsTys of
-      Left err -> Left err
-      Right formalsTys ->
-        let
-          resultTys = map resultTyFun resultMaybeTys
-          headerVEnv =
-            foldl'
-            (\venv (fundec,paramTys,resultTy) ->
-               Map.insert
-               (A.fundecName fundec)
-               Env.FunEntry{Env.formals=map snd paramTys,
-                            Env.result=resultTy}
-               venv)
-            (valEnv state)
-            (zip3 fundecs formalsTys resultTys)
-        in
-          foldl'
-          transBody
-          (Right state{valEnv=headerVEnv})
-          (zip3 fundecs formalsTys resultTys)
-  where
-    computeFormalTy (A.Field fieldName _ fieldTyp fieldPos) =
-      case Map.lookup fieldTyp (typEnv state) of
-        Nothing -> Left SemantError{what="at parameter " ++ (show fieldName) ++
-                                         " in function declaration, unbound type " ++
-                                         "variable " ++ (show fieldTyp),
-                                    at=fieldPos}
-        Just typeTy -> Right (fieldName, typeTy)
-    resultTyFun maybeResultTy = case maybeResultTy of
-                                  Nothing -> Types.UNIT
-                                  Just typ -> typ
-    transBody (Left err) _ = Left err
-    transBody (Right state') (fundec,formalsTys,resultTy) =
-      let
-        bodyVEnv = Map.union (valEnv state') $ Map.fromList $
-                   map (\(sym,typ) -> (sym, Env.VarEntry typ)) formalsTys
-      in
-        case transExp state'{valEnv=bodyVEnv} (A.funBody fundec) of
-          Left err -> Left err
-          Right (ExpTy{exp=_, ty=bodyTy}, state'') ->
-            if resultTy /= Types.UNIT && resultTy /= bodyTy
-            then
-              Left SemantError{what="computed type of function body " ++
-                                    (show bodyTy) ++ " and annotated type " ++
-                                    (show resultTy) ++ " do not match",
-                               at=(A.funPos fundec)}
-            else
-              Right state''
-transDec state (A.TypeDec tydecs) =
+transDec (A.TypeDec tydecs) =
   let
     stronglyConnComps = typeSCCs tydecs
   in
     case checkForIllegalCycles tydecs stronglyConnComps of
-      Left err -> Left err
-      Right () ->
-        foldl' step (Right state) stronglyConnComps
-        where
-          step (Left err) _ = Left err
-          step (Right state') (CyclicSCC syms) = transCyclicDecls state' tydecs syms
-          step (Right state') (AcyclicSCC sym) = transAcyclicDecl state' tydecs sym
+      Left err -> (lift . lift . throwE) err
+      Right () -> do
+        newStyleState <- get
+        newStyleEnv <- lift ask
+        let
+          state = newStateToOld newStyleState newStyleEnv
+          in
+          case foldl' step (Right state) stronglyConnComps of
+            Left err -> (lift . lift . throwE) err
+            Right state' -> return $ newEnvFromOld state'
+          where
+            step (Left err) _ = Left err
+            step (Right state') (CyclicSCC syms) = transCyclicDecls state' tydecs syms
+            step (Right state') (AcyclicSCC sym) = transAcyclicDecl state' tydecs sym
 
 transCyclicDecls :: SemantState -> [A.TyDec] -> [Symbol] -> Either SemantError SemantState
 transCyclicDecls state tydecs syms =
