@@ -58,6 +58,7 @@ incrCounter st@(SemantState _ _ _ c) = (c, st{counter=c+1})
 
 -- TODO learn me some monad transformers!
 transVar :: SemantState -> A.Var -> Either SemantError (ExpTy, SemantState)
+transVar' :: A.Var -> Translator ExpTy
 transExp :: SemantState -> A.Exp -> Either SemantError (ExpTy, SemantState)
 transTy :: A.Ty -> Translator Types.Ty
 transLetDecs :: SemantState -> [A.Dec] -> A.Pos -> Either SemantError SemantState
@@ -149,8 +150,54 @@ checkInt nonIntTy maybeCtx = Left $ (convertCtx maybeCtx) ++
 emptyExp :: Translate.Exp
 emptyExp = Translate.Exp()
 
+transVar' (A.SimpleVar sym pos) = do
+  val <- lookupT pos venv' sym
+  case val of
+    Env.VarEntry{Env.ty=t} -> return ExpTy{exp=emptyExp, ty=t}
+    (Env.FunEntry _ _) -> (lift . lift . throwE) SemantError{
+      what="variable " ++ (show sym) ++ " has no non-function bindings.",
+      at=pos}
+transVar' (A.FieldVar var sym pos) = do
+  ExpTy{exp=_, ty=varTy} <- transVar' var
+  case varTy of
+    r@(Types.RECORD(sym2ty, _)) ->
+      case lookup sym sym2ty of
+        Just t -> return ExpTy{exp=emptyExp, ty=t}
+        Nothing -> (lift . lift . throwE) SemantError{
+          what="in field expr, record type " ++
+               (show r) ++ " has no " ++ (show sym) ++ " field",
+          at=pos}
+    t@(_) -> (lift . lift . throwE) SemantError{
+      what="in field expr, only record types have fields. type=" ++ (show t),
+      at=pos}
+transVar' (A.SubscriptVar var expr pos) = do
+  ExpTy{exp=_, ty=varTy} <- transVar' var
+  newStyleState <- get
+  env <- lift ask
+  case varTy of
+    Types.ARRAY(varEltTy, _) ->
+      let
+        oldStyleState = newStateToOld newStyleState env
+      in
+        case transExp oldStyleState expr of
+          Left err -> (lift . lift . throwE) err
+          Right (ExpTy{exp=_, ty=expTy}, state') ->
+            let
+              newStyleState' = oldStateToNew state'
+            in
+              case expTy of
+                Types.INT ->
+                  put newStyleState' >> return ExpTy{exp=emptyExp, ty=varEltTy}
+                nonIntTy@(_) -> (lift . lift . throwE) SemantError{
+                  what="in subscript expr, subscript type is not an INT, is an " ++ (show nonIntTy),
+                  at=pos}
+    nonArrayTy@(_) -> (lift . lift . throwE) SemantError{
+      what="in subscript expr, only arrays may be subscripted -- attempting to subscript type=" ++
+           (show nonArrayTy),
+      at=pos}
+
 transVar state (A.SimpleVar sym pos) =
-  case Map.lookup sym (valEnv state)  of
+  case Map.lookup sym (valEnv state) of
     Just Env.VarEntry{Env.ty=t} -> Right (ExpTy{exp=emptyExp, ty=t}, state)
     Just (Env.FunEntry _ _) -> Left SemantError{
       what="variable " ++ (show sym) ++ " has no non-function bindings.",
