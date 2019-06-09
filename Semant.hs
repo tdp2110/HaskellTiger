@@ -41,22 +41,6 @@ data SemantState = SemantState {valEnv :: Env.VEnv,
                                 canBreak :: Bool,
                                 counter :: Integer}
 
-pushCanBreak :: SemantState -> SemantState
-pushCanBreak (SemantState v t _ c) = SemantState{valEnv=v,
-                                                 typEnv=t,
-                                                 canBreak=True,
-                                                 counter=c}
-
-pushCannotBreak :: SemantState -> SemantState
-pushCannotBreak (SemantState v t _ c) = SemantState{valEnv=v,
-                                                    typEnv=t,
-                                                    canBreak=True,
-                                                    counter=c}
-
-incrCounter :: SemantState -> (Integer, SemantState)
-incrCounter st@(SemantState _ _ _ c) = (c, st{counter=c+1})
-
--- TODO learn me some monad transformers!
 transVar :: A.Var -> Translator ExpTy
 transExp :: SemantState -> A.Exp -> Either SemantError (ExpTy, SemantState)
 transTy :: A.Ty -> Translator Types.Ty
