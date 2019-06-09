@@ -320,6 +320,7 @@ transExp' (A.WhileExp testExp bodyExp pos) = do
   st <- get
   put st{canBreak'=True}
   ExpTy{exp=_, ty=bodyTy} <- transExp' bodyExp
+  put st{canBreak'=False}
   if testTy /= Types.INT then
     throwT pos ("in whileExp, the test expression must be integral: " ++
                 "found type=" ++ (show testTy))
@@ -353,6 +354,27 @@ transExp' (A.ArrayExp arrayTySym sizeExp initExp pos) = do
           throwT pos ("only array types may appear as the symbol in an " ++
                       "array instance " ++
                       "definition. Found type=" ++ (show t))
+transExp' (A.ForExp forVar _ loExp hiExp body pos) = do
+  ExpTy{exp=_, ty=loTy} <- transExp' loExp
+  ExpTy{exp=_, ty=hiTy} <- transExp' hiExp
+  st <- get
+  env <- lift ask
+  let
+    bodyVEnv = Map.insert forVar Env.VarEntry{Env.ty=Types.INT} (venv' env)
+    bodyEnv = env{venv'=bodyVEnv}
+    in
+    case runTransT st{canBreak'=True} bodyEnv (transExp' body) of
+      Left err -> throwErr err
+      Right (ExpTy{exp=_, ty=bodyTy}, st') -> do
+        put st'{canBreak'=False}
+        if (loTy /= Types.INT) || (hiTy /= Types.INT) then
+          throwT pos "only integer expressions may appear as bounds in a ForExp"
+          else if bodyTy /= Types.UNIT then
+          throwT pos "the body of a ForExp must yield no value"
+          else
+          case checkForVarNotAssigned forVar body of
+            Left err -> throwErr err
+            _ -> return ExpTy{exp=emptyExp, ty=Types.UNIT}
 
 transExp state (A.VarExp var) =
   let
