@@ -67,7 +67,10 @@ newStateToOld st env = SemantState{valEnv=venv' env,
 type Translator = StateT SemantState' (ReaderT SemantEnv (ExceptT SemantError Identity))
 
 throwT :: A.Pos -> String -> Translator a
-throwT posn str = (lift . lift . throwE) SemantError{what=str, at=posn}
+throwT posn str = throwErr SemantError{what=str, at=posn}
+
+throwErr :: SemantError -> Translator a
+throwErr err = (lift . lift . throwE) err
 
 lookupT :: A.Pos -> (SemantEnv -> Map.Map Symbol a) -> Symbol -> Translator a
 lookupT posn f sym = do
@@ -138,22 +141,19 @@ transVar (A.SimpleVar sym pos) = do
   val <- lookupT pos venv' sym
   case val of
     Env.VarEntry{Env.ty=t} -> return ExpTy{exp=emptyExp, ty=t}
-    (Env.FunEntry _ _) -> (lift . lift . throwE) SemantError{
-      what="variable " ++ (show sym) ++ " has no non-function bindings.",
-      at=pos}
+    (Env.FunEntry _ _) -> throwT pos ("variable " ++ (show sym) ++
+                                      " has no non-function bindings.")
 transVar (A.FieldVar var sym pos) = do
   ExpTy{exp=_, ty=varTy} <- transVar var
   case varTy of
     r@(Types.RECORD(sym2ty, _)) ->
       case lookup sym sym2ty of
         Just t -> return ExpTy{exp=emptyExp, ty=t}
-        Nothing -> (lift . lift . throwE) SemantError{
-          what="in field expr, record type " ++
-               (show r) ++ " has no " ++ (show sym) ++ " field",
-          at=pos}
-    t@(_) -> (lift . lift . throwE) SemantError{
-      what="in field expr, only record types have fields. type=" ++ (show t),
-      at=pos}
+        Nothing -> throwT pos ("in field expr, record type " ++
+                               (show r) ++ " has no " ++ (show sym) ++
+                               " field")
+    t@(_) -> throwT pos ("in field expr, only record types have fields. type=" ++
+                         (show t))
 transVar (A.SubscriptVar var expr pos) = do
   ExpTy{exp=_, ty=varTy} <- transVar var
   newStyleState <- get
@@ -164,29 +164,29 @@ transVar (A.SubscriptVar var expr pos) = do
         oldStyleState = newStateToOld newStyleState env
       in
         case transExp oldStyleState expr of
-          Left err -> (lift . lift . throwE) err
+          Left err -> throwErr err
           Right (ExpTy{exp=_, ty=expTy}, state') ->
             let
               newStyleState' = oldStateToNew state'
             in
               case expTy of
-                Types.INT ->
-                  put newStyleState' >> return ExpTy{exp=emptyExp, ty=varEltTy}
-                nonIntTy@(_) -> (lift . lift . throwE) SemantError{
-                  what="in subscript expr, subscript type is not an INT, is an " ++ (show nonIntTy),
-                  at=pos}
-    nonArrayTy@(_) -> (lift . lift . throwE) SemantError{
-      what="in subscript expr, only arrays may be subscripted -- attempting to subscript type=" ++
-           (show nonArrayTy),
-      at=pos}
+                Types.INT -> do
+                  put newStyleState'
+                  return ExpTy{exp=emptyExp, ty=varEltTy}
+                nonIntTy@(_) -> throwT pos ("in subscript expr, subscript type " ++
+                                            "is not an INT, is an " ++ (show nonIntTy))
+    nonArrayTy@(_) -> throwT pos ("in subscript expr, only arrays may " ++
+                                  "be subscripted -- attempting to subscript type=" ++
+                                  (show nonArrayTy))
 
 transExp' (A.VarExp var) = do
   st <- get
   env <- lift ask
   case  runTransT st env (transVar var) of
-    Left err -> (lift . lift . throwE) err
-    Right (res, newState) ->
-      put newState >> return res
+    Left err -> throwErr err
+    Right (res, newState) -> do
+      put newState
+      return res
 transExp' A.NilExp = do
   return ExpTy{exp=emptyExp, ty=Types.NIL}
 transExp' (A.IntExp _) = do
@@ -595,7 +595,7 @@ transDec (A.VarDec name _ maybeTypenameAndPos initExp posn) = do
     oldStyleState = newStateToOld newStyleState newStyleEnv
     in
     case transExp oldStyleState initExp of
-      Left err -> (lift . lift . throwE) err
+      Left err -> throwErr err
       Right (ExpTy{exp=_, ty=actualInitTy}, state') ->
         if actualInitTy == Types.NIL
         then
@@ -603,9 +603,8 @@ transDec (A.VarDec name _ maybeTypenameAndPos initExp posn) = do
             Just recTy@(Types.RECORD _) ->
               return $ newEnvFromOld $ state'{
                 valEnv=Map.insert name (Env.VarEntry recTy) (valEnv state')}
-            _ -> lift . lift . throwE $ SemantError{
-              what="nil expression declarations must be constrained by a RECORD type",
-              at=posn}
+            _ -> throwT posn ("nil expression declarations must be " ++
+                              "constrained by a RECORD type")
         else
           let result = return $ newEnvFromOld $ state'{
                 valEnv=Map.insert name (Env.VarEntry actualInitTy) (valEnv state')}
@@ -614,11 +613,10 @@ transDec (A.VarDec name _ maybeTypenameAndPos initExp posn) = do
               Just typeAnnotation ->
                 if typeAnnotation /= actualInitTy
                 then
-                  lift . lift . throwE $ SemantError{
-                  what="mismatch in type annotation and computed type in varDecl: " ++
-                       "type annotation " ++ (show typeAnnotation) ++
-                       ", computed type " ++ (show actualInitTy),
-                  at=posn}
+                  throwT posn ("mismatch in type annotation and computed " ++
+                               "type in varDecl: " ++
+                               "type annotation " ++ (show typeAnnotation) ++
+                               ", computed type " ++ (show actualInitTy))
                 else result
               Nothing -> result
 transDec (A.FunctionDec fundecs) = do
@@ -639,7 +637,7 @@ transDec (A.FunctionDec fundecs) = do
                                  (A.params fundec)) fundecs
     in
     case maybeFormalsTys of
-      Left err -> (lift . lift . throwE) err
+      Left err -> throwErr err
       Right formalsTys ->
         let
           resultTys = map resultTyFun resultMaybeTys
@@ -678,14 +676,13 @@ transDec (A.FunctionDec fundecs) = do
           map (\(sym,typ) -> (sym, Env.VarEntry typ)) formalsTys
         in
         case transExp (newStateToOld st newStyleEnv){valEnv=bodyVEnv} (A.funBody fundec) of
-          Left err -> (lift . lift . throwE) err
+          Left err -> throwErr err
           Right (ExpTy{exp=_, ty=bodyTy}, state') ->
             if resultTy /= Types.UNIT && resultTy /= bodyTy
             then
-              lift . lift . throwE $ SemantError{what="computed type of function body " ++
-                                    (show bodyTy) ++ " and annotated type " ++
-                                    (show resultTy) ++ " do not match",
-                               at=(A.funPos fundec)}
+              throwT (A.funPos fundec) ("computed type of function body " ++
+                                        (show bodyTy) ++ " and annotated type " ++
+                                        (show resultTy) ++ " do not match")
             else
               return $ newEnvFromOld state'
 transDec (A.TypeDec tydecs) =
@@ -693,7 +690,7 @@ transDec (A.TypeDec tydecs) =
     stronglyConnComps = typeSCCs tydecs
   in
     case checkForIllegalCycles tydecs stronglyConnComps of
-      Left err -> (lift . lift . throwE) err
+      Left err -> throwErr err
       Right () -> do
         newStyleState <- get
         newStyleEnv <- lift ask
@@ -701,7 +698,7 @@ transDec (A.TypeDec tydecs) =
           state = newStateToOld newStyleState newStyleEnv
           in
           case foldl' step (Right state) stronglyConnComps of
-            Left err -> (lift . lift . throwE) err
+            Left err -> throwErr err
             Right state' -> return $ newEnvFromOld state'
           where
             step (Left err) _ = Left err
