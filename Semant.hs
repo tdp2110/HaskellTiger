@@ -282,6 +282,13 @@ transExp' (A.RecordExp fieldSymExpPosns typSym pos) = do
           throwT pos ("only record types may appear as the symbol in a " ++
                       "record instance " ++
                       "definition. Found type=" ++ (show t))
+transExp' (A.SeqExp expAndPosns) = do
+  expTys <- mapM
+    (\(expr,_) -> transExp' expr)
+    expAndPosns
+  case expTys of
+    [] -> return ExpTy{exp=emptyExp, ty=Types.UNIT}
+    _ -> return $ last expTys
 
 transExp state (A.VarExp var) =
   let
