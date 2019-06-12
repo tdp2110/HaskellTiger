@@ -46,6 +46,7 @@ transExp :: SemantState -> A.Exp -> Either SemantError (ExpTy, SemantState)
 transExp' :: A.Exp -> Translator ExpTy
 transTy :: A.Ty -> Translator Types.Ty
 transLetDecs :: SemantState -> [A.Dec] -> A.Pos -> Either SemantError SemantState
+transLetDecs' :: [A.Dec] -> A.Pos -> Translator SemantEnv
 
 transDec :: A.Dec -> Translator SemantEnv
 
@@ -375,6 +376,35 @@ transExp' (A.ForExp forVar _ loExp hiExp body pos) = do
           case checkForVarNotAssigned forVar body of
             Left err -> throwErr err
             _ -> return ExpTy{exp=emptyExp, ty=Types.UNIT}
+transExp' (A.LetExp decs bodyExp letPos) = do
+  env <- lift ask
+  st <- get
+  case runTransT st env (transLetDecs' decs letPos) of
+    Left err -> throwErr err
+    Right (bodyEnv, st') ->
+      case
+        runTransT st' bodyEnv (transExp' bodyExp)
+      of
+        Left err -> throwErr err
+        Right (res, st'') -> do
+          put st''
+          return res
+
+transLetDecs' decls letPos = do
+  env <- lift ask
+  case checkDeclNamesDistinctInLet decls letPos of
+    Left err -> throwErr err
+    Right () ->
+      foldM step env decls
+  where
+    step envAcc decl = do
+      st <- get
+      case runTransT st envAcc (transDec decl) of
+        Left err -> throwErr err
+        Right (newEnv, newState) -> do
+          put newState
+          return newEnv
+
 
 transExp state (A.VarExp var) =
   let
@@ -772,7 +802,8 @@ transDec (A.VarDec name _ maybeTypenameAndPos initExp posn) = do
     in
     case transExp oldStyleState initExp of
       Left err -> throwErr err
-      Right (ExpTy{exp=_, ty=actualInitTy}, state') ->
+      Right (ExpTy{exp=_, ty=actualInitTy}, state') -> do
+        put (oldStateToNew state')
         if actualInitTy == Types.NIL
         then
           case maybeTypeAnnotation of
