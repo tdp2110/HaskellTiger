@@ -782,37 +782,27 @@ transDec (A.VarDec name _ maybeTypenameAndPos initExp posn) = do
   maybeTypeAnnotation <- mapM
                          (\(typename,_) -> lookupT posn tenv2 typename)
                          maybeTypenameAndPos
-  newStyleState <- get
-  newStyleEnv <- lift ask
-  let
-    oldStyleState = newStateToOld newStyleState newStyleEnv
+  ExpTy{exp=_, ty=actualInitTy} <- transExp' initExp
+  env <- lift ask
+  if actualInitTy == Types.NIL then
+    case maybeTypeAnnotation of
+      Just recTy@(Types.RECORD _) ->
+        return env{venv'=Map.insert name (Env.VarEntry recTy) (venv' env)}
+      _ -> throwT posn ("nil expression declarations must be " ++
+                        "constrained by a RECORD type")
+    else
+    let
+      result = return env{venv'=Map.insert name (Env.VarEntry actualInitTy) (venv' env)}
     in
-    case transExp oldStyleState initExp of
-      Left err -> throwErr err
-      Right (ExpTy{exp=_, ty=actualInitTy}, state') -> do
-        put (oldStateToNew state')
-        if actualInitTy == Types.NIL
-        then
-          case maybeTypeAnnotation of
-            Just recTy@(Types.RECORD _) ->
-              return $ newEnvFromOld $ state'{
-                valEnv=Map.insert name (Env.VarEntry recTy) (valEnv state')}
-            _ -> throwT posn ("nil expression declarations must be " ++
-                              "constrained by a RECORD type")
-        else
-          let result = return $ newEnvFromOld $ state'{
-                valEnv=Map.insert name (Env.VarEntry actualInitTy) (valEnv state')}
-          in
-            case maybeTypeAnnotation of
-              Just typeAnnotation ->
-                if typeAnnotation /= actualInitTy
-                then
-                  throwT posn ("mismatch in type annotation and computed " ++
-                               "type in varDecl: " ++
-                               "type annotation " ++ (show typeAnnotation) ++
-                               ", computed type " ++ (show actualInitTy))
-                else result
-              Nothing -> result
+      case maybeTypeAnnotation of
+        Just typeAnnotation ->
+          if typeAnnotation /= actualInitTy then
+            throwT posn ("mismatch in type annotation and computed " ++
+                         "type in varDecl: " ++
+                         "type annotation " ++ (show typeAnnotation) ++
+                         ", computed type " ++ (show actualInitTy))
+          else result
+        Nothing -> result
 transDec (A.FunctionDec fundecs) = do
   newStyleEnv <- lift ask
   let
