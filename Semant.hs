@@ -157,25 +157,13 @@ transVar (A.FieldVar var sym pos) = do
                          (show t))
 transVar (A.SubscriptVar var expr pos) = do
   ExpTy{exp=_, ty=varTy} <- transVar var
-  newStyleState <- get
-  env <- lift ask
+  ExpTy{exp=_, ty=expTy} <- transExp' expr
   case varTy of
     Types.ARRAY(varEltTy, _) ->
-      let
-        oldStyleState = newStateToOld newStyleState env
-      in
-        case transExp oldStyleState expr of
-          Left err -> throwErr err
-          Right (ExpTy{exp=_, ty=expTy}, state') ->
-            let
-              newStyleState' = oldStateToNew state'
-            in
-              case expTy of
-                Types.INT -> do
-                  put newStyleState'
-                  return ExpTy{exp=emptyExp, ty=varEltTy}
-                nonIntTy@(_) -> throwT pos ("in subscript expr, subscript type " ++
-                                            "is not an INT, is an " ++ (show nonIntTy))
+      case expTy of
+        Types.INT -> return ExpTy{exp=emptyExp, ty=varEltTy}
+        nonIntTy@(_) -> throwT pos ("in subscript expr, subscript type " ++
+                                     "is not an INT, is an " ++ (show nonIntTy))
     nonArrayTy@(_) -> throwT pos ("in subscript expr, only arrays may " ++
                                   "be subscripted -- attempting to subscript type=" ++
                                   (show nonArrayTy))
@@ -404,7 +392,6 @@ transLetDecs' decls letPos = do
         Right (newEnv, newState) -> do
           put newState
           return newEnv
-
 
 transExp state (A.VarExp var) =
   let
