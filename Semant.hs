@@ -27,14 +27,10 @@ data ExpTy = ExpTy{exp :: Translate.Exp, ty :: Types.Ty } deriving (Show)
 transProg :: A.Exp -> Either SemantError ExpTy
 transProg expr =
   let
-    startState = SemantState{valEnv=Env.baseVEnv,
-                             typEnv=Env.baseTEnv,
-                             canBreak=False,
-                             counter=0}
+    startState = SemantState'{canBreak'=False, counter'=0}
+    env = SemantEnv{venv'=Env.baseVEnv, tenv2=Env.baseTEnv}
   in
-    case transExp startState expr of
-      Left err -> Left err
-      Right(expTy,_) -> Right expTy
+    evalTransT startState env (transExp' expr)
 
 data SemantState = SemantState {valEnv :: Env.VEnv,
                                 typEnv :: Env.TEnv,
