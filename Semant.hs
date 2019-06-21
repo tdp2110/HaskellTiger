@@ -27,15 +27,10 @@ data ExpTy = ExpTy{exp :: Translate.Exp, ty :: Types.Ty } deriving (Show)
 transProg :: A.Exp -> Either SemantError ExpTy
 transProg expr =
   let
-    startState = SemantState'{canBreak'=False, counter'=0}
+    startState = SemantState{canBreak'=False, counter'=0}
     env = SemantEnv{venv'=Env.baseVEnv, tenv2=Env.baseTEnv}
   in
     evalTransT startState env (transExp expr)
-
-data SemantState = SemantState {valEnv :: Env.VEnv,
-                                typEnv :: Env.TEnv,
-                                canBreak :: Bool,
-                                counter :: Integer}
 
 transVar :: A.Var -> Translator ExpTy
 transExp :: A.Exp -> Translator ExpTy
@@ -45,21 +40,9 @@ transLetDecs :: [A.Dec] -> A.Pos -> Translator SemantEnv
 transDec :: A.Dec -> Translator SemantEnv
 
 data SemantEnv = SemantEnv {venv'::Env.VEnv, tenv2 :: Env.TEnv}
-data SemantState' = SemantState' {canBreak' :: Bool, counter' :: Integer }
+data SemantState = SemantState {canBreak' :: Bool, counter' :: Integer }
 
-oldStateToNew :: SemantState -> SemantState'
-oldStateToNew st = SemantState'{canBreak'=canBreak st, counter'=counter st}
-
-newEnvFromOld ::SemantState -> SemantEnv
-newEnvFromOld st = SemantEnv{venv'=valEnv st, tenv2=typEnv st}
-
-newStateToOld :: SemantState' -> SemantEnv -> SemantState
-newStateToOld st env = SemantState{valEnv=venv' env,
-                                   typEnv=tenv2 env,
-                                   canBreak=canBreak' st,
-                                   counter=counter' st}
-
-type Translator = StateT SemantState' (ReaderT SemantEnv (ExceptT SemantError Identity))
+type Translator = StateT SemantState (ReaderT SemantEnv (ExceptT SemantError Identity))
 
 throwT :: A.Pos -> String -> Translator a
 throwT posn str = throwErr SemantError{what=str, at=posn}
@@ -74,17 +57,17 @@ lookupT posn f sym = do
     Nothing -> throwT posn $ "unbound variable " ++ (show sym)
     Just x -> return x
 
-runTransT :: SemantState' -> SemantEnv -> Translator a -> Either SemantError (a, SemantState')
+runTransT :: SemantState -> SemantEnv -> Translator a -> Either SemantError (a, SemantState)
 runTransT st env =
   runIdentity . runExceptT . flip runReaderT env . flip runStateT st
 
-evalTransT :: SemantState' -> SemantEnv -> Translator a -> Either SemantError a
+evalTransT :: SemantState -> SemantEnv -> Translator a -> Either SemantError a
 evalTransT st env =
   runIdentity . runExceptT . flip runReaderT env . flip evalStateT st
 
 nextId :: Translator Integer
 nextId = do
-  st@(SemantState' _ currId) <- get
+  st@(SemantState _ currId) <- get
   put st{counter'=currId + 1}
   return currId
 
@@ -313,7 +296,7 @@ transExp (A.WhileExp testExp bodyExp pos) = do
     else
     return ExpTy{exp=emptyExp, ty=Types.UNIT}
 transExp (A.BreakExp pos) = do
-  (SemantState' canBreak'' _) <- get
+  (SemantState canBreak'' _) <- get
   if canBreak'' then
     return ExpTy{exp=emptyExp, ty=Types.UNIT}
     else
@@ -583,22 +566,15 @@ transDec (A.TypeDec tydecs) =
     case checkForIllegalCycles tydecs stronglyConnComps of
       Left err -> throwErr err
       Right () -> do
-        newStyleState <- get
-        newStyleEnv <- lift ask
+        env <- lift ask
         let
-          state = newStateToOld newStyleState newStyleEnv
+          step env' (CyclicSCC syms) = transCyclicDecls env' tydecs syms
+          step env' (AcyclicSCC sym) = transAcyclicDecl env' tydecs sym
           in
-          case foldl' step (Right state) stronglyConnComps of
-            Left err -> throwErr err
-            Right state' -> return $ newEnvFromOld state'
-          where
-            step (Left err) _ = Left err
-            step (Right state') (CyclicSCC syms) = transCyclicDecls state' tydecs syms
-            step (Right state') (AcyclicSCC sym) = transAcyclicDecl state' tydecs sym
+          foldM step env stronglyConnComps
 
-transCyclicDecls' :: [A.TyDec] -> [Symbol] -> Translator Env.TEnv
-transCyclicDecls' tydecs syms = do
-  env <- lift ask
+transCyclicDecls :: SemantEnv -> [A.TyDec] -> [Symbol] -> Translator SemantEnv
+transCyclicDecls env tydecs syms = do
   state <- get
   let
     tenv = tenv2 env
@@ -629,7 +605,8 @@ transCyclicDecls' tydecs syms = do
       Left err -> throwErr err
       Right (translatedBodies, state') -> do
         put state'
-        return $ tieTheKnot tenv' (Map.fromList $ zip syms translatedBodies)
+        return $ env{tenv2=tieTheKnot tenv'
+                           (Map.fromList $ zip syms translatedBodies)}
   where
     tieTheKnot :: Env.TEnv -> Map.Map Symbol Types.Ty -> Env.TEnv
     tieTheKnot tenv' bodyMap =
@@ -654,9 +631,8 @@ transCyclicDecls' tydecs syms = do
       in
         Map.union newTyMap tenv'
 
-transAcyclicDecl' :: [A.TyDec] -> Symbol -> Translator Env.TEnv
-transAcyclicDecl' tydecs sym = do
-  env <- lift ask
+transAcyclicDecl :: SemantEnv -> [A.TyDec] -> Symbol -> Translator SemantEnv
+transAcyclicDecl env tydecs sym = do
   state <- get
   let
     (A.TyDec _ typ _) = lookupTypeSym sym tydecs
@@ -668,80 +644,7 @@ transAcyclicDecl' tydecs sym = do
       Left err -> throwErr err
       Right (typesTy, state') -> do
         put state'
-        return $ Map.insert sym typesTy (tenv2 env)
-
-
-transCyclicDecls :: SemantState -> [A.TyDec] -> [Symbol] -> Either SemantError SemantState
-transCyclicDecls state tydecs syms =
-  let
-    tenv = typEnv state
-    headers = map (\sym -> (sym, Types.NAME(sym, Nothing))) syms
-    bodies = map (\sym -> let (A.TyDec _ typ _) = lookupTypeSym sym tydecs
-                          in typ) syms
-    headerMap = Map.fromList headers
-    tenv' = Map.union tenv headerMap
-    state' = state{typEnv=tenv'}
-    maybeTranslatedBodies =
-      foldl'
-      (\acc typ -> case acc of
-                     Left err -> Left err
-                     Right (translatedBodies, state'') ->
-                       let newEnv = newEnvFromOld state'' in
-                         case runTransT
-                              (oldStateToNew state'')
-                              newEnv
-                              (transTy typ) of
-                           Left err -> Left err
-                           Right (typeTy,state''') ->
-                             Right (translatedBodies ++ [typeTy],
-                                    newStateToOld state''' newEnv))
-      (Right ([], state'))
-      bodies
-  in
-    case maybeTranslatedBodies of
-      Left err -> Left err
-      Right (translatedBodies, state'') ->
-        let
-          tenv'' = tieTheKnot (typEnv state'') (Map.fromList $ zip syms translatedBodies)
-        in
-          Right state''{typEnv=tenv''}
-  where
-    tieTheKnot :: Env.TEnv -> Map.Map Symbol Types.Ty -> Env.TEnv
-    tieTheKnot tenv' bodyMap =
-      let
-        newTyMap = Map.fromList newTyList
-        newTyList = [tieEntry elt | elt <- Map.toList bodyMap]
-        tieEntry (sym, Types.RECORD (fieldMap, recordId)) =
-          let
-            tieFieldEntry :: (Symbol, Types.Ty) -> (Symbol, Types.Ty)
-            tieFieldEntry (fieldName, Types.NAME(sym',_)) =
-              (fieldName, newTyMap Map.! sym')
-            tieFieldEntry (fieldName, typ) =
-              (fieldName, typ)
-          in
-            (sym, Types.RECORD(map tieFieldEntry fieldMap, recordId))
-        tieEntry (sym, Types.ARRAY (Types.NAME(sym',_), arrayId)) =
-          (sym, Types.ARRAY (newTyMap Map.! sym', arrayId))
-        tieEntry (sym, Types.NAME(sym', _)) =
-          (sym, newTyMap Map.! sym')
-        tieEntry (sym, typ) =
-          (sym, typ)
-      in
-        Map.union newTyMap tenv'
-
-transAcyclicDecl :: SemantState -> [A.TyDec] -> Symbol -> Either SemantError SemantState
-transAcyclicDecl state tydecs sym =
-  let
-    (A.TyDec _ typ _) = lookupTypeSym sym tydecs
-    newStyleEnv = newEnvFromOld state
-  in
-    case runTransT
-         (oldStateToNew state)
-         newStyleEnv
-         (transTy typ) of
-      Left err -> Left err
-      Right (typesTy, state') -> Right
-        (newStateToOld state' newStyleEnv){typEnv=Map.insert sym typesTy (typEnv state)}
+        return $ env{tenv2=Map.insert sym typesTy (tenv2 env)}
 
 checkForIllegalCycles :: [A.TyDec] -> [SCC Symbol] -> Either SemantError ()
 checkForIllegalCycles tydecs stronglyConnectedComponents =
