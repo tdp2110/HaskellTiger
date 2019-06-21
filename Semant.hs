@@ -596,8 +596,8 @@ transDec (A.TypeDec tydecs) =
             step (Right state') (CyclicSCC syms) = transCyclicDecls state' tydecs syms
             step (Right state') (AcyclicSCC sym) = transAcyclicDecl state' tydecs sym
 
-transAcyclicDecls' :: [A.TyDec] -> [Symbol] -> Translator Env.TEnv
-transAcyclicDecls' tydecs syms = do
+transCyclicDecls' :: [A.TyDec] -> [Symbol] -> Translator Env.TEnv
+transCyclicDecls' tydecs syms = do
   env <- lift ask
   state <- get
   let
@@ -653,6 +653,23 @@ transAcyclicDecls' tydecs syms = do
           (sym, typ)
       in
         Map.union newTyMap tenv'
+
+transAcyclicDecl' :: [A.TyDec] -> Symbol -> Translator Env.TEnv
+transAcyclicDecl' tydecs sym = do
+  env <- lift ask
+  state <- get
+  let
+    (A.TyDec _ typ _) = lookupTypeSym sym tydecs
+    in
+    case runTransT
+         state
+         env
+         (transTy typ) of
+      Left err -> throwErr err
+      Right (typesTy, state') -> do
+        put state'
+        return $ Map.insert sym typesTy (tenv2 env)
+
 
 transCyclicDecls :: SemantState -> [A.TyDec] -> [Symbol] -> Either SemantError SemantState
 transCyclicDecls state tydecs syms =
