@@ -596,6 +596,64 @@ transDec (A.TypeDec tydecs) =
             step (Right state') (CyclicSCC syms) = transCyclicDecls state' tydecs syms
             step (Right state') (AcyclicSCC sym) = transAcyclicDecl state' tydecs sym
 
+transAcyclicDecls' :: [A.TyDec] -> [Symbol] -> Translator Env.TEnv
+transAcyclicDecls' tydecs syms = do
+  env <- lift ask
+  state <- get
+  let
+    tenv = tenv2 env
+    headers = map (\sym -> (sym, Types.NAME(sym, Nothing))) syms
+    bodies = map (\sym -> let (A.TyDec _ typ _) = lookupTypeSym sym tydecs
+                          in typ) syms
+    headerMap = Map.fromList headers
+    tenv' = Map.union tenv headerMap
+    env' = env{tenv2=tenv'}
+    maybeTranslatedBodiesM =
+      foldM
+      (\acc typ -> do
+          state' <- get
+          case
+            runTransT state' env' (transTy typ)
+            of
+            Left err -> throwErr err
+            Right (typeTy, newState) -> do
+              put newState
+              return $ acc ++ [typeTy]
+      )
+      []
+      bodies
+    in
+    case
+      runTransT state env' maybeTranslatedBodiesM
+    of
+      Left err -> throwErr err
+      Right (translatedBodies, state') -> do
+        put state'
+        return $ tieTheKnot tenv' (Map.fromList $ zip syms translatedBodies)
+  where
+    tieTheKnot :: Env.TEnv -> Map.Map Symbol Types.Ty -> Env.TEnv
+    tieTheKnot tenv' bodyMap =
+      let
+        newTyMap = Map.fromList newTyList
+        newTyList = [tieEntry elt | elt <- Map.toList bodyMap]
+        tieEntry (sym, Types.RECORD (fieldMap, recordId)) =
+          let
+            tieFieldEntry :: (Symbol, Types.Ty) -> (Symbol, Types.Ty)
+            tieFieldEntry (fieldName, Types.NAME(sym',_)) =
+              (fieldName, newTyMap Map.! sym')
+            tieFieldEntry (fieldName, typ) =
+              (fieldName, typ)
+          in
+            (sym, Types.RECORD(map tieFieldEntry fieldMap, recordId))
+        tieEntry (sym, Types.ARRAY (Types.NAME(sym',_), arrayId)) =
+          (sym, Types.ARRAY (newTyMap Map.! sym', arrayId))
+        tieEntry (sym, Types.NAME(sym', _)) =
+          (sym, newTyMap Map.! sym')
+        tieEntry (sym, typ) =
+          (sym, typ)
+      in
+        Map.union newTyMap tenv'
+
 transCyclicDecls :: SemantState -> [A.TyDec] -> [Symbol] -> Either SemantError SemantState
 transCyclicDecls state tydecs syms =
   let
