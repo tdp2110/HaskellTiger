@@ -40,6 +40,7 @@ data AstDir =
   | ArrayInit
   | FunDec Int
   | FunParam Int
+  | DecInit
   deriving (Show)
 
 data EnvEntry = EnvEntry{staticDepth :: Int, path :: AstPath}
@@ -60,13 +61,21 @@ findEscapes :: A.Exp -> [AstPath]
 findEscapes exp =
   toList $ findEscapesT $ findEscapesM exp
 
+incrStaticDepth :: Escaper ()
+incrStaticDepth  = do
+  state <- lift get
+  lift (put state{depth=1+(depth state)})
+  return ()
+
 pushDir :: (MonadTrans t, Monad m) =>
   EscaperState -> AstDir -> t (StateT EscaperState m) ()
 pushDir state dir = lift (put state{astPath=astPath state ++ [dir]})
 
-pushBinding :: (MonadTrans t, Monad m) =>
-  EscaperState -> Symbol -> t (StateT EscaperState m) ()
-pushBinding state sym =
+pushBinding :: (MonadTrans t, Monad m,
+                Monad (t (StateT EscaperState m))) =>
+  Symbol -> t (StateT EscaperState m) ()
+pushBinding sym = do
+  state <- lift get
   lift (put state{env=Map.insert
                       sym
                       EnvEntry{staticDepth=depth state,
@@ -133,7 +142,7 @@ findEscapesM (A.ForExp forVar _ loExp hiExp bodyExp _) = do
   pushDir state ForHi
   _ <- findEscapesM hiExp
   pushDir state ForBody
-  pushBinding state forVar
+  pushBinding forVar
   _ <- findEscapesM bodyExp
   return ()
 findEscapesM (A.ArrayExp _ sizeExp initExp _) = do
@@ -143,6 +152,71 @@ findEscapesM (A.ArrayExp _ sizeExp initExp _) = do
   pushDir state ArrayInit
   _ <- findEscapesM initExp
   return ()
+findEscapesM (A.LetExp decs bodyExp _) = do
+  state <- lift get
+  extendEnv decs
+  pushDir state LetBody
+  _ <- findEscapesM bodyExp
+  return ()
+findEscapesM _ = do
+  return ()
+
+extendEnv :: [A.Dec] -> Escaper ()
+extendEnv decs = forM_ (enumerate decs) mapFun
+  where
+    mapFun (decIdx, (A.FunctionDec fundecs)) = do
+      state <- lift get
+      pushDir state (LetDec decIdx)
+      extendEnvWithFunctionDec fundecs
+      return ()
+    mapFun (decIdx, (A.VarDec sym _ _ initExp _)) = do
+      state <- lift get
+      pushDir state (LetDec decIdx)
+      _ <- findEscapesM initExp
+      lift (put state)
+      pushBinding sym
+      return ()
+    mapFun (_, (A.TypeDec _)) = do return ()
+
+extendEnvWithFunctionDec :: [A.FunDec] -> Escaper ()
+extendEnvWithFunctionDec fundecs = do
+  _ <- insertHeaders (map A.fundecName fundecs)
+  incrStaticDepth
+  _ <- processBodies (zip (map A.params fundecs) (map A.funBody fundecs))
+  return ()
+  where
+    insertHeaders :: [Symbol] -> Escaper ()
+    insertHeaders syms = forM_ (enumerate syms) insertHeadersMapFun
+    insertHeadersMapFun :: (Int, Symbol) -> Escaper ()
+    insertHeadersMapFun (fundecIdx, sym) = do
+      state <- lift get
+      pushDir state (FunDec fundecIdx)
+      pushBinding sym
+      lift (put state)
+      return ()
+    processBodies :: [([A.Field], A.Exp)] -> Escaper ()
+    processBodies paramsAndExps = forM_
+      (enumerate paramsAndExps)
+      processBodiesMapFun
+    processBodiesMapFun :: (Int, ([A.Field], A.Exp)) -> Escaper ()
+    processBodiesMapFun (fundecIdx, (params, bodyExp)) = do
+      state <- lift get
+      _ <- forM_ (enumerate params) extendByParams
+      state' <- lift get
+      lift (put state'{astPath=astPath state})
+      state'' <- lift get
+      pushDir state'' (FunDec fundecIdx)
+      _ <- findEscapesM bodyExp
+      lift (put state'')
+      return ()
+    extendByParams :: (Int, A.Field) -> Escaper ()
+    extendByParams (fieldIdx, field) = do
+      state <- lift get
+      pushDir state (FunParam fieldIdx)
+      pushBinding (A.fieldName field)
+      state' <- lift get
+      lift (put state'{astPath=astPath state})
+      return ()
 
 findSym :: A.Var -> Symbol
 findSym (A.SimpleVar sym _) = sym
@@ -232,6 +306,8 @@ escapeDecPath (A.FunctionDec funDecs) [FunDec(funIdx), FunParam(paramIdx)] =
     escapeField :: A.Field -> A.Field
     escapeField field@(A.Field _ _ _ _) = field{A.fieldEscape=True}
 escapeDecPath varDec@(A.VarDec _ _ _ _ _) [] = varDec{A.vardecEscape=True}
+escapeDecPath varDec@(A.VarDec _ _ _ initExp _) (DecInit:path') =
+  varDec{A.decInit=escapeExpPath initExp path'}
 escapeDecPath _ _ = error "shouldn't get here"
 
 replaceNth :: Int -> [a] -> a -> [a]
