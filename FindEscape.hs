@@ -82,16 +82,13 @@ escapeDec :: A.Dec -> AstPath -> A.Dec
 escapeDec (A.FunctionDec funDecs) [FunDec(funIdx), FunParam(paramIdx)] =
   A.FunctionDec $ replaceNth funIdx funDecs (escapeParam (funDecs !! funIdx) paramIdx)
   where
-
-escapeDec varDec@(A.VarDec _ _ _ _ _) [] = varDec{A.vardecEscape=True}
-escapeDec _ _ = error "shouldn't get here"
-
-escapeParam :: A.FunDec -> Int -> A.FunDec
-escapeParam funDec@(A.FunDec _ params _ _ _) idx =
-  funDec{A.params=replaceNth idx params (escapeField $ params !! idx)}
-  where
+    escapeParam :: A.FunDec -> Int -> A.FunDec
+    escapeParam funDec@(A.FunDec _ params _ _ _) idx =
+      funDec{A.params=replaceNth idx params (escapeField $ params !! idx)}
     escapeField :: A.Field -> A.Field
     escapeField field@(A.Field _ _ _ _) = field{A.fieldEscape=True}
+escapeDec varDec@(A.VarDec _ _ _ _ _) [] = varDec{A.vardecEscape=True}
+escapeDec _ _ = error "shouldn't get here"
 
 replaceNth :: Int -> [a] -> a -> [a]
 replaceNth idx xs replacement =

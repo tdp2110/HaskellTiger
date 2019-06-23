@@ -5,7 +5,7 @@ import qualified Env as Env
 import qualified Translate as Translate
 import qualified Types as Types
 import Symbol
-import qualified FindEscape as FindEscape
+import FindEscape()
 
 import Control.Monad.Trans.Class
 import Control.Monad (join, foldM)
