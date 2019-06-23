@@ -60,35 +60,60 @@ findEscapes :: A.Exp -> [AstPath]
 findEscapes exp =
   toList $ findEscapesT $ findEscapesM exp
 
+pushDir :: (MonadTrans t, Monad m) =>
+                 EscaperState -> AstDir -> t (StateT EscaperState m) ()
+pushDir state dir = lift (put state{astPath=astPath state ++ [dir]})
+
 findEscapesM :: A.Exp -> Escaper ()
 findEscapesM (A.VarExp (A.SimpleVar sym _)) = findEscapesVar sym
 findEscapesM (A.VarExp (A.FieldVar var _ _)) = findEscapesVar $ findSym var
 findEscapesM (A.CallExp _ args _) = forM_ args findEscapesM
 findEscapesM (A.OpExp leftExp _ rightExp _) = do
   state <- lift get
-  lift (put state{astPath=astPath state ++ [OpLeft]})
+  pushDir state OpLeft
   _ <- findEscapesM leftExp
-  lift (put state{astPath=astPath state ++ [OpLeft]})
+  pushDir state OpRight
   _ <- findEscapesM rightExp
   lift (put state)
   return ()
-findEscapesM (A.RecordExp fields _ _) = forM_ fields mapFun
+findEscapesM (A.RecordExp fields _ _) = forM_ (enumerate fields) mapFun
   where
-    mapFun (_, exp, _) = findEscapesM exp
-findEscapesM (A.SeqExp seqElts) = forM_ seqElts mapFun
+    mapFun (fieldIdx, (_, exp, _)) = do
+      state <- lift get
+      pushDir state (RecField fieldIdx)
+      _ <- findEscapesM exp
+      lift (put state)
+      return ()
+findEscapesM (A.SeqExp seqElts) = forM_ (enumerate seqElts) mapFun
   where
-    mapFun (exp, _) = findEscapesM exp
-findEscapesM (A.AssignExp _ exp _) = findEscapesM exp
+    mapFun (seqEltIdx, (exp, _)) = do
+      state <- lift get
+      pushDir state (SeqElt seqEltIdx)
+      _ <- findEscapesM exp
+      lift (put state)
+      return ()
+findEscapesM (A.AssignExp _ exp _) = do
+  state <- lift get
+  pushDir state AssignExp
+  _ <- findEscapesM exp
+  return ()
 findEscapesM (A.IfExp testExp thenExp elseExpMaybe _) = do
+  state <- lift get
+  pushDir state IfTest
   _ <- findEscapesM testExp
+  pushDir state IfThen
   _ <- findEscapesM thenExp
+  pushDir state IfElse
   case elseExpMaybe of
     Nothing -> return ()
     Just elseExp -> do
       _ <- findEscapesM elseExp
       return ()
 findEscapesM (A.WhileExp testExp bodyExp _) = do
+  state <- lift get
+  pushDir state WhileTest
   _ <- findEscapesM testExp
+  pushDir state WhileBody
   _ <- findEscapesM bodyExp
   return ()
 
@@ -187,3 +212,6 @@ replaceNth idx xs replacement =
   case splitAt idx xs of
     (xs', _:xs'') -> xs' ++ [replacement] ++ xs''
     _ -> error $ "invalid split index: " ++ (show idx)
+
+enumerate :: [a] -> [(Int, a)]
+enumerate = zip [0 :: Int ..]
