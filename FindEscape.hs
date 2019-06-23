@@ -1,4 +1,4 @@
-module FindEscape (escapeExp) where
+module FindEscape (escapeExp, findEscapes, AstDir(..), getEscape) where
 
 import qualified Absyn as A
 import Symbol
@@ -40,8 +40,9 @@ data AstDir =
   | ArrayInit
   | FunDec Int
   | FunParam Int
+  | FunBody
   | DecInit
-  deriving (Show)
+  deriving (Show, Eq)
 
 data EnvEntry = EnvEntry{staticDepth :: Int, path :: AstPath}
 type Env = Map.Map Symbol EnvEntry
@@ -201,11 +202,12 @@ extendEnvWithFunctionDec fundecs = do
     processBodiesMapFun :: (Int, ([A.Field], A.Exp)) -> Escaper ()
     processBodiesMapFun (fundecIdx, (params, bodyExp)) = do
       state <- lift get
+      pushDir state (FunDec fundecIdx)
       _ <- forM_ (enumerate params) extendByParams
       state' <- lift get
       lift (put state'{astPath=astPath state})
       state'' <- lift get
-      pushDir state'' (FunDec fundecIdx)
+      pushDir state'' FunBody
       _ <- findEscapesM bodyExp
       lift (put state'')
       return ()
@@ -305,10 +307,85 @@ escapeDecPath (A.FunctionDec funDecs) [FunDec(funIdx), FunParam(paramIdx)] =
       funDec{A.params=replaceNth idx params (escapeField $ params !! idx)}
     escapeField :: A.Field -> A.Field
     escapeField field@(A.Field _ _ _ _) = field{A.fieldEscape=True}
+escapeDecPath (A.FunctionDec funDecs) (FunDec(funIdx):FunBody:path') =
+  let
+    funDec = funDecs !! funIdx
+    funBody = A.funBody funDec
+  in
+    A.FunctionDec $ replaceNth funIdx funDecs funDec{A.funBody=escapeExpPath funBody path'}
 escapeDecPath varDec@(A.VarDec _ _ _ _ _) [] = varDec{A.vardecEscape=True}
 escapeDecPath varDec@(A.VarDec _ _ _ initExp _) (DecInit:path') =
   varDec{A.decInit=escapeExpPath initExp path'}
-escapeDecPath _ _ = error "shouldn't get here"
+escapeDecPath dec path' = error $ "shouldn't get here: dec = " ++ (show dec) ++
+                         "\npath = " ++ (show path')
+
+getEscape :: A.Exp -> AstPath -> Bool
+getEscape (A.CallExp _ args _) (CallArg(idx):path') =
+  getEscape (args !! idx) path'
+getEscape (A.OpExp leftExp _ _ _) (OpLeft:path') =
+  getEscape leftExp path'
+getEscape (A.OpExp _ _ rightExp _) (OpRight:path') =
+  getEscape rightExp path'
+getEscape (A.RecordExp fields _ _) (RecField(idx):path') =
+  let
+    (_, exp, _) = fields !! idx
+  in
+    getEscape exp path'
+getEscape (A.SeqExp seqElts) (SeqElt(idx):path') =
+  let
+    (exp, _) = seqElts !! idx
+  in
+    getEscape exp path'
+getEscape (A.AssignExp _ exp _) (AssignExp:path') =
+  getEscape exp path'
+getEscape (A.IfExp testExp _ _ _) (IfTest:path') =
+  getEscape testExp path'
+getEscape (A.IfExp _ thenExp _ _) (IfThen:path') =
+  getEscape thenExp path'
+getEscape (A.IfExp _ _ (Just elseExp) _) (IfElse:path') =
+  getEscape elseExp path'
+getEscape (A.WhileExp testExp _ _) (WhileTest:path') =
+  getEscape testExp path'
+getEscape (A.WhileExp _ bodyExp _) (WhileBody:path') =
+  getEscape bodyExp path'
+getEscape (A.ForExp _ escape _ _ _ _) [] = escape
+getEscape (A.ForExp _ _ loExp _ _ _) (ForLo:path') =
+  getEscape loExp path'
+getEscape (A.ForExp _ _ _ hiExp _ _) (ForHi:path') =
+  getEscape hiExp path'
+getEscape (A.ForExp _ _ _ _ bodyExp _) (ForBody:path') =
+  getEscape bodyExp path'
+getEscape (A.LetExp decs _ _) (LetDec(idx):path') =
+  getEscapeDec (decs !! idx) path'
+getEscape (A.LetExp _ bodyExp _) (LetBody:path') =
+  getEscape bodyExp path'
+getEscape (A.ArrayExp _ sizeExp _ _) (ArraySize:path') =
+  getEscape sizeExp path'
+getEscape (A.ArrayExp _ _ initExp _) (ArrayInit:path') =
+  getEscape initExp path'
+getEscape exp path' = error $ "shouldn't get here. exp = " ++ (show exp) ++
+                      "\npath = " ++ (show path')
+
+getEscapeDec :: A.Dec -> AstPath -> Bool
+getEscapeDec (A.FunctionDec funDecs) [FunDec(funIdx), FunParam(paramIdx)] =
+  getEscapeParam (funDecs !! funIdx) paramIdx
+  where
+    getEscapeParam :: A.FunDec -> Int -> Bool
+    getEscapeParam (A.FunDec _ params _ _ _) idx =
+      getEscapeField $ params !! idx
+    getEscapeField :: A.Field -> Bool
+    getEscapeField (A.Field _ escape _ _) = escape
+getEscapeDec (A.FunctionDec funDecs) (FunDec(funIdx):FunBody:path') =
+  let
+    funDec = funDecs !! funIdx
+    funBody = A.funBody funDec
+  in
+    getEscape funBody path'
+getEscapeDec (A.VarDec _ escape _ _ _) [] = escape
+getEscapeDec (A.VarDec _ _ _ initExp _) (DecInit:path') =
+  getEscape initExp path'
+getEscapeDec dec path' = error $ "shouldn't get here: dec = " ++ (show dec) ++
+                         "\npath = " ++ (show path')
 
 replaceNth :: Int -> [a] -> a -> [a]
 replaceNth idx xs replacement =

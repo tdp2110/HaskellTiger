@@ -289,7 +289,7 @@ simpleVar l = A.SimpleVar (identifier l) (posn l)
 
 field :: Symbol -> L.Lexeme -> A.Field
 field name l = A.Field{A.fieldName=name,
-                       A.fieldEscape=True,
+                       A.fieldEscape=False,
                        A.fieldTyp=(identifier l),
                        A.fieldPos=(posn l)}
 
