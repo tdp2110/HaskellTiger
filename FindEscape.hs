@@ -136,6 +136,13 @@ findEscapesM (A.ForExp forVar _ loExp hiExp bodyExp _) = do
   pushBinding state forVar
   _ <- findEscapesM bodyExp
   return ()
+findEscapesM (A.ArrayExp _ sizeExp initExp _) = do
+  state <- lift get
+  pushDir state ArraySize
+  _ <- findEscapesM sizeExp
+  pushDir state ArrayInit
+  _ <- findEscapesM initExp
+  return ()
 
 findSym :: A.Var -> Symbol
 findSym (A.SimpleVar sym _) = sym
