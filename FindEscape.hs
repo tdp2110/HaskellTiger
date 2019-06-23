@@ -3,6 +3,7 @@ module FindEscape (escapeExp) where
 import qualified Absyn as A
 import Symbol
 
+import Control.Monad (forM_)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.State (StateT, get, put, evalStateT)
 import Control.Monad.Trans.Writer (WriterT, tell, execWriterT)
@@ -60,7 +61,36 @@ findEscapes exp =
   toList $ findEscapesT $ findEscapesM exp
 
 findEscapesM :: A.Exp -> Escaper ()
-findEscapesM (A.VarExp (A.SimpleVar sym _)) = do
+findEscapesM (A.VarExp (A.SimpleVar sym _)) = findEscapesVar sym
+findEscapesM (A.VarExp (A.FieldVar var _ _)) = findEscapesVar $ findSym var
+findEscapesM (A.CallExp _ args _) = forM_ args findEscapesM
+findEscapesM (A.OpExp leftExp _ rightExp _) = do
+  _ <- findEscapesM leftExp
+  _ <- findEscapesM rightExp
+  return ()
+findEscapesM (A.RecordExp fields _ _) = forM_ fields mapFun
+  where
+    mapFun (_, exp, _) = findEscapesM exp
+findEscapesM (A.SeqExp seqElts) = forM_ seqElts mapFun
+  where
+    mapFun (exp, _) = findEscapesM exp
+findEscapesM (A.AssignExp _ exp _) = findEscapesM exp
+findEscapesM (A.IfExp testExp thenExp elseExpMaybe _) = do
+  _ <- findEscapesM testExp
+  _ <- findEscapesM thenExp
+  case elseExpMaybe of
+    Nothing -> return ()
+    Just elseExp -> do
+      _ <- findEscapesM elseExp
+      return ()
+
+findSym :: A.Var -> Symbol
+findSym (A.SimpleVar sym _) = sym
+findSym (A.FieldVar var _ _) = findSym var
+findSym (A.SubscriptVar var _ _) = findSym var
+
+findEscapesVar :: Symbol -> Escaper ()
+findEscapesVar sym = do
   state <- lift get
   let
     ourDepth = depth state
@@ -78,7 +108,6 @@ findEscapesM (A.VarExp (A.SimpleVar sym _)) = do
       _ -> do
         return ()
   return ()
-findEscapesM _ = undefined
 
 escapePaths :: A.Exp -> [AstPath] -> A.Exp
 escapePaths exp paths =
