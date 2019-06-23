@@ -3,7 +3,11 @@ module FindEscape (escapeExp) where
 import qualified Absyn as A
 import Symbol
 
-import Data.Map (Map)
+import Control.Monad.Trans.State (StateT, get, put, evalStateT)
+import Control.Monad.Trans.Writer (WriterT, tell, execWriterT)
+import Data.DList (DList, toList)
+import Data.Functor.Identity
+import qualified Data.Map as Map
 import Data.List
 import Prelude hiding (exp)
 
@@ -36,11 +40,26 @@ data AstDir =
   | FunParam Int
   deriving (Show)
 
-data EnvEntry = EnvEntry{depth :: Int, path :: AstPath}
-type Env = Map Symbol EnvEntry
+data EnvEntry = EnvEntry{staticDepth :: Int, path :: AstPath}
+type Env = Map.Map Symbol EnvEntry
+
+data EscaperState = EscaperState{depth :: Int, env :: Env}
+
+type Escaper =  WriterT (DList AstPath) (StateT EscaperState Identity)
+
+findEscapesT :: Escaper a -> DList AstPath
+findEscapesT escaper =
+  let
+    initialState = EscaperState{depth=0, env=Map.empty}
+  in
+    runIdentity (evalStateT (execWriterT escaper) initialState)
 
 findEscapes :: A.Exp -> [AstPath]
-findEscapes _ = undefined
+findEscapes exp =
+  toList $ findEscapesT $ findEscapesM exp
+
+findEscapesM :: A.Exp -> Escaper ()
+findEscapesM _ = undefined
 
 escapePaths :: A.Exp -> [AstPath] -> A.Exp
 escapePaths exp paths =
