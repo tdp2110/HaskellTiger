@@ -3,9 +3,10 @@ module FindEscape (escapeExp) where
 import qualified Absyn as A
 import Symbol
 
+import Control.Monad.Trans.Class
 import Control.Monad.Trans.State (StateT, get, put, evalStateT)
 import Control.Monad.Trans.Writer (WriterT, tell, execWriterT)
-import Data.DList (DList, toList)
+import Data.DList (DList, toList, singleton)
 import Data.Functor.Identity
 import qualified Data.Map as Map
 import Data.List
@@ -59,6 +60,24 @@ findEscapes exp =
   toList $ findEscapesT $ findEscapesM exp
 
 findEscapesM :: A.Exp -> Escaper ()
+findEscapesM (A.VarExp (A.SimpleVar sym _)) = do
+  state <- lift get
+  let
+    ourDepth = depth state
+    theEnv = env state
+    bindingMaybe = Map.lookup sym theEnv
+    in
+    case bindingMaybe of
+      Just (EnvEntry boundDepth boundPath) ->
+        if ourDepth > boundDepth then
+          do
+            tell $ singleton boundPath
+            return ()
+        else do
+          return ()
+      _ -> do
+        return ()
+  return ()
 findEscapesM _ = undefined
 
 escapePaths :: A.Exp -> [AstPath] -> A.Exp
