@@ -61,8 +61,18 @@ findEscapes exp =
   toList $ findEscapesT $ findEscapesM exp
 
 pushDir :: (MonadTrans t, Monad m) =>
-                 EscaperState -> AstDir -> t (StateT EscaperState m) ()
+  EscaperState -> AstDir -> t (StateT EscaperState m) ()
 pushDir state dir = lift (put state{astPath=astPath state ++ [dir]})
+
+pushBinding :: (MonadTrans t, Monad m) =>
+  EscaperState -> Symbol -> t (StateT EscaperState m) ()
+pushBinding state sym =
+  lift (put state{env=Map.insert
+                      sym
+                      EnvEntry{staticDepth=depth state,
+                               path=astPath state}
+                      (env state)})
+
 
 findEscapesM :: A.Exp -> Escaper ()
 findEscapesM (A.VarExp (A.SimpleVar sym _)) = findEscapesVar sym
@@ -114,6 +124,16 @@ findEscapesM (A.WhileExp testExp bodyExp _) = do
   pushDir state WhileTest
   _ <- findEscapesM testExp
   pushDir state WhileBody
+  _ <- findEscapesM bodyExp
+  return ()
+findEscapesM (A.ForExp forVar _ loExp hiExp bodyExp _) = do
+  state <- lift get
+  pushDir state ForLo
+  _ <- findEscapesM loExp
+  pushDir state ForHi
+  _ <- findEscapesM hiExp
+  pushDir state ForBody
+  pushBinding state forVar
   _ <- findEscapesM bodyExp
   return ()
 
