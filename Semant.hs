@@ -5,7 +5,7 @@ import qualified Env as Env
 import qualified Translate as Translate
 import qualified Types as Types
 import Symbol
-import FindEscape()
+import FindEscape (escapeExp)
 
 import Control.Monad.Trans.Class
 import Control.Monad (join, foldM)
@@ -31,7 +31,7 @@ transProg expr =
     startState = SemantState{canBreak'=False, counter'=0}
     env = SemantEnv{venv'=Env.baseVEnv, tenv2=Env.baseTEnv}
   in
-    evalTransT startState env (transExp expr)
+    evalTransT startState env (transExp (escapeExp expr))
 
 transVar :: A.Var -> Translator ExpTy
 transExp :: A.Exp -> Translator ExpTy

@@ -83,7 +83,6 @@ pushBinding sym = do
                                path=astPath state}
                       (env state)})
 
-
 findEscapesM :: A.Exp -> Escaper ()
 findEscapesM (A.VarExp (A.SimpleVar sym _)) = findEscapesVar sym
 findEscapesM (A.VarExp (A.FieldVar var _ _)) = findEscapesVar $ findSym var
