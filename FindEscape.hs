@@ -45,14 +45,14 @@ data AstDir =
 data EnvEntry = EnvEntry{staticDepth :: Int, path :: AstPath}
 type Env = Map.Map Symbol EnvEntry
 
-data EscaperState = EscaperState{depth :: Int, env :: Env}
+data EscaperState = EscaperState{depth :: Int, env :: Env, astPath :: AstPath}
 
 type Escaper =  WriterT (DList AstPath) (StateT EscaperState Identity)
 
 findEscapesT :: Escaper a -> DList AstPath
 findEscapesT escaper =
   let
-    initialState = EscaperState{depth=0, env=Map.empty}
+    initialState = EscaperState{depth=0, env=Map.empty, astPath=[]}
   in
     runIdentity (evalStateT (execWriterT escaper) initialState)
 
@@ -65,8 +65,12 @@ findEscapesM (A.VarExp (A.SimpleVar sym _)) = findEscapesVar sym
 findEscapesM (A.VarExp (A.FieldVar var _ _)) = findEscapesVar $ findSym var
 findEscapesM (A.CallExp _ args _) = forM_ args findEscapesM
 findEscapesM (A.OpExp leftExp _ rightExp _) = do
+  state <- lift get
+  lift (put state{astPath=astPath state ++ [OpLeft]})
   _ <- findEscapesM leftExp
+  lift (put state{astPath=astPath state ++ [OpLeft]})
   _ <- findEscapesM rightExp
+  lift (put state)
   return ()
 findEscapesM (A.RecordExp fields _ _) = forM_ fields mapFun
   where
@@ -83,6 +87,10 @@ findEscapesM (A.IfExp testExp thenExp elseExpMaybe _) = do
     Just elseExp -> do
       _ <- findEscapesM elseExp
       return ()
+findEscapesM (A.WhileExp testExp bodyExp _) = do
+  _ <- findEscapesM testExp
+  _ <- findEscapesM bodyExp
+  return ()
 
 findSym :: A.Var -> Symbol
 findSym (A.SimpleVar sym _) = sym
@@ -103,10 +111,9 @@ findEscapesVar sym = do
           do
             tell $ singleton boundPath
             return ()
-        else do
+        else
           return ()
-      _ -> do
-        return ()
+      _ -> return ()
   return ()
 
 escapePaths :: A.Exp -> [AstPath] -> A.Exp
