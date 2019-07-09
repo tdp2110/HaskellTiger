@@ -45,13 +45,12 @@ instance Frame.Frame X64Frame where
   formals = formals
   locals = locals
 
-newFrame :: Temp.Generator -> [Frame.EscapesOrNot] -> (Temp.Generator, X64Frame)
-newFrame gen escapes =
+newFrame :: Temp.Label -> Temp.Generator -> [Frame.EscapesOrNot] -> (Temp.Generator, X64Frame)
+newFrame frameName gen escapes =
   let
-    (frameName, gen') = Temp.newlabel gen
     initialFrame = freshFrame frameName
   in
-    foldl' step (gen', initialFrame) escapes
+    foldl' step (gen, initialFrame) escapes
   where
     step :: (Temp.Generator, X64Frame) -> Frame.EscapesOrNot -> (Temp.Generator, X64Frame)
     step (gen', frame) escapesOrNot = allocFormal gen' frame escapesOrNot

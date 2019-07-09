@@ -12,7 +12,7 @@ escapes _ = False
 
 class Frame f where
   type Access f :: *
-  newFrame :: Temp.Generator -> [EscapesOrNot] -> (Temp.Generator, f)
+  newFrame :: Temp.Label -> Temp.Generator -> [EscapesOrNot] -> (Temp.Generator, f)
   name :: f -> Temp.Label
   allocLocal :: Temp.Generator -> f -> EscapesOrNot -> (Temp.Generator, f, Access f)
   formals :: f -> [Access f]
