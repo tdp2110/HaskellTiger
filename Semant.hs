@@ -90,6 +90,15 @@ nextId = do
   put st{counter'=currId + 1}
   return currId
 
+nextLabel :: Translator Temp.Label
+nextLabel = do
+  st@(SemantState _ _ _ gen) <- get
+  let
+    (lab, gen') = Temp.newlabel gen
+    in do
+    put st{generator=gen'}
+    return lab
+
 newLevel :: [Frame.EscapesOrNot] -> Translator Level
 newLevel escapes = do
   st@(SemantState parentLev _ _ gen) <- get
@@ -520,6 +529,7 @@ transDec (A.VarDec name _ maybeTypenameAndPos initExp posn) = do
           else result
         Nothing -> result
 transDec (A.FunctionDec fundecs) = do
+  st <- get
   env <- lift ask
   let
     resultMaybeTys =
@@ -541,22 +551,19 @@ transDec (A.FunctionDec fundecs) = do
       Right formalsTys ->
         let
           resultTys = map resultTyFun resultMaybeTys
-          headerVEnv =
-            foldl'
-            (\venv (fundec,paramTys,resultTy) ->
-               Map.insert
-               (A.fundecName fundec)
-               Env.FunEntry{Env.formals=map snd paramTys,
-                            Env.result=resultTy}
-               venv)
-            (venv' env)
-            (zip3 fundecs formalsTys resultTys)
-          headerEnv = env{venv'=headerVEnv}
         in
-          foldM
-          transBody
-          headerEnv
-          (zip3 fundecs formalsTys resultTys)
+          case runTransT
+               st
+               env
+               (extractHeaderM (venv' env) fundecs formalsTys resultTys)
+          of
+            Left err -> throwErr err
+            Right (headerVEnv, newState) -> do
+              put newState
+              foldM
+                transBody
+                env{venv'=headerVEnv}
+                (zip3 fundecs formalsTys resultTys)
   where
     computeFormalTy env (A.Field fieldName _ fieldTyp fieldPos) =
       case Map.lookup fieldTyp (tenv2 env) of
@@ -602,6 +609,38 @@ transDec (A.TypeDec tydecs) =
           step env' (AcyclicSCC sym) = transAcyclicDecl env' tydecs sym
           in
           foldM step env stronglyConnComps
+
+extractHeaderM :: Env.VEnv -> [A.FunDec] -> [[(a, Types.Ty)]] -> [Types.Ty]
+  -> Translator Env.VEnv
+extractHeaderM venv fundecs formalsTys resultTys =
+  foldM
+  extractHeader
+  venv
+  (zip3 fundecs formalsTys resultTys)
+  where
+    extractHeader :: Env.VEnv -> (A.FunDec, [(a, Types.Ty)], Types.Ty)
+      -> Translator Env.VEnv
+    extractHeader valEnv (fundec,paramTys,resultTy) =
+      let
+        escapes = calcEscapes fundec
+      in do
+        nextLev <- newLevel escapes
+        nextLab <- nextLabel
+        return $ Map.insert
+          (A.fundecName fundec)
+          Env.FunEntry{Env.level=nextLev,
+                       Env.label=nextLab,
+                       Env.formals=map snd paramTys,
+                       Env.result=resultTy}
+          valEnv
+    calcEscapes :: A.FunDec -> [Frame.EscapesOrNot]
+    calcEscapes (A.FunDec _ params _ _ _) =
+      map
+      (\ (A.Field _ escapesOrNot _ _) -> if escapesOrNot then
+                                           Frame.Escapes
+                                         else
+                                           Frame.NoEscape)
+      params
 
 transCyclicDecls :: SemantEnv -> [A.TyDec] -> [Symbol] -> Translator SemantEnv
 transCyclicDecls env tydecs syms = do
