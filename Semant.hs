@@ -2,10 +2,12 @@ module Semant where
 
 import qualified Absyn as A
 import qualified Env as Env
+import qualified Frame
 import qualified Translate as Translate
 import qualified Types as Types
 import Symbol
 import FindEscape (escapeExp)
+import qualified Temp
 
 import Control.Monad.Trans.Class
 import Control.Monad (join, foldM)
@@ -47,6 +49,9 @@ type Level = Translate.X64Level
 type Translate = Translate.X64Translate
 outermost :: Level
 outermost = Translate.X64Outermost
+newLevel :: (Level, Temp.Label, [Frame.EscapesOrNot]) -> Temp.Generator
+  -> (Temp.Generator, Level)
+newLevel = Translate.x64NewLevel
 
 data SemantEnv = SemantEnv {venv'::Env.VEnv, tenv2 :: Env.TEnv}
 data SemantState = SemantState { level :: Level
@@ -81,6 +86,11 @@ nextId = do
   st@(SemantState _ _ currId) <- get
   put st{counter'=currId + 1}
   return currId
+
+getLevel :: Translator Level
+getLevel = do
+  (SemantState lev _ _) <- get
+  return lev
 
 transTy (A.NameTy(sym, posn)) = do
   typ <- lookupT posn tenv2 sym
@@ -489,7 +499,8 @@ transDec (A.VarDec name _ maybeTypenameAndPos initExp posn) = do
                         "constrained by a RECORD type")
     else
     let
-      result = return env{venv'=Map.insert name (Env.VarEntry actualInitTy) (venv' env)}
+      venv'' = Map.insert name (Env.VarEntry actualInitTy) (venv' env)
+      result = return env{venv'=venv''}
     in
       case maybeTypeAnnotation of
         Just typeAnnotation ->
@@ -501,6 +512,7 @@ transDec (A.VarDec name _ maybeTypenameAndPos initExp posn) = do
           else result
         Nothing -> result
 transDec (A.FunctionDec fundecs) = do
+  parentLev <- getLevel
   newStyleEnv <- lift ask
   let
     resultMaybeTys =
