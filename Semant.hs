@@ -520,20 +520,20 @@ transDec (A.VarDec name _ maybeTypenameAndPos initExp posn) = do
           else result
         Nothing -> result
 transDec (A.FunctionDec fundecs) = do
-  newStyleEnv <- lift ask
+  env <- lift ask
   let
     resultMaybeTys =
       map (\fundec ->
               (join $ fmap (\(typename,_) ->
                               Map.lookup
                               typename
-                              (tenv2 newStyleEnv))
-                (A.result fundec)))
+                              $ tenv2 env)
+                $ A.result fundec))
       fundecs
     maybeFormalsTys =
       sequence $ map (\fundec -> sequence $
                                  fmap
-                                 (computeFormalTy newStyleEnv)
+                                 (computeFormalTy env)
                                  (A.params fundec)) fundecs
     in
     case maybeFormalsTys of
@@ -549,17 +549,17 @@ transDec (A.FunctionDec fundecs) = do
                Env.FunEntry{Env.formals=map snd paramTys,
                             Env.result=resultTy}
                venv)
-            (venv' newStyleEnv)
+            (venv' env)
             (zip3 fundecs formalsTys resultTys)
-          headerNewStyleEnv = newStyleEnv{venv'=headerVEnv}
+          headerEnv = env{venv'=headerVEnv}
         in
           foldM
           transBody
-          headerNewStyleEnv
+          headerEnv
           (zip3 fundecs formalsTys resultTys)
   where
-    computeFormalTy newStyleEnv (A.Field fieldName _ fieldTyp fieldPos) =
-      case Map.lookup fieldTyp (tenv2 newStyleEnv) of
+    computeFormalTy env (A.Field fieldName _ fieldTyp fieldPos) =
+      case Map.lookup fieldTyp (tenv2 env) of
         Nothing -> Left SemantError{what="at parameter " ++ (show fieldName) ++
                                          " in function declaration, unbound type " ++
                                          "variable " ++ (show fieldTyp),
