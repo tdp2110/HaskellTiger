@@ -9,6 +9,7 @@ import Data.List
 
 
 data X64Access = InFrame Int | InReg Temp.Label
+  deriving (Show)
 
 {-
 The first six integer or pointer arguments are passed in registers:
@@ -17,6 +18,7 @@ RDI, RSI, RDX, RCX, R8, R9
 data X64Frame = X64Frame {name :: Temp.Label,
                           formals :: [X64Access],
                           locals :: [X64Access]}
+  deriving (Show)
 
 maxNumRegisterParams :: Int
 maxNumRegisterParams = 6

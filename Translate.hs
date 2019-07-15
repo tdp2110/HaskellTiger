@@ -19,13 +19,16 @@ class Translate f where
     -> (Temp.Generator, Level f, Access f)
 
 data X64Translate = X64Translate
+  deriving (Show)
 data X64Level = X64Level { x64Parent :: X64Level
                          , x64Name :: Temp.Label
                          , x64Formals :: [Frame.EscapesOrNot]
                          , x64Frame :: X64Frame.X64Frame}
            | X64Outermost
+  deriving (Show)
 data X64Access = X64Access { level :: X64Level
                            , access :: X64Frame.X64Access }
+  deriving (Show)
 
 instance Translate X64Translate where
   type (Level X64Translate) = X64Level

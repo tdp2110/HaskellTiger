@@ -4,6 +4,7 @@ import qualified Symbol
 
 
 newtype Label = Label Symbol.Symbol
+  deriving (Show)
 
 data Generator = Generator {tempIdx :: Int, labelIdx :: Int}
 

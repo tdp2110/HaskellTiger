@@ -1,14 +1,19 @@
 module Env where
 
-import Types
 import Symbol
+import qualified Temp
+import qualified Translate
+import Types
 
 import Data.Map (Map)
 import qualified Data.Map as Map
 
 data EnvEntry =
     VarEntry{ty :: Ty}
-  | FunEntry{formals :: [Ty], result :: Ty}
+  | FunEntry{ level :: Translate.X64Level
+            , label ::Temp.Label
+            , formals :: [Ty]
+            , result :: Ty }
   deriving (Show)
 
 type VEnv = Map Symbol Env.EnvEntry

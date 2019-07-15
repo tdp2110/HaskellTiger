@@ -28,8 +28,11 @@ data ExpTy = ExpTy{exp :: Translate.Exp, ty :: Types.Ty } deriving (Show)
 transProg :: A.Exp -> Either SemantError ExpTy
 transProg expr =
   let
-    startState = SemantState{canBreak'=False, counter'=0}
-    env = SemantEnv{venv'=Env.baseVEnv, tenv2=Env.baseTEnv}
+    startState = SemantState{ level=outermost
+                            , canBreak=False
+                            , counter'=0 }
+    env = SemantEnv{ venv'=Env.baseVEnv
+                   , tenv2=Env.baseTEnv }
   in
     evalTransT startState env (transExp (escapeExp expr))
 
@@ -40,8 +43,15 @@ transLetDecs :: [A.Dec] -> A.Pos -> Translator SemantEnv
 
 transDec :: A.Dec -> Translator SemantEnv
 
+type Level = Translate.X64Level
+type Translate = Translate.X64Translate
+outermost :: Level
+outermost = Translate.X64Outermost
+
 data SemantEnv = SemantEnv {venv'::Env.VEnv, tenv2 :: Env.TEnv}
-data SemantState = SemantState {canBreak' :: Bool, counter' :: Integer }
+data SemantState = SemantState { level :: Level
+                               , canBreak :: Bool
+                               , counter' :: Integer }
 
 type Translator = StateT SemantState (ReaderT SemantEnv (ExceptT SemantError Identity))
 
@@ -68,7 +78,7 @@ evalTransT st env =
 
 nextId :: Translator Integer
 nextId = do
-  st@(SemantState _ currId) <- get
+  st@(SemantState _ _ currId) <- get
   put st{counter'=currId + 1}
   return currId
 
@@ -120,7 +130,7 @@ transVar (A.SimpleVar sym pos) = do
   val <- lookupT pos venv' sym
   case val of
     Env.VarEntry{Env.ty=t} -> return ExpTy{exp=emptyExp, ty=t}
-    (Env.FunEntry _ _) -> throwT pos ("variable " ++ (show sym) ++
+    (Env.FunEntry _ _ _ _) -> throwT pos ("variable " ++ (show sym) ++
                                       " has no non-function bindings.")
 transVar (A.FieldVar var sym pos) = do
   ExpTy{exp=_, ty=varTy} <- transVar var
@@ -163,7 +173,7 @@ transExp (A.StringExp _) = do
 transExp (A.CallExp funcSym argExps pos) = do
   funEntry <- lookupT pos venv' funcSym
   case funEntry of
-    (Env.FunEntry formalsTys resultTy) -> do
+    (Env.FunEntry _ _ formalsTys resultTy) -> do
       paramExpTys <- mapM transExp argExps
       let paramTys = map ty paramExpTys in
         if (length formalsTys) /= (length paramTys)
@@ -285,9 +295,9 @@ transExp (A.IfExp testExpr thenExpr maybeElseExpr pos) = do
 transExp (A.WhileExp testExp bodyExp pos) = do
   ExpTy{exp=_, ty=testTy} <- transExp testExp
   st <- get
-  put st{canBreak'=True}
+  put st{canBreak=True}
   ExpTy{exp=_, ty=bodyTy} <- transExp bodyExp
-  put st{canBreak'=False}
+  put st{canBreak=False}
   if testTy /= Types.INT then
     throwT pos ("in whileExp, the test expression must be integral: " ++
                 "found type=" ++ (show testTy))
@@ -297,8 +307,8 @@ transExp (A.WhileExp testExp bodyExp pos) = do
     else
     return ExpTy{exp=emptyExp, ty=Types.UNIT}
 transExp (A.BreakExp pos) = do
-  (SemantState canBreak'' _) <- get
-  if canBreak'' then
+  (SemantState _ canBreak' _) <- get
+  if canBreak' then
     return ExpTy{exp=emptyExp, ty=Types.UNIT}
     else
     throwT pos "break expression not enclosed in a while or for"
@@ -330,10 +340,10 @@ transExp (A.ForExp forVar _ loExp hiExp body pos) = do
     bodyVEnv = Map.insert forVar Env.VarEntry{Env.ty=Types.INT} (venv' env)
     bodyEnv = env{venv'=bodyVEnv}
     in
-    case runTransT st{canBreak'=True} bodyEnv (transExp body) of
+    case runTransT st{canBreak=True} bodyEnv (transExp body) of
       Left err -> throwErr err
       Right (ExpTy{exp=_, ty=bodyTy}, st') -> do
-        put st'{canBreak'=False}
+        put st'{canBreak=False}
         if (loTy /= Types.INT) || (hiTy /= Types.INT) then
           throwT pos "only integer expressions may appear as bounds in a ForExp"
           else if bodyTy /= Types.UNIT then
