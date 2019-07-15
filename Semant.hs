@@ -32,11 +32,12 @@ transProg expr =
   let
     startState = SemantState{ level=outermost
                             , canBreak=False
-                            , counter'=0 }
+                            , counter'=0
+                            , generator=Temp.newGen}
     env = SemantEnv{ venv'=Env.baseVEnv
                    , tenv2=Env.baseTEnv }
   in
-    evalTransT startState env (transExp (escapeExp expr))
+    evalTransT startState env $ transExp $ escapeExp expr
 
 transVar :: A.Var -> Translator ExpTy
 transExp :: A.Exp -> Translator ExpTy
@@ -47,16 +48,18 @@ transDec :: A.Dec -> Translator SemantEnv
 
 type Level = Translate.X64Level
 type Translate = Translate.X64Translate
+type Generator = Temp.Generator
 outermost :: Level
 outermost = Translate.X64Outermost
-newLevel :: (Level, Temp.Label, [Frame.EscapesOrNot]) -> Temp.Generator
+newLevelFn :: (Level, Temp.Label, [Frame.EscapesOrNot]) -> Temp.Generator
   -> (Temp.Generator, Level)
-newLevel = Translate.x64NewLevel
+newLevelFn = Translate.x64NewLevel
 
 data SemantEnv = SemantEnv {venv'::Env.VEnv, tenv2 :: Env.TEnv}
 data SemantState = SemantState { level :: Level
                                , canBreak :: Bool
-                               , counter' :: Integer }
+                               , counter' :: Integer
+                               , generator :: Generator }
 
 type Translator = StateT SemantState (ReaderT SemantEnv (ExceptT SemantError Identity))
 
@@ -83,14 +86,19 @@ evalTransT st env =
 
 nextId :: Translator Integer
 nextId = do
-  st@(SemantState _ _ currId) <- get
+  st@(SemantState _ _ currId _) <- get
   put st{counter'=currId + 1}
   return currId
 
-getLevel :: Translator Level
-getLevel = do
-  (SemantState lev _ _) <- get
-  return lev
+newLevel :: [Frame.EscapesOrNot] -> Translator Level
+newLevel escapes = do
+  st@(SemantState parentLev _ _ gen) <- get
+  let
+    (nextLab, gen') = Temp.newlabel gen
+    (gen'', lev') = newLevelFn (parentLev, nextLab, escapes) gen'
+    in do
+    put st{generator=gen''}
+    return lev'
 
 transTy (A.NameTy(sym, posn)) = do
   typ <- lookupT posn tenv2 sym
@@ -317,7 +325,7 @@ transExp (A.WhileExp testExp bodyExp pos) = do
     else
     return ExpTy{exp=emptyExp, ty=Types.UNIT}
 transExp (A.BreakExp pos) = do
-  (SemantState _ canBreak' _) <- get
+  (SemantState _ canBreak' _ _) <- get
   if canBreak' then
     return ExpTy{exp=emptyExp, ty=Types.UNIT}
     else
@@ -512,7 +520,6 @@ transDec (A.VarDec name _ maybeTypenameAndPos initExp posn) = do
           else result
         Nothing -> result
 transDec (A.FunctionDec fundecs) = do
-  parentLev <- getLevel
   newStyleEnv <- lift ask
   let
     resultMaybeTys =
