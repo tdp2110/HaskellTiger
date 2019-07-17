@@ -46,14 +46,14 @@ x64AllocLocal :: X64Level -> Temp.Generator -> Frame.EscapesOrNot ->
 
 x64NewLevel (parent, label, escapes) gen =
   let
-    escapes' = [Frame.Escapes] ++ escapes
+    escapes' = [Frame.Escapes] ++ escapes -- initial escape for static link
     (frameLabel, gen') = Temp.newlabel gen
     (gen'', frame') = X64Frame.newFrame frameLabel gen' escapes'
   in
     (gen'', X64Level{ x64Parent=parent
-                   , x64Name=label
-                   , x64Formals=escapes'
-                   , x64Frame=frame' })
+                    , x64Name=label
+                    , x64Formals=escapes'
+                    , x64Frame=frame' })
 
 x64TranslateFormals lev =
   let

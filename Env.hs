@@ -9,9 +9,9 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 
 data EnvEntry =
-    VarEntry{ty :: Ty}
+    VarEntry{ ty :: Ty }
   | FunEntry{ level :: Translate.X64Level
-            , label ::Temp.Label
+            , label :: Temp.Label
             , formals :: [Ty]
             , result :: Ty }
   deriving (Show)
@@ -23,16 +23,79 @@ baseTEnv :: TEnv
 baseTEnv = Map.fromList [(Symbol "string", STRING),
                          (Symbol "int", INT)]
 
+outermost :: Translate.X64Level
+outermost = Translate.X64Outermost
+
 baseVEnv :: VEnv
 baseVEnv = Map.fromList [
-  (Symbol "print", FunEntry{formals=[STRING], result=UNIT}),
-  (Symbol "flush", FunEntry{formals=[], result=UNIT}),
-  (Symbol "getchar", FunEntry{formals=[], result=STRING}),
-  (Symbol "ord", FunEntry{formals=[STRING], result=INT}),
-  (Symbol "chr", FunEntry{formals=[INT], result=STRING}),
-  (Symbol "size", FunEntry{formals=[STRING], result=INT}),
-  (Symbol "substring", FunEntry{formals=[STRING, INT, INT], result=STRING}),
-  (Symbol "concat", FunEntry{formals=[STRING, STRING], result=STRING}),
-  (Symbol "not", FunEntry{formals=[INT], result=INT}),
-  (Symbol "exit", FunEntry{formals=[INT], result=UNIT})
+  let
+    sym = Symbol "print"
+  in
+    (sym, FunEntry{ level=outermost
+                  , label=Temp.Label sym
+                  , formals=[STRING]
+                  , result=UNIT }),
+  let
+    sym = Symbol "flush"
+  in
+    (sym, FunEntry{ level=outermost
+                  , label=Temp.Label sym
+                  , formals=[]
+                  , result=UNIT }),
+  let
+    sym = Symbol "getchar"
+  in
+    (sym, FunEntry{ level=outermost
+                  , label=Temp.Label sym
+                  , formals=[]
+                  , result=STRING }),
+  let
+    sym = Symbol "ord"
+  in
+    (sym, FunEntry{ level=outermost
+                  , label=Temp.Label sym
+                  , formals=[STRING]
+                  , result=INT }),
+  let
+    sym = Symbol "chr"
+  in
+    (sym, FunEntry{ level=outermost
+                  , label=Temp.Label sym
+                  , formals=[INT]
+                  , result=STRING }),
+  let
+    sym = Symbol "size"
+  in
+    (sym, FunEntry{ level=outermost
+                  , label=Temp.Label sym
+                  , formals=[STRING]
+                  , result=INT }),
+  let
+    sym = Symbol "substring"
+  in
+    (sym, FunEntry{ level=outermost
+                  , label=Temp.Label sym
+                  , formals=[STRING, INT, INT]
+                  , result=STRING }),
+  let
+    sym = Symbol "concat"
+  in
+    (sym, FunEntry{ level=outermost
+                  , label=Temp.Label sym
+                  , formals=[STRING, STRING]
+                  , result=STRING }),
+  let
+    sym = Symbol "not"
+  in
+    (sym, FunEntry{ level=outermost
+                  , label=Temp.Label sym
+                  , formals=[INT]
+                  , result=INT }),
+  let
+    sym = Symbol "exit"
+  in
+    (sym, FunEntry{ level=outermost
+                  , label=Temp.Label sym
+                  , formals=[INT]
+                  , result=UNIT })
   ]
