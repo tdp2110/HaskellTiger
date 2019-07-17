@@ -30,10 +30,12 @@ data ExpTy = ExpTy{exp :: Translate.Exp, ty :: Types.Ty } deriving (Show)
 transProg :: A.Exp -> Either SemantError ExpTy
 transProg expr =
   let
-    startState = SemantState{ level=outermost
+    gen = Temp.newGen
+    (gen', mainLevel) = newLevelFn (outermost, Temp.Label $ Symbol "main", []) gen
+    startState = SemantState{ level=mainLevel
                             , canBreak=False
                             , counter'=0
-                            , generator=Temp.newGen}
+                            , generator=gen'}
     env = SemantEnv{ venv'=Env.baseVEnv
                    , tenv2=Env.baseTEnv }
   in
@@ -49,11 +51,14 @@ transDec :: A.Dec -> Translator SemantEnv
 type Level = Translate.X64Level
 type Translate = Translate.X64Translate
 type Generator = Temp.Generator
+type Access = Tramslate.X64Access
 outermost :: Level
 outermost = Translate.X64Outermost
 newLevelFn :: (Level, Temp.Label, [Frame.EscapesOrNot]) -> Temp.Generator
   -> (Temp.Generator, Level)
 newLevelFn = Translate.x64NewLevel
+allocLocalFn :: Level -> Temp.Generator -> Frame.EscapesOrNot
+  -> (Temp.Generator, Level, Access)
 
 data SemantEnv = SemantEnv {venv'::Env.VEnv, tenv2 :: Env.TEnv}
 data SemantState = SemantState { level :: Level
@@ -109,6 +114,8 @@ newLevel escapes = do
     put st{generator=gen''}
     return lev'
 
+allocLocal :: Frame.EscapesOrNot -> Translator
+
 transTy (A.NameTy(sym, posn)) = do
   typ <- lookupT posn tenv2 sym
   return typ
@@ -156,7 +163,7 @@ emptyExp = Translate.Exp()
 transVar (A.SimpleVar sym pos) = do
   val <- lookupT pos venv' sym
   case val of
-    Env.VarEntry{Env.ty=t} -> return ExpTy{exp=emptyExp, ty=t}
+    (Env.VarEntry _ t) -> return ExpTy{exp=emptyExp, ty=t}
     (Env.FunEntry _ _ _ _) -> throwT pos ("variable " ++ (show sym) ++
                                       " has no non-function bindings.")
 transVar (A.FieldVar var sym pos) = do
@@ -216,7 +223,7 @@ transExp (A.CallExp funcSym argExps pos) = do
               throwT pos ("parameter " ++ (show ix) ++ " of func " ++ (show funcSym) ++
                           " requires type " ++ (show formalTy) ++
                           " but was passed a value of type " ++ (show paramTy))
-    (Env.VarEntry t) -> throwT pos ("only functions are callable: found type " ++
+    (Env.VarEntry _ t) -> throwT pos ("only functions are callable: found type " ++
                                    (show t))
 transExp (A.OpExp leftExp op rightExp pos) = do
   ExpTy{exp=_, ty=tyleft} <- transExp leftExp

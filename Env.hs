@@ -9,7 +9,8 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 
 data EnvEntry =
-    VarEntry{ ty :: Ty }
+    VarEntry{ access :: Translate.X64Access
+            , ty :: Ty }
   | FunEntry{ level :: Translate.X64Level
             , label :: Temp.Label
             , formals :: [Ty]
