@@ -51,7 +51,7 @@ transDec :: A.Dec -> Translator SemantEnv
 type Level = Translate.X64Level
 type Translate = Translate.X64Translate
 type Generator = Temp.Generator
-type Access = Tramslate.X64Access
+type Access = Translate.X64Access
 outermost :: Level
 outermost = Translate.X64Outermost
 newLevelFn :: (Level, Temp.Label, [Frame.EscapesOrNot]) -> Temp.Generator
@@ -59,6 +59,11 @@ newLevelFn :: (Level, Temp.Label, [Frame.EscapesOrNot]) -> Temp.Generator
 newLevelFn = Translate.x64NewLevel
 allocLocalFn :: Level -> Temp.Generator -> Frame.EscapesOrNot
   -> (Temp.Generator, Level, Access)
+allocLocalFn = Translate.x64AllocLocal
+
+toEscape :: Bool -> Frame.EscapesOrNot
+toEscape True = Frame.Escapes
+toEscape _ = Frame.NoEscape
 
 data SemantEnv = SemantEnv {venv'::Env.VEnv, tenv2 :: Env.TEnv}
 data SemantState = SemantState { level :: Level
@@ -114,7 +119,15 @@ newLevel escapes = do
     put st{generator=gen''}
     return lev'
 
-allocLocal :: Frame.EscapesOrNot -> Translator
+allocLocal :: Bool -> Translator Access
+allocLocal escape = do
+  st@(SemantState lev _ _ gen) <- get
+  let
+    (gen', lev', access) = allocLocalFn lev gen (toEscape escape)
+    in do
+    put st{level=lev', generator=gen'}
+    return access
+
 
 transTy (A.NameTy(sym, posn)) = do
   typ <- lookupT posn tenv2 sym
@@ -509,16 +522,21 @@ checkForVarNotAssigned forVar (A.LetExp decs bodyExp _) =
       checkForVarNotAssigned forVar bodyExp
 checkForVarNotAssigned _ _ = Right ()
 
-transDec (A.VarDec name _ maybeTypenameAndPos initExp posn) = do
+transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
   maybeTypeAnnotation <- mapM
                          (\(typename,_) -> lookupT posn tenv2 typename)
                          maybeTypenameAndPos
   ExpTy{exp=_, ty=actualInitTy} <- transExp initExp
   env <- lift ask
+  st <- get
   if actualInitTy == Types.NIL then
     case maybeTypeAnnotation of
       Just recTy@(Types.RECORD _) ->
-        return env{venv'=Map.insert name (Env.VarEntry recTy) (venv' env)}
+        case runTransT st env (allocLocal escape) of
+          Left err -> throwErr err
+          Right (access, st') -> do
+            put st'
+            return env{venv'=Map.insert name (Env.VarEntry access recTy) (venv' env)}
       _ -> throwT posn ("nil expression declarations must be " ++
                         "constrained by a RECORD type")
     else
@@ -572,7 +590,7 @@ transDec (A.FunctionDec fundecs) = do
                 env{venv'=headerVEnv}
                 (zip3 fundecs formalsTys resultTys)
   where
-    computeFormalTy env (A.Field fieldName _ fieldTyp fieldPos) =
+    computeFormalTy env (A.Field fieldName escape fieldTyp fieldPos) =
       case Map.lookup fieldTyp (tenv2 env) of
         Nothing -> Left SemantError{what="at parameter " ++ (show fieldName) ++
                                          " in function declaration, unbound type " ++
