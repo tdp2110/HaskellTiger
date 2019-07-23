@@ -52,6 +52,8 @@ type Level = Translate.X64Level
 type Translate = Translate.X64Translate
 type Generator = Temp.Generator
 type Access = Translate.X64Access
+formalAccesses :: Level -> [Access]
+formalAccesses = Translate.x64TranslateFormals
 outermost :: Level
 outermost = Translate.X64Outermost
 newLevelFn :: (Level, Temp.Label, [Frame.EscapesOrNot]) -> Temp.Generator
@@ -384,6 +386,7 @@ transExp (A.ForExp forVar _ loExp hiExp body pos) = do
   st <- get
   env <- lift ask
   let
+    -- TODO NEXT: need to give the forVar an access
     bodyVEnv = Map.insert forVar Env.VarEntry{Env.ty=Types.INT} (venv' env)
     bodyEnv = env{venv'=bodyVEnv}
     in
@@ -536,13 +539,21 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
           Left err -> throwErr err
           Right (access, st') -> do
             put st'
-            return env{venv'=Map.insert name (Env.VarEntry access recTy) (venv' env)}
+            return env{ venv'=Map.insert
+                             name (Env.VarEntry access recTy)
+                             (venv' env) }
       _ -> throwT posn ("nil expression declarations must be " ++
                         "constrained by a RECORD type")
     else
     let
-      venv'' = Map.insert name (Env.VarEntry actualInitTy) (venv' env)
-      result = return env{venv'=venv''}
+      result = case runTransT st env (allocLocal escape) of
+        Left err -> throwErr err
+        Right (access, st') -> do
+          put st'
+          return env { venv'=Map.insert
+                            name
+                            (Env.VarEntry access actualInitTy)
+                            (venv' env) }
     in
       case maybeTypeAnnotation of
         Just typeAnnotation ->
@@ -590,13 +601,13 @@ transDec (A.FunctionDec fundecs) = do
                 env{venv'=headerVEnv}
                 (zip3 fundecs formalsTys resultTys)
   where
-    computeFormalTy env (A.Field fieldName escape fieldTyp fieldPos) =
+    computeFormalTy env (A.Field fieldName esc fieldTyp fieldPos) =
       case Map.lookup fieldTyp (tenv2 env) of
         Nothing -> Left SemantError{what="at parameter " ++ (show fieldName) ++
                                          " in function declaration, unbound type " ++
                                          "variable " ++ (show fieldTyp),
                                     at=fieldPos}
-        Just typeTy -> Right (fieldName, typeTy)
+        Just typeTy -> Right (fieldName, typeTy, toEscape esc)
     resultTyFun maybeResultTy = case maybeResultTy of
                                   Nothing -> Types.UNIT
                                   Just typ -> typ
@@ -605,8 +616,19 @@ transDec (A.FunctionDec fundecs) = do
       let
         venv = venv' env
         bodyVEnv = Map.union venv $ Map.fromList $
-          map (\(sym,typ) -> (sym, Env.VarEntry typ)) formalsTys
+          map (\(sym,typ,_) -> (sym, Env.VarEntry (formalAccess sym) typ)) formalsTys
         bodyEnv = env{venv'=bodyVEnv}
+        {- Should be able to recover the access of a formal parameter
+           by looking at the current level. should be able to get it by
+           zipping (params fundec) with (formals $ level st) and selecting -}
+        formalAccess :: Symbol -> Access
+        formalAccess sym = case
+          lookup sym $ zip
+            (map A.fieldName $ A.params fundec)
+            (formalAccesses $ level st)
+          of
+            Just acc -> acc
+            _ -> error "must not get here"
         in
         case
           runTransT st bodyEnv (transExp $ A.funBody fundec)
@@ -635,16 +657,17 @@ transDec (A.TypeDec tydecs) =
           in
           foldM step env stronglyConnComps
 
-extractHeaderM :: Env.VEnv -> [A.FunDec] -> [[(a, Types.Ty)]] -> [Types.Ty]
-  -> Translator Env.VEnv
+extractHeaderM :: Map.Map Symbol Env.EnvEntry
+               -> [A.FunDec]
+               -> [[(a, Types.Ty, c)]]
+               -> [Types.Ty]
+               -> Translator Env.VEnv
 extractHeaderM venv fundecs formalsTys resultTys =
   foldM
   extractHeader
   venv
   (zip3 fundecs formalsTys resultTys)
   where
-    extractHeader :: Env.VEnv -> (A.FunDec, [(a, Types.Ty)], Types.Ty)
-      -> Translator Env.VEnv
     extractHeader valEnv (fundec,paramTys,resultTy) =
       let
         escapes = calcEscapes fundec
@@ -655,7 +678,7 @@ extractHeaderM venv fundecs formalsTys resultTys =
           (A.fundecName fundec)
           Env.FunEntry{Env.level=nextLev,
                        Env.label=nextLab,
-                       Env.formals=map snd paramTys,
+                       Env.formals=map (\(_,elt,_) -> elt) paramTys,
                        Env.result=resultTy}
           valEnv
     calcEscapes :: A.FunDec -> [Frame.EscapesOrNot]
