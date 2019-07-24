@@ -125,7 +125,7 @@ allocLocal :: Bool -> Translator Access
 allocLocal escape = do
   st@(SemantState lev _ _ gen) <- get
   let
-    (gen', lev', access) = allocLocalFn lev gen (toEscape escape)
+    (gen', lev', access) = allocLocalFn lev gen $ toEscape escape
     in do
     put st{level=lev', generator=gen'}
     return access
@@ -166,8 +166,9 @@ isCmp _ = False
 
 checkInt :: Types.Ty -> Maybe String-> Either String Translate.Exp
 checkInt Types.INT _ = Right $ Translate.Exp ()
-checkInt nonIntTy maybeCtx = Left $ (convertCtx maybeCtx) ++
-                             "expected type Ty.INT, but found " ++ show nonIntTy
+checkInt nonIntTy maybeCtx =
+  Left $ (convertCtx maybeCtx) ++
+  "expected type Ty.INT, but found " ++ show nonIntTy
   where
     convertCtx Nothing = ""
     convertCtx (Just str) = str ++ ", "
@@ -179,19 +180,22 @@ transVar (A.SimpleVar sym pos) = do
   val <- lookupT pos venv' sym
   case val of
     (Env.VarEntry _ t) -> return ExpTy{exp=emptyExp, ty=t}
-    (Env.FunEntry _ _ _ _) -> throwT pos ("variable " ++ (show sym) ++
-                                      " has no non-function bindings.")
+    (Env.FunEntry _ _ _ _) -> throwT pos $
+                              "variable " ++ (show sym) ++
+                              " has no non-function bindings."
 transVar (A.FieldVar var sym pos) = do
   ExpTy{exp=_, ty=varTy} <- transVar var
   case varTy of
     r@(Types.RECORD(sym2ty, _)) ->
       case lookup sym sym2ty of
         Just t -> return ExpTy{exp=emptyExp, ty=t}
-        Nothing -> throwT pos ("in field expr, record type " ++
-                               (show r) ++ " has no " ++ (show sym) ++
-                               " field")
-    t@(_) -> throwT pos ("in field expr, only record types have fields. type=" ++
-                         (show t))
+        Nothing -> throwT pos $
+                   "in field expr, record type " ++
+                   (show r) ++ " has no " ++ (show sym) ++
+                   " field"
+    t@(_) -> throwT pos $
+             "in field expr, only record types have fields. type=" ++
+             (show t)
 transVar (A.SubscriptVar var expr pos) = do
   ExpTy{exp=_, ty=varTy} <- transVar var
   ExpTy{exp=_, ty=expTy} <- transExp expr
@@ -199,16 +203,18 @@ transVar (A.SubscriptVar var expr pos) = do
     Types.ARRAY(varEltTy, _) ->
       case expTy of
         Types.INT -> return ExpTy{exp=emptyExp, ty=varEltTy}
-        nonIntTy@(_) -> throwT pos ("in subscript expr, subscript type " ++
-                                     "is not an INT, is an " ++ (show nonIntTy))
-    nonArrayTy@(_) -> throwT pos ("in subscript expr, only arrays may " ++
-                                  "be subscripted -- attempting to subscript type=" ++
-                                  (show nonArrayTy))
+        nonIntTy@(_) -> throwT pos $
+                        "in subscript expr, subscript type " ++
+                        "is not an INT, is an " ++ (show nonIntTy)
+    nonArrayTy@(_) -> throwT pos $
+                      "in subscript expr, only arrays may " ++
+                      "be subscripted -- attempting to subscript type=" ++
+                      (show nonArrayTy)
 
 transExp (A.VarExp var) = do
   st <- get
   env <- lift ask
-  case  runTransT st env (transVar var) of
+  case runTransT st env $ transVar var of
     Left err -> throwErr err
     Right (res, newState) -> do
       put newState
@@ -227,19 +233,21 @@ transExp (A.CallExp funcSym argExps pos) = do
       let paramTys = map ty paramExpTys in
         if (length formalsTys) /= (length paramTys)
         then
-          throwT pos ("function " ++ (show funcSym) ++
-                      " expects " ++ (show $ length formalsTys) ++
-                      " parameters but was passed " ++ (show $ length paramTys))
+          throwT pos $ "function " ++ (show funcSym) ++
+          " expects " ++ (show $ length formalsTys) ++
+          " parameters but was passed " ++ (show $ length paramTys)
         else
           case filter (\(ty1, ty2, _) -> ty1 /= ty2)
                (zip3 formalsTys paramTys [0 :: Integer ..]) of
             [] -> return ExpTy{exp=emptyExp, ty=resultTy}
             ((formalTy, paramTy, ix):_) ->
-              throwT pos ("parameter " ++ (show ix) ++ " of func " ++ (show funcSym) ++
-                          " requires type " ++ (show formalTy) ++
-                          " but was passed a value of type " ++ (show paramTy))
-    (Env.VarEntry _ t) -> throwT pos ("only functions are callable: found type " ++
-                                   (show t))
+              throwT pos $
+              "parameter " ++ (show ix) ++ " of func " ++ (show funcSym) ++
+              " requires type " ++ (show formalTy) ++
+              " but was passed a value of type " ++ (show paramTy)
+    (Env.VarEntry _ t) -> throwT pos $
+                          "only functions are callable: found type " ++
+                          (show t)
 transExp (A.OpExp leftExp op rightExp pos) = do
   ExpTy{exp=_, ty=tyleft} <- transExp leftExp
   ExpTy{exp=_, ty=tyright} <- transExp rightExp
@@ -249,7 +257,7 @@ transExp (A.OpExp leftExp op rightExp pos) = do
           checkInt tyright (Just "in right hand operand")
     in
       case maybeError of
-        Left err -> throwT pos ("In OpExp, " ++ err)
+        Left err -> throwT pos $ "In OpExp, " ++ err
         Right _ -> return ExpTy{exp=emptyExp, ty=Types.INT}
     else
     if isCmp op then
@@ -267,8 +275,9 @@ transExp (A.OpExp leftExp op rightExp pos) = do
             if arr1 == arr2 then res
             else
               throwT pos "only identical array types may be compared"
-          _ -> throwT pos ("incomparable types " ++ (show tyleft) ++
-                           " and " ++ (show tyright))
+          _ -> throwT pos $
+               "incomparable types " ++ (show tyleft) ++
+               " and " ++ (show tyright)
     else undefined
 transExp (A.RecordExp fieldSymExpPosns typSym pos) = do
   maybeRecordTy <- lookupT pos tenv2 typSym
@@ -280,9 +289,10 @@ transExp (A.RecordExp fieldSymExpPosns typSym pos) = do
       in
         if actualSyms /= expectedSyms
         then
-          throwT pos ("incompatible field names: expected " ++
-                       (show expectedSyms) ++ " but record expression has " ++
-                       (show actualSyms))
+          throwT pos $
+          "incompatible field names: expected " ++
+          (show expectedSyms) ++ " but record expression has " ++
+          (show actualSyms)
         else do
           actualFieldExpTys <- mapM (\(_,expr,_) -> transExp expr) fieldSymExpPosns
           let
@@ -295,13 +305,15 @@ transExp (A.RecordExp fieldSymExpPosns typSym pos) = do
             of
               [] -> return ExpTy{exp=emptyExp, ty=recordTy}
               ((sym,expectedTy,actualTy,fieldPos):_) ->
-                throwT fieldPos ("in record exp, field " ++ (show sym) ++
-                                 " should have type " ++ (show expectedTy) ++
-                                 " but has type " ++ (show actualTy))
+                throwT fieldPos $
+                "in record exp, field " ++ (show sym) ++
+                " should have type " ++ (show expectedTy) ++
+                " but has type " ++ (show actualTy)
     t@(_) ->
-          throwT pos ("only record types may appear as the symbol in a " ++
-                      "record instance " ++
-                      "definition. Found type=" ++ (show t))
+          throwT pos $
+          "only record types may appear as the symbol in a " ++
+          "record instance " ++
+          "definition. Found type=" ++ (show t)
 transExp (A.SeqExp expAndPosns) = do
   expTys <- mapM
     (\(expr,_) -> transExp expr)
@@ -315,16 +327,17 @@ transExp (A.AssignExp var expr pos) = do
   if varTy == exprTy then
     return ExpTy{exp=emptyExp, ty=Types.UNIT}
     else
-    throwT pos ("in assignExp, variable has type " ++ (show varTy) ++
-                " but assign target has type " ++ (show exprTy))
+    throwT pos $
+    "in assignExp, variable has type " ++ (show varTy) ++
+    " but assign target has type " ++ (show exprTy)
 transExp (A.IfExp testExpr thenExpr maybeElseExpr pos) = do
   testExpTy <- transExp testExpr
   thenExpTy <- transExp thenExpr
   let
     maybeElseExpTy = fmap transExp maybeElseExpr in
     if (ty testExpTy) /= Types.INT then
-      throwT pos ("in ifExp, the test expression must be integral: " ++
-                  "found type=" ++ (show $ ty testExpTy))
+      throwT pos $ "in ifExp, the test expression must be integral: " ++
+      "found type=" ++ (show $ ty testExpTy)
     else
       case maybeElseExpTy of
         Nothing -> return thenExpTy
@@ -335,10 +348,10 @@ transExp (A.IfExp testExpr thenExpr maybeElseExpr pos) = do
             elseTy = ty elseExpTy
             in
             if thenTy /= elseTy then
-              throwT pos ("in ifExp, thenExp and elseExp must have " ++
-                          "the same type: found " ++ (show thenTy) ++
-                          " and " ++ (show elseTy) ++
-                          ", respectfully")
+              throwT pos $ "in ifExp, thenExp and elseExp must have " ++
+              "the same type: found " ++ (show thenTy) ++
+              " and " ++ (show elseTy) ++
+              ", respectfully"
             else
               return ExpTy{exp=emptyExp, ty=thenTy}
 transExp (A.WhileExp testExp bodyExp pos) = do
@@ -348,11 +361,11 @@ transExp (A.WhileExp testExp bodyExp pos) = do
   ExpTy{exp=_, ty=bodyTy} <- transExp bodyExp
   put st{canBreak=False}
   if testTy /= Types.INT then
-    throwT pos ("in whileExp, the test expression must be integral: " ++
-                "found type=" ++ (show testTy))
+    throwT pos $ "in whileExp, the test expression must be integral: " ++
+    "found type=" ++ (show testTy)
     else if bodyTy /= Types.UNIT then
-    throwT pos ("in a whileExp, the body expression must yield no value: " ++
-                "found type=" ++ (show bodyTy)) -- TODO add a test for me!
+    throwT pos $ "in a whileExp, the body expression must yield no value: " ++
+    "found type=" ++ (show bodyTy) -- TODO add a test for me!
     else
     return ExpTy{exp=emptyExp, ty=Types.UNIT}
 transExp (A.BreakExp pos) = do
@@ -368,24 +381,24 @@ transExp (A.ArrayExp arrayTySym sizeExp initExp pos) = do
       ExpTy{exp=_, ty=sizeTy} <- transExp sizeExp
       ExpTy{exp=_, ty=initTy} <- transExp initExp
       if sizeTy /= Types.INT then
-        throwT pos ("in ArrayExp, sizeExp must be an integer. " ++
-                    "Found type=" ++ (show sizeTy))
+        throwT pos $"in ArrayExp, sizeExp must be an integer. " ++
+        "Found type=" ++ (show sizeTy)
         else if initTy /= arrayEltTy then
-        throwT pos ("in ArrayExp, initExp has actual type " ++
-                    (show initTy) ++ ", when it must have " ++
-                    (show arrayEltTy))
+        throwT pos $ "in ArrayExp, initExp has actual type " ++
+        (show initTy) ++ ", when it must have " ++
+        (show arrayEltTy)
         else
         return ExpTy{exp=emptyExp, ty=arrayTy}
     t@(_) ->
-          throwT pos ("only array types may appear as the symbol in an " ++
-                      "array instance " ++
-                      "definition. Found type=" ++ (show t))
+          throwT pos $ "only array types may appear as the symbol in an " ++
+          "array instance " ++
+          "definition. Found type=" ++ (show t)
 transExp (A.ForExp forVar escape loExp hiExp body pos) = do
   ExpTy{exp=_, ty=loTy} <- transExp loExp
   ExpTy{exp=_, ty=hiTy} <- transExp hiExp
   st <- get
   env <- lift ask
-  case runTransT st env (allocLocal escape) of
+  case runTransT st env $ allocLocal escape of
     Left err -> throwErr err
     Right (access, st') -> do
       put st'
@@ -393,7 +406,7 @@ transExp (A.ForExp forVar escape loExp hiExp body pos) = do
         bodyVEnv = Map.insert forVar (Env.VarEntry access Types.INT) (venv' env)
         bodyEnv = env{venv'=bodyVEnv}
         in
-        case runTransT st{canBreak=True} bodyEnv (transExp body) of
+        case runTransT st{canBreak=True} bodyEnv $ transExp body of
           Left err -> throwErr err
           Right (ExpTy{exp=_, ty=bodyTy}, st'') -> do
             put st''{canBreak=False}
@@ -408,7 +421,7 @@ transExp (A.ForExp forVar escape loExp hiExp body pos) = do
 transExp (A.LetExp decs bodyExp letPos) = do
   env <- lift ask
   st <- get
-  case runTransT st env (transLetDecs decs letPos) of
+  case runTransT st env $ transLetDecs decs letPos of
     Left err -> throwErr err
     Right (bodyEnv, st') ->
       case
@@ -428,7 +441,7 @@ transLetDecs decls letPos = do
   where
     step envAcc decl = do
       st <- get
-      case runTransT st envAcc (transDec decl) of
+      case runTransT st envAcc $ transDec decl of
         Left err -> throwErr err
         Right (newEnv, newState) -> do
           put newState
@@ -538,18 +551,18 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
   if actualInitTy == Types.NIL then
     case maybeTypeAnnotation of
       Just recTy@(Types.RECORD _) ->
-        case runTransT st env (allocLocal escape) of
+        case runTransT st env $ allocLocal escape of
           Left err -> throwErr err
           Right (access, st') -> do
             put st'
             return env{ venv'=Map.insert
-                             name (Env.VarEntry access recTy)
-                             (venv' env) }
-      _ -> throwT posn ("nil expression declarations must be " ++
-                        "constrained by a RECORD type")
+                              name (Env.VarEntry access recTy)
+                              (venv' env) }
+      _ -> throwT posn $ "nil expression declarations must be " ++
+           "constrained by a RECORD type"
     else
     let
-      result = case runTransT st env (allocLocal escape) of
+      result = case runTransT st env $ allocLocal escape of
         Left err -> throwErr err
         Right (access, st') -> do
           put st'
@@ -561,10 +574,10 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
       case maybeTypeAnnotation of
         Just typeAnnotation ->
           if typeAnnotation /= actualInitTy then
-            throwT posn ("mismatch in type annotation and computed " ++
-                         "type in varDecl: " ++
-                         "type annotation " ++ (show typeAnnotation) ++
-                         ", computed type " ++ (show actualInitTy))
+            throwT posn $ "mismatch in type annotation and computed " ++
+            "type in varDecl: " ++
+            "type annotation " ++ (show typeAnnotation) ++
+            ", computed type " ++ (show actualInitTy)
           else result
         Nothing -> result
 transDec (A.FunctionDec fundecs) = do
@@ -594,7 +607,7 @@ transDec (A.FunctionDec fundecs) = do
           case runTransT
                st
                env
-               (extractHeaderM (venv' env) fundecs formalsTys resultTys)
+               $ extractHeaderM (venv' env) fundecs formalsTys resultTys
           of
             Left err -> throwErr err
             Right (headerVEnv, newState) -> do
@@ -621,9 +634,6 @@ transDec (A.FunctionDec fundecs) = do
         bodyVEnv = Map.union venv $ Map.fromList $
           map (\(sym,typ,_) -> (sym, Env.VarEntry (formalAccess sym) typ)) formalsTys
         bodyEnv = env{venv'=bodyVEnv}
-        {- Should be able to recover the access of a formal parameter
-           by looking at the current level. should be able to get it by
-           zipping (params fundec) with (formals $ level st) and selecting -}
         formalAccess :: Symbol -> Access
         formalAccess sym = case
           lookup sym $ zip
@@ -640,9 +650,9 @@ transDec (A.FunctionDec fundecs) = do
           Right (ExpTy{exp=_, ty=bodyTy}, state') ->
             if resultTy /= Types.UNIT && resultTy /= bodyTy
             then
-              throwT (A.funPos fundec) ("computed type of function body " ++
-                                        (show bodyTy) ++ " and annotated type " ++
-                                        (show resultTy) ++ " do not match")
+              throwT (A.funPos fundec) $ "computed type of function body " ++
+              (show bodyTy) ++ " and annotated type " ++
+              (show resultTy) ++ " do not match"
             else do
               put state'
               return env
@@ -760,11 +770,11 @@ transAcyclicDecl env tydecs sym = do
     case runTransT
          state
          env
-         (transTy typ) of
+         $ transTy typ of
       Left err -> throwErr err
       Right (typesTy, state') -> do
         put state'
-        return $ env{tenv2=Map.insert sym typesTy (tenv2 env)}
+        return $ env{tenv2=Map.insert sym typesTy $ tenv2 env}
 
 checkForIllegalCycles :: [A.TyDec] -> [SCC Symbol] -> Either SemantError ()
 checkForIllegalCycles tydecs stronglyConnectedComponents =
@@ -791,7 +801,6 @@ typeSCCs tydecs =
     typeEdges = map (\(sym, _, syms) -> (sym, sym, syms)) typeGraph
   in
     reverse $ stronglyConnComp typeEdges
-
 
 allAreName :: [A.TyDec] -> SCC Symbol -> Bool
 allAreName tydecs (AcyclicSCC sym) = isNameTy tydecs sym
