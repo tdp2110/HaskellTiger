@@ -380,28 +380,31 @@ transExp (A.ArrayExp arrayTySym sizeExp initExp pos) = do
           throwT pos ("only array types may appear as the symbol in an " ++
                       "array instance " ++
                       "definition. Found type=" ++ (show t))
-transExp (A.ForExp forVar _ loExp hiExp body pos) = do
+transExp (A.ForExp forVar escape loExp hiExp body pos) = do
   ExpTy{exp=_, ty=loTy} <- transExp loExp
   ExpTy{exp=_, ty=hiTy} <- transExp hiExp
   st <- get
   env <- lift ask
-  let
-    -- TODO NEXT: need to give the forVar an access
-    bodyVEnv = Map.insert forVar Env.VarEntry{Env.ty=Types.INT} (venv' env)
-    bodyEnv = env{venv'=bodyVEnv}
-    in
-    case runTransT st{canBreak=True} bodyEnv (transExp body) of
-      Left err -> throwErr err
-      Right (ExpTy{exp=_, ty=bodyTy}, st') -> do
-        put st'{canBreak=False}
-        if (loTy /= Types.INT) || (hiTy /= Types.INT) then
-          throwT pos "only integer expressions may appear as bounds in a ForExp"
-          else if bodyTy /= Types.UNIT then
-          throwT pos "the body of a ForExp must yield no value"
-          else
-          case checkForVarNotAssigned forVar body of
-            Left err -> throwErr err
-            _ -> return ExpTy{exp=emptyExp, ty=Types.UNIT}
+  case runTransT st env (allocLocal escape) of
+    Left err -> throwErr err
+    Right (access, st') -> do
+      put st'
+      let
+        bodyVEnv = Map.insert forVar (Env.VarEntry access Types.INT) (venv' env)
+        bodyEnv = env{venv'=bodyVEnv}
+        in
+        case runTransT st{canBreak=True} bodyEnv (transExp body) of
+          Left err -> throwErr err
+          Right (ExpTy{exp=_, ty=bodyTy}, st'') -> do
+            put st''{canBreak=False}
+            if (loTy /= Types.INT) || (hiTy /= Types.INT) then
+              throwT pos "only integer expressions may appear as bounds in a ForExp"
+              else if bodyTy /= Types.UNIT then
+              throwT pos "the body of a ForExp must yield no value"
+              else
+              case checkForVarNotAssigned forVar body of
+                Left err -> throwErr err
+                _ -> return ExpTy{exp=emptyExp, ty=Types.UNIT}
 transExp (A.LetExp decs bodyExp letPos) = do
   env <- lift ask
   st <- get
