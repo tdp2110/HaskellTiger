@@ -2,11 +2,13 @@
 
 module Translate where
 
-import qualified Temp
 import qualified Frame
+import qualified Temp
+import qualified Tree
 import qualified X64Frame
 
-newtype Exp = Exp () deriving (Show)
+import Prelude hiding (exp)
+
 
 class Translate f where
   type Level f :: *
@@ -69,3 +71,15 @@ x64AllocLocal lev gen escapeOrNot =
     lev' = lev{ x64Frame=frame' }
   in
     (gen', lev', X64Access{level=lev', access=access'})
+
+data Exp =
+    Ex Tree.Exp
+  | Nx Tree.Stm
+  | Cx (Temp.Label -> Temp.Label -> Tree.Stm)
+  | Exp () -- to delete!!!
+
+instance Show Exp where
+  show (Ex exp) = "Exp.Ex " ++ show exp
+  show (Nx stm) = "Exp.Nx " ++ show stm
+  show (Cx _) = "Exp.Cx(...)"
+  show (Exp _) = "Exp.Exp"

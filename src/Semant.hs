@@ -253,7 +253,7 @@ transExp (A.OpExp leftExp op rightExp pos) = do
   ExpTy{exp=_, ty=tyright} <- transExp rightExp
   if isArith op then
     let maybeError = do
-          checkInt tyleft (Just "in left hand operand")
+          _ <- checkInt tyleft (Just "in left hand operand")
           checkInt tyright (Just "in right hand operand")
     in
       case maybeError of
