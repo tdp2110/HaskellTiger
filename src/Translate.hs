@@ -103,3 +103,10 @@ unEx (Cx genstm) gen =
 makeSeq :: [Tree.Stm] -> Tree.Stm
 makeSeq [] = Tree.EXP $ Tree.CONST 0
 makeSeq (stmt:stmts) = Tree.SEQ(stmt, makeSeq stmts)
+
+unCx :: Exp -> (Temp.Label -> Temp.Label -> Tree.Stm)
+unCx (Ex (Tree.CONST 0)) = \_ f -> Tree.JUMP(Tree.NAME f, [f])
+unCx (Ex (Tree.CONST 1)) = \t _ -> Tree.JUMP(Tree.NAME t, [t])
+unCx (Ex exp) = \t f -> Tree.CJUMP (Tree.NE, exp, Tree.CONST 0, t, f)
+unCx (Cx genstm) = genstm
+unCx (Nx _) = error "should never get here"
