@@ -81,3 +81,25 @@ instance Show Exp where
   show (Ex exp) = "Exp.Ex " ++ show exp
   show (Nx stm) = "Exp.Nx " ++ show stm
   show (Cx _) = "Exp.Cx(...)"
+
+unEx :: Exp -> Temp.Generator -> (Tree.Exp, Temp.Generator)
+unEx (Ex exp) gen = (exp, gen)
+unEx (Nx stm) gen = (Tree.ESEQ(stm, Tree.CONST 0), gen)
+unEx (Cx genstm) gen =
+  let
+    (r, gen') = Temp.newtemp gen
+    (t, gen'') = Temp.newlabel gen'
+    (f, gen''') = Temp.newlabel gen''
+    expRes = Tree.ESEQ(
+      makeSeq [ Tree.MOVE(Tree.TEMP r, Tree.CONST 1)
+          , genstm t f
+          , Tree.LABEL f
+          , Tree.MOVE(Tree.TEMP r, Tree.CONST 0)
+          , Tree.LABEL t],
+      Tree.TEMP r)
+  in
+    (expRes, gen''')
+
+makeSeq :: [Tree.Stm] -> Tree.Stm
+makeSeq [] = Tree.EXP $ Tree.CONST 0
+makeSeq (stmt:stmts) = Tree.SEQ(stmt, makeSeq stmts)
