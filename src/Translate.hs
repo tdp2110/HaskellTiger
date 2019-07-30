@@ -110,3 +110,14 @@ unCx (Ex (Tree.CONST 1)) = \t _ -> Tree.JUMP(Tree.NAME t, [t])
 unCx (Ex exp) = \t f -> Tree.CJUMP (Tree.NE, exp, Tree.CONST 0, t, f)
 unCx (Cx genstm) = genstm
 unCx (Nx _) = error "should never get here"
+
+unNx :: Exp -> Temp.Generator -> (Tree.Stm, Temp.Generator)
+unNx (Nx stm) gen = (stm, gen)
+unNx (Ex exp) gen = (Tree.EXP exp, gen)
+unNx (Cx genstm) gen =
+  let
+    (t, gen') = Temp.newlabel gen
+    (f, gen'') = Temp.newlabel gen'
+    stmtRes = makeSeq [genstm t f, Tree.LABEL t, Tree.LABEL f]
+  in
+    (stmtRes, gen'')
