@@ -8,6 +8,7 @@ import qualified Types as Types
 import Symbol
 import FindEscape (escapeExp)
 import qualified Temp
+import qualified Tree
 
 import Control.Monad.Trans.Class
 import Control.Monad (join, foldM)
@@ -164,8 +165,8 @@ isCmp A.GeOp = True
 isCmp _ = False
 
 
-checkInt :: Types.Ty -> Maybe String-> Either String Translate.Exp
-checkInt Types.INT _ = Right $ Translate.Exp ()
+checkInt :: Types.Ty -> Maybe String-> Either String ()
+checkInt Types.INT _ = Right $ ()
 checkInt nonIntTy maybeCtx =
   Left $ (convertCtx maybeCtx) ++
   "expected type Ty.INT, but found " ++ show nonIntTy
@@ -174,7 +175,7 @@ checkInt nonIntTy maybeCtx =
     convertCtx (Just str) = str ++ ", "
 
 emptyExp :: Translate.Exp
-emptyExp = Translate.Exp()
+emptyExp = Translate.Ex $ Tree.CONST 0
 
 transVar (A.SimpleVar sym pos) = do
   val <- lookupT pos venv' sym

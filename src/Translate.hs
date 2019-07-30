@@ -76,10 +76,8 @@ data Exp =
     Ex Tree.Exp
   | Nx Tree.Stm
   | Cx (Temp.Label -> Temp.Label -> Tree.Stm)
-  | Exp () -- to delete!!!
 
 instance Show Exp where
   show (Ex exp) = "Exp.Ex " ++ show exp
   show (Nx stm) = "Exp.Nx " ++ show stm
   show (Cx _) = "Exp.Cx(...)"
-  show (Exp _) = "Exp.Exp"
