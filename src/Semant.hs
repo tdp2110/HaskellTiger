@@ -179,8 +179,10 @@ emptyExp = Translate.Ex $ Tree.CONST 0
 
 transVar (A.SimpleVar sym pos) = do
   val <- lookupT pos venv' sym
+  (SemantState lev _ _ _) <- get
   case val of
-    (Env.VarEntry _ t) -> return ExpTy{exp=emptyExp, ty=t}
+    (Env.VarEntry access t) -> return ExpTy{ exp=Translate.simpleVar access lev
+                                           , ty=t}
     (Env.FunEntry _ _ _ _) -> throwT pos $
                               "variable " ++ (show sym) ++
                               " has no non-function bindings."

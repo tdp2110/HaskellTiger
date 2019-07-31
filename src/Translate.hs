@@ -25,12 +25,18 @@ data X64Translate = X64Translate
 data X64Level = X64Level { x64Parent :: X64Level
                          , x64Name :: Temp.Label
                          , x64Formals :: [Frame.EscapesOrNot]
-                         , x64Frame :: X64Frame.X64Frame}
+                         , x64Frame :: X64Frame.X64Frame
+                         , identifier :: Int }
            | X64Outermost
   deriving (Show)
 data X64Access = X64Access { level :: X64Level
                            , access :: X64Frame.X64Access }
   deriving (Show)
+
+instance Eq X64Level where
+  X64Outermost == X64Outermost = True
+  (X64Level _ _ _ _ id1) == (X64Level _ _ _ _ id2) = id1 == id2
+  _ == _ = False
 
 instance Translate X64Translate where
   type (Level X64Translate) = X64Level
@@ -51,11 +57,13 @@ x64NewLevel (parent, label, escapes) gen =
     escapes' = [Frame.Escapes] ++ escapes -- initial escape for static link
     (frameLabel, gen') = Temp.newlabel gen
     (gen'', frame') = X64Frame.newFrame frameLabel gen' escapes'
+    (identity, gen''') = Temp.newtemp gen''
   in
-    (gen'', X64Level{ x64Parent=parent
-                    , x64Name=label
-                    , x64Formals=escapes'
-                    , x64Frame=frame' })
+    (gen''', X64Level{ x64Parent=parent
+                     , x64Name=label
+                     , x64Formals=escapes'
+                     , x64Frame=frame'
+                     , identifier=identity })
 
 x64TranslateFormals lev =
   let
@@ -121,3 +129,14 @@ unNx (Cx genstm) gen =
     stmtRes = makeSeq [genstm t f, Tree.LABEL t, Tree.LABEL f]
   in
     (stmtRes, gen'')
+
+simpleVar :: X64Access -> X64Level -> Exp
+simpleVar X64Access{level=declaredLevel, access=accessInDeclaredFrame} levelAtUse =
+  Ex . go levelAtUse $ X64Frame.frameExp $ x64Frame levelAtUse
+  where
+    go :: X64Level -> Tree.Exp -> Tree.Exp
+    go currentLevel currentFPExp =
+      if declaredLevel == currentLevel then
+        X64Frame.exp accessInDeclaredFrame currentFPExp
+        else
+        go (x64Parent currentLevel) $ X64Frame.staticLink currentFPExp
