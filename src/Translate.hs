@@ -2,6 +2,7 @@
 
 module Translate where
 
+import qualified Absyn
 import qualified Frame
 import qualified Temp
 import qualified Tree
@@ -140,3 +141,22 @@ simpleVar X64Access{level=declaredLevel, access=accessInDeclaredFrame} levelAtUs
         X64Frame.exp accessInDeclaredFrame currentFPExp
         else
         go (x64Parent currentLevel) $ X64Frame.staticLink currentFPExp
+
+binOp :: Exp -> Exp -> Absyn.Oper -> Temp.Generator -> (Exp, Temp.Generator)
+binOp expLeft expRight op gen =
+  let
+    (expLeft', gen') = unEx expLeft gen
+    (expRight', gen'') = unEx expRight gen'
+    op' = transBinOp op
+    resExp = Ex $ Tree.BINOP (op', expLeft', expRight')
+  in
+    (resExp, gen'')
+
+transBinOp :: Absyn.Oper -> Tree.Binop
+transBinOp op =
+  case op of
+    Absyn.PlusOp -> Tree.PLUS
+    Absyn.MinusOp -> Tree.MINUS
+    Absyn.TimesOp -> Tree.MUL
+    Absyn.DivideOp -> Tree.DIV
+    _ -> error "shouldn't get here"

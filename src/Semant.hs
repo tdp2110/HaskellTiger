@@ -105,7 +105,7 @@ nextId = do
 
 nextLabel :: Translator Temp.Label
 nextLabel = do
-  st@(SemantState _ _ _ gen) <- get
+  st@SemantState{generator=gen} <- get
   let
     (lab, gen') = Temp.newlabel gen
     in do
@@ -252,8 +252,8 @@ transExp (A.CallExp funcSym argExps pos) = do
                           "only functions are callable: found type " ++
                           (show t)
 transExp (A.OpExp leftExp op rightExp pos) = do
-  ExpTy{exp=_, ty=tyleft} <- transExp leftExp
-  ExpTy{exp=_, ty=tyright} <- transExp rightExp
+  ExpTy{exp=expLeft, ty=tyleft} <- transExp leftExp
+  ExpTy{exp=expRight, ty=tyright} <- transExp rightExp
   if isArith op then
     let maybeError = do
           _ <- checkInt tyleft (Just "in left hand operand")
@@ -261,7 +261,13 @@ transExp (A.OpExp leftExp op rightExp pos) = do
     in
       case maybeError of
         Left err -> throwT pos $ "In OpExp, " ++ err
-        Right _ -> return ExpTy{exp=emptyExp, ty=Types.INT}
+        Right _ -> do
+                st@SemantState{generator=gen} <- get
+                let
+                  (resExp, gen') = Translate.binOp expLeft expRight op gen
+                  in do
+                    put st{generator=gen'}
+                    return ExpTy{exp=resExp, ty=Types.INT}
     else
     if isCmp op then
       let
