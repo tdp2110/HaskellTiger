@@ -274,7 +274,13 @@ transExp (A.OpExp leftExp op rightExp pos) = do
         res = return ExpTy{exp=emptyExp, ty=Types.INT}
       in
         case (tyleft, tyright) of
-          (Types.INT, Types.INT) -> res
+          (Types.INT, Types.INT) -> do
+            st@SemantState{generator=gen} <- get
+            let
+              (resExp, gen') = Translate.relOp expLeft expRight op gen
+              in do
+                put st{generator=gen'}
+                return ExpTy{exp=resExp, ty=Types.INT}
           (Types.STRING, Types.STRING) -> res
           (r1@(Types.RECORD _), r2@(Types.RECORD _)) ->
             if r1 == r2 then res
