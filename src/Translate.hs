@@ -147,37 +147,29 @@ relOp expLeft expRight op gen =
   let
     (expLeft', gen') = unEx expLeft gen
     (expRight', gen'') = unEx expRight gen'
-    op' = transRelOp op
+    op' = case op of
+            Absyn.EqOp -> Tree.EQ
+            Absyn.NeqOp -> Tree.NE
+            Absyn.LtOp -> Tree.LT
+            Absyn.LeOp -> Tree.LE
+            Absyn.GtOp -> Tree.GT
+            Absyn.GeOp -> Tree.GE
+            _ -> error "shouldn't get here"
     resExp = Cx $ \t f -> Tree.CJUMP (op', expLeft', expRight', t, f)
   in
     (resExp, gen'')
-
-transRelOp :: Absyn.Oper -> Tree.Relop
-transRelOp op =
-  case op of
-    Absyn.EqOp -> Tree.EQ
-    Absyn.NeqOp -> Tree.NE
-    Absyn.LtOp -> Tree.LT
-    Absyn.LeOp -> Tree.LE
-    Absyn.GtOp -> Tree.GT
-    Absyn.GeOp -> Tree.GE
-    _ -> error "shouldn't get here"
 
 binOp :: Exp -> Exp -> Absyn.Oper -> Temp.Generator -> (Exp, Temp.Generator)
 binOp expLeft expRight op gen =
   let
     (expLeft', gen') = unEx expLeft gen
     (expRight', gen'') = unEx expRight gen'
-    op' = transBinOp op
+    op' = case op of
+            Absyn.PlusOp -> Tree.PLUS
+            Absyn.MinusOp -> Tree.MINUS
+            Absyn.TimesOp -> Tree.MUL
+            Absyn.DivideOp -> Tree.DIV
+            _ -> error "shouldn't get here"
     resExp = Ex $ Tree.BINOP (op', expLeft', expRight')
   in
     (resExp, gen'')
-
-transBinOp :: Absyn.Oper -> Tree.Binop
-transBinOp op =
-  case op of
-    Absyn.PlusOp -> Tree.PLUS
-    Absyn.MinusOp -> Tree.MINUS
-    Absyn.TimesOp -> Tree.MUL
-    Absyn.DivideOp -> Tree.DIV
-    _ -> error "shouldn't get here"
