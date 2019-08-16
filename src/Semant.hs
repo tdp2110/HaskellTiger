@@ -99,7 +99,7 @@ evalTransT st env =
 
 nextId :: Translator Integer
 nextId = do
-  st@(SemantState _ _ currId _) <- get
+  st@SemantState{counter'=currId} <- get
   put st{counter'=currId + 1}
   return currId
 
@@ -346,29 +346,41 @@ transExp (A.AssignExp var expr pos) = do
     "in assignExp, variable has type " ++ (show varTy) ++
     " but assign target has type " ++ (show exprTy)
 transExp (A.IfExp testExpr thenExpr maybeElseExpr pos) = do
-  testExpTy <- transExp testExpr
-  thenExpTy <- transExp thenExpr
+  ExpTy{exp=testExp, ty=testTy} <- transExp testExpr
+  ExpTy{exp=thenExp, ty=thenTy} <- transExp thenExpr
+  st@SemantState{generator=gen} <- get
   let
     maybeElseExpTy = fmap transExp maybeElseExpr in
-    if (ty testExpTy) /= Types.INT then
+    if testTy /= Types.INT then
       throwT pos $ "in ifExp, the test expression must be integral: " ++
-      "found type=" ++ (show $ ty testExpTy)
+      "found type=" ++ (show testTy)
     else
       case maybeElseExpTy of
-        Nothing -> return thenExpTy
+        Nothing -> let
+          (ifElseExp, gen') = Translate.ifThen
+                              testExp
+                              thenExp
+                              gen
+          in do
+          put st{generator=gen'}
+          return ExpTy{exp=ifElseExp, ty=thenTy}
         Just elseExpTyM -> do
-          elseExpTy <- elseExpTyM
-          let
-            thenTy = ty thenExpTy
-            elseTy = ty elseExpTy
-            in
-            if thenTy /= elseTy then
-              throwT pos $ "in ifExp, thenExp and elseExp must have " ++
-              "the same type: found " ++ (show thenTy) ++
-              " and " ++ (show elseTy) ++
-              ", respectfully"
+          ExpTy{exp=elseExp, ty=elseTy} <- elseExpTyM
+          if thenTy /= elseTy then
+            throwT pos $ "in ifExp, thenExp and elseExp must have " ++
+            "the same type: found " ++ (show thenTy) ++
+            " and " ++ (show elseTy) ++
+            ", respectfully"
             else
-              return ExpTy{exp=emptyExp, ty=thenTy}
+            let
+              (ifThenElseExp, gen') = Translate.ifThenElse
+                                      testExp
+                                      thenExp
+                                      elseExp
+                                      gen
+              in do
+              put st{generator=gen'}
+              return ExpTy{exp=ifThenElseExp, ty=thenTy}
 transExp (A.WhileExp testExp bodyExp pos) = do
   ExpTy{exp=_, ty=testTy} <- transExp testExp
   st <- get

@@ -91,9 +91,12 @@ instance Show Exp where
   show (Nx stm) = "Exp.Nx " ++ show stm
   show (Cx _) = "Exp.Cx(...)"
 
+zero :: Tree.Exp
+zero = Tree.CONST 0
+
 unEx :: Exp -> Temp.Generator -> (Tree.Exp, Temp.Generator)
 unEx (Ex exp) gen = (exp, gen)
-unEx (Nx stm) gen = (Tree.ESEQ(stm, Tree.CONST 0), gen)
+unEx (Nx stm) gen = (Tree.ESEQ(stm, zero), gen)
 unEx (Cx genstm) gen =
   let
     (r, gen') = Temp.newtemp gen
@@ -103,20 +106,20 @@ unEx (Cx genstm) gen =
       makeSeq [ Tree.MOVE(Tree.TEMP r, Tree.CONST 1)
           , genstm t f
           , Tree.LABEL f
-          , Tree.MOVE(Tree.TEMP r, Tree.CONST 0)
+          , Tree.MOVE(Tree.TEMP r, zero)
           , Tree.LABEL t],
       Tree.TEMP r)
   in
     (expRes, gen''')
 
 makeSeq :: [Tree.Stm] -> Tree.Stm
-makeSeq [] = Tree.EXP $ Tree.CONST 0
+makeSeq [] = Tree.EXP $ zero
 makeSeq (stmt:stmts) = Tree.SEQ(stmt, makeSeq stmts)
 
 unCx :: Exp -> (Temp.Label -> Temp.Label -> Tree.Stm)
 unCx (Ex (Tree.CONST 0)) = \_ f -> Tree.JUMP(Tree.NAME f, [f])
 unCx (Ex (Tree.CONST 1)) = \t _ -> Tree.JUMP(Tree.NAME t, [t])
-unCx (Ex exp) = \t f -> Tree.CJUMP (Tree.NE, exp, Tree.CONST 0, t, f)
+unCx (Ex exp) = \t f -> Tree.CJUMP (Tree.NE, exp, zero, t, f)
 unCx (Cx genstm) = genstm
 unCx (Nx _) = error "should never get here"
 
@@ -173,3 +176,42 @@ binOp expLeft expRight op gen =
     resExp = Ex $ Tree.BINOP (op', expLeft', expRight')
   in
     (resExp, gen'')
+
+ifThen :: Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
+ifThen testExpE thenExpE gen =
+  let
+    cx = unCx testExpE
+    (thenStm, gen') = unNx thenExpE gen
+    (t, gen'') = Temp.newlabel gen'
+    (f, gen''') = Temp.newlabel gen''
+    resExp = Ex $ Tree.ESEQ ( makeSeq [cx t f,
+                                       Tree.LABEL t,
+                                       thenStm,
+                                       Tree.LABEL f]
+                            , zero)
+  in
+    (resExp, gen''')
+
+{-
+TODO page 162 notes that this should be optimized
+-}
+ifThenElse :: Exp -> Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
+ifThenElse testExpE thenExpE elseExpE gen =
+  let
+    cx = unCx testExpE
+    (thenExp, gen') = unEx thenExpE gen
+    (elseExp, gen'') = unEx elseExpE gen'
+    (t, gen''') = Temp.newlabel gen''
+    (f, gen4) = Temp.newlabel gen'''
+    (joinLab, gen5) = Temp.newlabel gen4
+    (r, gen6) = Temp.newtemp gen5
+    resExp = Ex $ Tree.ESEQ (makeSeq [cx t f,
+                                      Tree.LABEL t,
+                                      Tree.MOVE (Tree.TEMP r, thenExp),
+                                      Tree.JUMP (Tree.NAME joinLab, [joinLab]),
+                                      Tree.LABEL f,
+                                      Tree.MOVE (Tree.TEMP r, elseExp),
+                                      Tree.LABEL joinLab]
+                            , Tree.TEMP r)
+  in
+    (resExp, gen6)
