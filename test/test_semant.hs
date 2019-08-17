@@ -376,6 +376,54 @@ ifExp4 = TestCase (
       "in ifExp, thenExp and elseExp must have the same type" err
   )
 
+while1 :: Test
+while1 = TestCase (
+  let
+    text = "let\n" ++
+           "  var x := 0\n" ++
+           "in\n" ++
+           "  while x < 10 do\n" ++
+           "    x := x + 1\n" ++
+           "end"
+    (Right Semant.ExpTy{Semant.exp=(Translate.Nx _), Semant.ty=ty}) = parseToSema text
+  in do
+    assertEqual "well-formed while has UNIT ty" Types.UNIT ty
+  )
+
+while2 :: Test
+while2 = TestCase (
+  let
+    text = "let\n" ++
+           "  var x := 0\n" ++
+           "in\n" ++
+           "  while x < 10 do\n" ++
+           "    (x := x + 1;\n" ++
+           "    if x = 5 then break)\n" ++
+           "end"
+    (Right Semant.ExpTy{Semant.exp=(Translate.Nx _), Semant.ty=ty}) = parseToSema text
+  in do
+    assertEqual "well-formed while has UNIT ty" Types.UNIT ty
+  )
+
+while3 :: Test
+while3 = TestCase (
+  let
+    text = "let\n" ++
+           "  var x := 0\n" ++
+           "in\n" ++
+           "  while x < 10 do\n" ++
+           "    (x := x + 1;\n" ++
+           "    2)\n" ++
+           "end"
+    (Left(Semant.SemantError err _)) = parseToSema text
+  in do
+    assertBool
+      "ill-formed while-body"
+      $ isInfixOf
+      "in a whileExp, the body expression must yield no value"
+      err
+  )
+
 tests :: Test
 tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "int arith 1" intArith1,
@@ -408,7 +456,10 @@ tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "ifExp1" ifExp1,
                   TestLabel "ifExp2" ifExp2,
                   TestLabel "ifExp3" ifExp3,
-                  TestLabel "ifExp4" ifExp4
+                  TestLabel "ifExp4" ifExp4,
+                  TestLabel "while1" while1,
+                  TestLabel "while2" while2,
+                  TestLabel "while3" while3
                  ]
 
 main :: IO Counts

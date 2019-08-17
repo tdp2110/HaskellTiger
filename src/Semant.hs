@@ -34,7 +34,7 @@ transProg expr =
     gen = Temp.newGen
     (gen', mainLevel) = newLevelFn (outermost, Temp.Label $ Symbol "main", []) gen
     startState = SemantState{ level=mainLevel
-                            , canBreak=False
+                            , breakTarget=Nothing
                             , counter'=0
                             , generator=gen'}
     env = SemantEnv{ venv'=Env.baseVEnv
@@ -70,7 +70,7 @@ toEscape _ = Frame.NoEscape
 
 data SemantEnv = SemantEnv {venv'::Env.VEnv, tenv2 :: Env.TEnv}
 data SemantState = SemantState { level :: Level
-                               , canBreak :: Bool
+                               , breakTarget :: Maybe Temp.Label
                                , counter' :: Integer
                                , generator :: Generator }
 
@@ -386,25 +386,35 @@ transExp (A.IfExp testExpr thenExpr maybeElseExpr pos) = do
               put st{generator=gen'}
               return ExpTy{exp=ifThenElseExp, ty=thenTy}
 transExp (A.WhileExp testExp bodyExp pos) = do
-  ExpTy{exp=_, ty=testTy} <- transExp testExp
+  ExpTy{exp=testE, ty=testTy} <- transExp testExp
+  breakTargetLab <- nextLabel
   st <- get
-  put st{canBreak=True}
-  ExpTy{exp=_, ty=bodyTy} <- transExp bodyExp
-  put st{canBreak=False}
+  put st{breakTarget=Just breakTargetLab}
+  ExpTy{exp=bodyE, ty=bodyTy} <- transExp bodyExp
+  put st{breakTarget=Nothing}
   if testTy /= Types.INT then
     throwT pos $ "in whileExp, the test expression must be integral: " ++
     "found type=" ++ (show testTy)
     else if bodyTy /= Types.UNIT then
     throwT pos $ "in a whileExp, the body expression must yield no value: " ++
-    "found type=" ++ (show bodyTy) -- TODO add a test for me!
-    else
-    return ExpTy{exp=emptyExp, ty=Types.UNIT}
+    "found type=" ++ (show bodyTy)
+    else do
+    st'@SemantState{generator=gen} <- get
+    let
+      (resExp, gen') = Translate.while
+                       testE
+                       bodyE
+                       breakTargetLab
+                       gen
+      in do
+      put st'{generator=gen'}
+      return ExpTy{exp=resExp, ty=Types.UNIT}
 transExp (A.BreakExp pos) = do
-  (SemantState _ canBreak' _ _) <- get
-  if canBreak' then
-    return ExpTy{exp=emptyExp, ty=Types.UNIT}
-    else
-    throwT pos "break expression not enclosed in a while or for"
+  SemantState{breakTarget=breakTargetMaybe} <- get
+  case breakTargetMaybe of
+    Nothing -> throwT pos "break expression not enclosed in a while or for"
+    Just doneLabel -> return ExpTy{ exp=Translate.break doneLabel
+                                  , ty=Types.UNIT}
 transExp (A.ArrayExp arrayTySym sizeExp initExp pos) = do
   maybeArrayTy <- lookupT pos tenv2 arrayTySym
   case maybeArrayTy of
@@ -433,14 +443,18 @@ transExp (A.ForExp forVar escape loExp hiExp body pos) = do
     Left err -> throwErr err
     Right (access, st') -> do
       put st'
+      breakTargetLab <- nextLabel
       let
         bodyVEnv = Map.insert forVar (Env.VarEntry access Types.INT) (venv' env)
         bodyEnv = env{venv'=bodyVEnv}
         in
-        case runTransT st{canBreak=True} bodyEnv $ transExp body of
+        case runTransT
+             st{breakTarget=Just breakTargetLab}
+             bodyEnv
+             $ transExp body of
           Left err -> throwErr err
           Right (ExpTy{exp=_, ty=bodyTy}, st'') -> do
-            put st''{canBreak=False}
+            put st''{breakTarget=Nothing}
             if (loTy /= Types.INT) || (hiTy /= Types.INT) then
               throwT pos "only integer expressions may appear as bounds in a ForExp"
               else if bodyTy /= Types.UNIT then

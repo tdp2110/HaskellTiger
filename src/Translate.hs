@@ -104,10 +104,10 @@ unEx (Cx genstm) gen =
     (f, gen''') = Temp.newlabel gen''
     expRes = Tree.ESEQ(
       makeSeq [ Tree.MOVE(Tree.TEMP r, Tree.CONST 1)
-          , genstm t f
-          , Tree.LABEL f
-          , Tree.MOVE(Tree.TEMP r, zero)
-          , Tree.LABEL t],
+              , genstm t f
+              , Tree.LABEL f
+              , Tree.MOVE(Tree.TEMP r, zero)
+              , Tree.LABEL t],
       Tree.TEMP r)
   in
     (expRes, gen''')
@@ -184,10 +184,10 @@ ifThen testExpE thenExpE gen =
     (thenStm, gen') = unNx thenExpE gen
     (t, gen'') = Temp.newlabel gen'
     (f, gen''') = Temp.newlabel gen''
-    resExp = Nx $ makeSeq [cx t f,
-                           Tree.LABEL t,
-                           thenStm,
-                           Tree.LABEL f]
+    resExp = Nx $ makeSeq [ cx t f
+                          , Tree.LABEL t
+                          , thenStm
+                          , Tree.LABEL f ]
   in
     (resExp, gen''')
 
@@ -197,14 +197,14 @@ TODO page 162 notes that this should be optimized
 ifThenElse :: Exp -> Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
 ifThenElse testExpE thenExpE elseExpE gen =
   let
-    cx = unCx testExpE
+    testGen = unCx testExpE
     (thenExp, gen') = unEx thenExpE gen
     (elseExp, gen'') = unEx elseExpE gen'
     (t, gen''') = Temp.newlabel gen''
     (f, gen4) = Temp.newlabel gen'''
     (joinLab, gen5) = Temp.newlabel gen4
     (r, gen6) = Temp.newtemp gen5
-    resExp = Ex $ Tree.ESEQ (makeSeq [cx t f,
+    resExp = Ex $ Tree.ESEQ (makeSeq [testGen t f,
                                       Tree.LABEL t,
                                       Tree.MOVE (Tree.TEMP r, thenExp),
                                       Tree.JUMP (Tree.NAME joinLab, [joinLab]),
@@ -214,3 +214,22 @@ ifThenElse testExpE thenExpE elseExpE gen =
                             , Tree.TEMP r)
   in
     (resExp, gen6)
+
+while :: Exp -> Exp -> Temp.Label -> Temp.Generator -> (Exp, Temp.Generator)
+while testExpE bodyExpE doneLab gen =
+  let
+    (testLab, gen') = Temp.newlabel gen
+    (bodyLab, gen'') = Temp.newlabel gen'
+    (testExp, gen''') = unEx testExpE gen''
+    (bodyExp, gen4) = unEx bodyExpE gen'''
+    resExp = Nx $ makeSeq [ Tree.LABEL testLab
+                          , Tree.CJUMP (Tree.NE, zero, testExp, doneLab, bodyLab)
+                          , Tree.LABEL bodyLab
+                          , Tree.EXP bodyExp
+                          , Tree.JUMP (Tree.NAME testLab, [testLab])
+                          , Tree.LABEL doneLab ]
+  in
+    (resExp, gen4)
+
+break :: Temp.Label -> Exp
+break breakTarget = Nx $ Tree.JUMP (Tree.NAME breakTarget, [breakTarget])
