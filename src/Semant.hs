@@ -361,9 +361,13 @@ transExp (A.IfExp testExpr thenExpr maybeElseExpr pos) = do
                               testExp
                               thenExp
                               gen
-          in do
-          put st{generator=gen'}
-          return ExpTy{exp=ifElseExp, ty=thenTy}
+          in
+            if thenTy /= Types.UNIT then
+               throwT pos $ "in if-then exp (without else), the if body " ++
+               "must yield no value"
+             else do
+              put st{generator=gen'}
+              return ExpTy{exp=ifElseExp, ty=thenTy}
         Just elseExpTyM -> do
           ExpTy{exp=elseExp, ty=elseTy} <- elseExpTyM
           if thenTy /= elseTy then

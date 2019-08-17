@@ -184,11 +184,10 @@ ifThen testExpE thenExpE gen =
     (thenStm, gen') = unNx thenExpE gen
     (t, gen'') = Temp.newlabel gen'
     (f, gen''') = Temp.newlabel gen''
-    resExp = Ex $ Tree.ESEQ ( makeSeq [cx t f,
-                                       Tree.LABEL t,
-                                       thenStm,
-                                       Tree.LABEL f]
-                            , zero)
+    resExp = Nx $ makeSeq [cx t f,
+                           Tree.LABEL t,
+                           thenStm,
+                           Tree.LABEL f]
   in
     (resExp, gen''')
 

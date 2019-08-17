@@ -2,6 +2,7 @@ module Main where
 
 import qualified Parser
 import qualified Semant
+import qualified Translate
 import qualified Types
 
 import Test.HUnit
@@ -328,6 +329,53 @@ mutuallyRecFuns = TestCase (
     assertEqual "mutrec isEven/Odd" Types.INT ty
   )
 
+ifExp1 :: Test
+ifExp1 = TestCase (
+  let
+    text = "let\n" ++
+           "  var x := 0\n" ++
+           "in if x = 1 then x := 2\n end"
+    (Right Semant.ExpTy{Semant.exp=(Translate.Nx _), Semant.ty=ty}) = parseToSema text
+  in do
+    assertEqual "well-formed if then exp has UNIT ty" Types.UNIT ty
+  )
+
+ifExp2 :: Test
+ifExp2 = TestCase (
+  let
+    text = "let\n" ++
+           "  var x := 0\n" ++
+           "in if x = 1 then 2\n end"
+    (Left(Semant.SemantError err _)) = parseToSema text
+  in do
+    assertBool "if then no else" $ isInfixOf
+      "in if-then exp (without else), the if body" err
+  )
+
+ifExp3 :: Test
+ifExp3 = TestCase (
+  let
+    text = "let\n" ++
+           "  var x := 0\n" ++
+           "in if x = 1 then 2 else 3\n end"
+    (Right Semant.ExpTy{Semant.exp=(Translate.Ex _), Semant.ty=ty}) = parseToSema text
+  in do
+    assertEqual "well-formed if then else types match"
+      Types.INT ty
+  )
+
+ifExp4 :: Test
+ifExp4 = TestCase (
+  let
+    text = "let\n" ++
+           "  var x := 0\n" ++
+           "in if x = 1 then 2 else \"cat\"\n end"
+    (Left(Semant.SemantError err _)) = parseToSema text
+  in do
+    assertBool "if then else types don't match" $ isInfixOf
+      "in ifExp, thenExp and elseExp must have the same type" err
+  )
+
 tests :: Test
 tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "int arith 1" intArith1,
@@ -356,7 +404,11 @@ tests = TestList [TestLabel "ints" intLiteral,
                   TestLabel "letExp1" letExp1,
                   TestLabel "arrayOfTypeAlias" arrayOfTypeAlias,
                   TestLabel "intUncallable" intUncallable,
-                  TestLabel "mutuallyRecFuns" mutuallyRecFuns
+                  TestLabel "mutuallyRecFuns" mutuallyRecFuns,
+                  TestLabel "ifExp1" ifExp1,
+                  TestLabel "ifExp2" ifExp2,
+                  TestLabel "ifExp3" ifExp3,
+                  TestLabel "ifExp4" ifExp4
                  ]
 
 main :: IO Counts
