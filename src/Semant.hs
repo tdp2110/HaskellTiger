@@ -160,6 +160,7 @@ isCmp :: A.Oper -> Bool
 isCmp A.EqOp = True
 isCmp A.NeqOp = True
 isCmp A.LtOp = True
+isCmp A.LeOp = True
 isCmp A.GtOp = True
 isCmp A.GeOp = True
 isCmp _ = False
@@ -293,7 +294,7 @@ transExp (A.OpExp leftExp op rightExp pos) = do
           _ -> throwT pos $
                "incomparable types " ++ (show tyleft) ++
                " and " ++ (show tyright)
-    else undefined
+    else error $ show op
 transExp (A.RecordExp fieldSymExpPosns typSym pos) = do
   maybeRecordTy <- lookupT pos tenv2 typSym
   case maybeRecordTy of
@@ -434,35 +435,89 @@ transExp (A.ArrayExp arrayTySym sizeExp initExp pos) = do
           throwT pos $ "only array types may appear as the symbol in an " ++
           "array instance " ++
           "definition. Found type=" ++ (show t)
+{-
+In converting ForExps, the naive approach is to rewrite the AST
+
+  for i := lo to hi
+    do body
+
+into
+
+  let var i := lo
+      var __limit := hi
+  in while i <= __limit
+    do (body; i := i + 1)
+  end
+
+but this potentially overflows if hi = INT_MAX.
+We deal with this by instead rewriting into
+
+  let var i := lo
+      var __limit := hi
+  in
+  if lo <= hi
+    then while 1
+            do (body;
+            if i < __limit then i := i + 1
+                           else break);
+-}
 transExp (A.ForExp forVar escape loExp hiExp body pos) = do
   ExpTy{exp=_, ty=loTy} <- transExp loExp
   ExpTy{exp=_, ty=hiTy} <- transExp hiExp
-  st <- get
-  env <- lift ask
-  case runTransT st env $ allocLocal escape of
-    Left err -> throwErr err
-    Right (access, st') -> do
-      put st'
-      breakTargetLab <- nextLabel
-      let
-        bodyVEnv = Map.insert forVar (Env.VarEntry access Types.INT) (venv' env)
-        bodyEnv = env{venv'=bodyVEnv}
-        in
-        case runTransT
-             st{breakTarget=Just breakTargetLab}
-             bodyEnv
-             $ transExp body of
-          Left err -> throwErr err
-          Right (ExpTy{exp=_, ty=bodyTy}, st'') -> do
-            put st''{breakTarget=Nothing}
-            if (loTy /= Types.INT) || (hiTy /= Types.INT) then
-              throwT pos "only integer expressions may appear as bounds in a ForExp"
-              else if bodyTy /= Types.UNIT then
-              throwT pos "the body of a ForExp must yield no value"
-              else
-              case checkForVarNotAssigned forVar body of
-                Left err -> throwErr err
-                _ -> return ExpTy{exp=emptyExp, ty=Types.UNIT}
+  if (loTy /= Types.INT) || (hiTy /= Types.INT) then
+    throwT pos "only integer expressions may appear as bounds in a ForExp"
+    else
+    case checkForVarNotAssigned forVar body of
+      Left err -> throwErr err
+      _ -> let
+        forVarDec = A.VarDec{ A.name=forVar
+                            , A.vardecEscape=escape
+                            , A.varDecTyp=Nothing
+                            , A.decInit=loExp
+                            , A.decPos=pos }
+        forVar_ = A.SimpleVar forVar pos
+        forVarExp = A.VarExp forVar_
+        limitVarName = Symbol "__limit"
+        limitVarDec = A.VarDec{ A.name=limitVarName
+                              , A.vardecEscape=False
+                              , A.varDecTyp=Nothing
+                              , A.decInit=hiExp
+                              , A.decPos=pos }
+        limitVarExp = A.VarExp $ A.SimpleVar limitVarName pos
+        letBody = A.IfExp{ A.test=A.OpExp{ A.left=forVarExp
+                                         , A.oper=A.LeOp
+                                         , A.right=limitVarExp
+                                         , A.pos=pos }
+                         , A.then'=A.WhileExp{
+                             A.test=A.IntExp 1,
+                             A.body=A.SeqExp [ (body, pos)
+                                             , ( A.IfExp{ A.test=A.OpExp {
+                                                            A.left=forVarExp,
+                                                            A.oper=A.LtOp,
+                                                            A.right=limitVarExp,
+                                                            A.pos=pos
+                                                            }
+                                                        , A.then'=A.AssignExp{
+                                                            A.var=forVar_,
+                                                            A.exp=A.OpExp{
+                                                                A.left=forVarExp,
+                                                                A.oper=A.PlusOp,
+                                                                A.right=A.IntExp 1,
+                                                                A.pos=pos
+                                                                },
+                                                              A.pos=pos
+                                                            }
+                                                        , A.else'=Just $ A.BreakExp pos
+                                                        , A.pos=pos }
+                                               , pos ) ],
+                             A.pos=pos
+                             }
+                         , A.else'=Nothing
+                         , A.pos=pos }
+        ast' = A.LetExp{ A.decs=[forVarDec, limitVarDec]
+                       , A.body=letBody
+                       , A.pos=pos }
+        in transExp ast'
 transExp (A.LetExp decs bodyExp letPos) = do
   env <- lift ask
   st <- get
