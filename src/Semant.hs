@@ -122,15 +122,20 @@ newLevel escapes = do
     put st{generator=gen''}
     return lev'
 
-allocLocal :: Bool -> Translator Access
-allocLocal escape = do
-  st@(SemantState lev _ _ gen) <- get
+allocLocalT :: Bool -> Translator Access
+allocLocalT escape = do
+  st@(SemantState{level=lev, generator=gen}) <- get
   let
     (gen', lev', access) = allocLocalFn lev gen $ toEscape escape
     in do
     put st{level=lev', generator=gen'}
     return access
 
+allocLocal :: Bool -> SemantState -> SemantEnv -> (Access, SemantState)
+allocLocal escape st env =
+  case runTransT st env $ allocLocalT escape of
+    Left err -> error $ "unexpected error: " ++ show err
+    Right (access, st') -> (access, st')
 
 transTy (A.NameTy(sym, posn)) = do
   typ <- lookupT posn tenv2 sym
@@ -651,9 +656,9 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
   if actualInitTy == Types.NIL then
     case maybeTypeAnnotation of
       Just recTy@(Types.RECORD _) ->
-        case runTransT st env $ allocLocal escape of
-          Left err -> throwErr err
-          Right (access, st') -> do
+        let
+          (access, st') = allocLocal escape st env
+        in do
             put st'
             return env{ venv'=Map.insert
                               name (Env.VarEntry access recTy)
@@ -662,9 +667,10 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
            "constrained by a RECORD type"
     else
     let
-      result = case runTransT st env $ allocLocal escape of
-        Left err -> throwErr err
-        Right (access, st') -> do
+      result =
+        let
+          (access, st') = allocLocal escape st env
+        in do
           put st'
           return env { venv'=Map.insert
                             name
