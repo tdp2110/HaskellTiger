@@ -37,6 +37,10 @@ exp (InReg regNum) _ = Tree.TEMP regNum
 frameExp :: X64Frame -> Tree.Exp
 frameExp X64Frame{fp=framePtr} = Tree.TEMP framePtr
 
+externalCall :: Temp.Label -> [Tree.Exp] -> Tree.Exp
+externalCall funname params =
+  Tree.CALL (Tree.NAME funname, params)
+
 accessExp :: X64Frame -> X64Access -> Tree.Exp
 accessExp frame acc = exp acc $ frameExp frame
 

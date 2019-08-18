@@ -9,7 +9,7 @@ import qualified Tree
 import qualified X64Frame
 
 import Control.Monad.Trans.State (State, get, put, runState)
-import Control.Monad (foldM)
+import Control.Monad (mapM)
 import Prelude hiding (exp)
 
 
@@ -138,14 +138,7 @@ unNx (Cx genstm) gen =
 
 simpleVar :: X64Access -> X64Level -> Exp
 simpleVar X64Access{level=declaredLevel, access=accessInDeclaredFrame} levelAtUse =
-  Ex . go levelAtUse $ X64Frame.frameExp $ x64Frame levelAtUse
-  where
-    go :: X64Level -> Tree.Exp -> Tree.Exp
-    go currentLevel currentFPExp =
-      if declaredLevel == currentLevel then
-        X64Frame.exp accessInDeclaredFrame currentFPExp
-        else
-        go (x64Parent currentLevel) $ X64Frame.staticLink currentFPExp
+  Ex $ X64Frame.exp accessInDeclaredFrame $ staticLink levelAtUse declaredLevel
 
 relOp :: Exp -> Exp -> Absyn.Oper -> Temp.Generator -> (Exp, Temp.Generator)
 relOp expLeft expRight op gen =
@@ -252,19 +245,33 @@ callM funLevel callerLevel funlab params = do
     (treeParams, gen') = runState (mapM unExM params) gen
     in do
     put gen'
-    return $ Ex $ Tree.CALL ( Tree.NAME funlab
-                            , [staticLink] ++ treeParams)
-  where
-    staticLink :: Tree.Exp
-    {- TODO!!! p 166: "To do this computation, both the level of f
-       and the level of the function calling f are required. A chain of
-       (zero or more) offsets found in successive level descriptors is
-       fetched, starting with the frame pointer TEMP(FP) defined by the
-       Frame module.
-    -}
-    staticLink = undefined
+    return $ Ex $ case x64Parent funLevel of
+                    X64Outermost ->
+                      X64Frame.externalCall funlab treeParams
+                    funParentLevel ->
+                      Tree.CALL ( Tree.NAME funlab
+                                , [staticLink
+                                    callerLevel
+                                    funParentLevel]
+                                  ++ treeParams)
 
 call :: X64Level -> X64Level -> Temp.Label -> [Exp] -> Temp.Generator
   -> (Exp, Temp.Generator)
 call funLevel callerLevel funlab params gen =
   runState (callM funLevel callerLevel funlab params) gen
+
+staticLink :: X64Level -> X64Level -> Tree.Exp
+staticLink X64Outermost _ = error "outermost can't find static links"
+staticLink _ X64Outermost = error "can't find static links to outermost"
+staticLink baseLevel destLevel =
+  let
+    baseFrame = x64Frame baseLevel
+  in
+    if baseLevel == destLevel then
+      X64Frame.frameExp baseFrame
+    else
+      case X64Frame.formals baseFrame of
+        [] ->
+          error "expected static link in formals"
+        (sl : _) ->
+          X64Frame.exp sl $ staticLink (x64Parent baseLevel) destLevel
