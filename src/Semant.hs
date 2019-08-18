@@ -82,6 +82,9 @@ throwT posn str = throwErr SemantError{what=str, at=posn}
 throwErr :: SemantError -> Translator a
 throwErr err = (lift . lift . throwE) err
 
+askEnv :: Translator SemantEnv
+askEnv = lift ask
+
 lookupT :: A.Pos -> (SemantEnv -> Map.Map Symbol a) -> Symbol -> Translator a
 lookupT posn f sym = do
   env <- lift $ asks f
@@ -231,7 +234,7 @@ transVar (A.SubscriptVar var expr pos) = do
 
 transExp (A.VarExp var) = do
   st <- get
-  env <- lift ask
+  env <- askEnv
   case runTransT st env $ transVar var of
     Left err -> throwErr err
     Right (res, newState) -> do
@@ -546,7 +549,7 @@ transExp (A.ForExp forVar escape loExp hiExp body pos) = do
                        , A.pos=pos }
         in transExp ast'
 transExp (A.LetExp decs bodyExp letPos) = do
-  env <- lift ask
+  env <- askEnv
   st <- get
   case runTransT st env $ transLetDecs decs letPos of
     Left err -> throwErr err
@@ -560,7 +563,7 @@ transExp (A.LetExp decs bodyExp letPos) = do
           return res
 
 transLetDecs decls letPos = do
-  env <- lift ask
+  env <- askEnv
   case checkDeclNamesDistinctInLet decls letPos of
     Left err -> throwErr err
     Right () ->
@@ -673,7 +676,7 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
                          (\(typename,_) -> lookupT posn tenv2 typename)
                          maybeTypenameAndPos
   ExpTy{exp=_, ty=actualInitTy} <- transExp initExp
-  env <- lift ask
+  env <- askEnv
   st <- get
   if actualInitTy == Types.NIL then
     case maybeTypeAnnotation of
@@ -710,7 +713,7 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
         Nothing -> result
 transDec (A.FunctionDec fundecs) = do
   st <- get
-  env <- lift ask
+  env <- askEnv
   let
     resultMaybeTys =
       map (\fundec ->
@@ -791,7 +794,7 @@ transDec (A.TypeDec tydecs) =
     case checkForIllegalCycles tydecs stronglyConnComps of
       Left err -> throwErr err
       Right () -> do
-        env <- lift ask
+        env <- askEnv
         let
           step env' (CyclicSCC syms) = transCyclicDecls env' tydecs syms
           step env' (AcyclicSCC sym) = transAcyclicDecl env' tydecs sym
