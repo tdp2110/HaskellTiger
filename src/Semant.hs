@@ -196,15 +196,28 @@ transVar (A.SimpleVar sym pos) = do
                               "variable " ++ (show sym) ++
                               " has no non-function bindings."
 transVar (A.FieldVar var sym pos) = do
-  ExpTy{exp=_, ty=varTy} <- transVar var
+  ExpTy{exp=recordExp, ty=varTy} <- transVar var
+  st@SemantState{generator=gen} <- get
   case varTy of
     r@(Types.RECORD(sym2ty, _)) ->
-      case lookup sym sym2ty of
-        Just t -> return ExpTy{exp=emptyExp, ty=t}
-        Nothing -> throwT pos $
-                   "in field expr, record type " ++
-                   (show r) ++ " has no " ++ (show sym) ++
-                   " field"
+      let
+        symTyIxList =
+          map (\((s,t),ix) -> (s,(t,ix))) $ zip sym2ty [0 :: Int ..]
+      in
+        case lookup sym symTyIxList  of
+          Just (t, fieldNumber) ->
+            let
+              (resExp, gen') = Translate.field
+                               recordExp
+                               fieldNumber
+                               gen
+            in do
+              put st{generator=gen'}
+              return ExpTy{exp=resExp, ty=t}
+          Nothing -> throwT pos $
+                     "in field expr, record type " ++
+                     (show r) ++ " has no " ++ (show sym) ++
+                     " field"
     t@(_) -> throwT pos $
              "in field expr, only record types have fields. type=" ++
              (show t)
@@ -217,6 +230,7 @@ transVar (A.SubscriptVar var expr pos) = do
       case expTy of
         Types.INT ->
           let
+            {- In the case of a constexpr access, we could optimize -}
             (resExp, gen') = Translate.subscript
                              varExp
                              indexExp
