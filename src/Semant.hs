@@ -206,12 +206,21 @@ transVar (A.FieldVar var sym pos) = do
              "in field expr, only record types have fields. type=" ++
              (show t)
 transVar (A.SubscriptVar var expr pos) = do
-  ExpTy{exp=_, ty=varTy} <- transVar var
-  ExpTy{exp=_, ty=expTy} <- transExp expr
+  ExpTy{exp=varExp, ty=varTy} <- transVar var
+  ExpTy{exp=indexExp, ty=expTy} <- transExp expr
+  st@SemantState{generator=gen} <- get
   case varTy of
     Types.ARRAY(varEltTy, _) ->
       case expTy of
-        Types.INT -> return ExpTy{exp=emptyExp, ty=varEltTy}
+        Types.INT ->
+          let
+            (resExp, gen') = Translate.subscript
+                             varExp
+                             indexExp
+                             gen
+          in do
+            put st{generator=gen'}
+            return ExpTy{exp=resExp, ty=varEltTy}
         nonIntTy@(_) -> throwT pos $
                         "in subscript expr, subscript type " ++
                         "is not an INT, is an " ++ (show nonIntTy)

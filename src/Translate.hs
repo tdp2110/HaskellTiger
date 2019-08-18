@@ -229,6 +229,21 @@ while testExpE bodyExpE doneLab gen =
 break :: Temp.Label -> Exp
 break breakTarget = Nx $ Tree.JUMP (Tree.NAME breakTarget, [breakTarget])
 
+
+subscript :: Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
+subscript arrExpE indexExpE gen =
+  let
+    (arrExp, gen') = unEx arrExpE gen
+    (indexExp, gen'') = unEx indexExpE gen'
+    resExp = Ex $ Tree.MEM $ Tree.BINOP
+             (Tree.PLUS,
+              arrExp,
+              Tree.BINOP (Tree.MUL,
+                          Tree.CONST X64Frame.wordSize,
+                          indexExp))
+  in
+    (resExp, gen'')
+
 unExM :: Exp -> State Temp.Generator Tree.Exp
 unExM exp = do
   gen <- get
