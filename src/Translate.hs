@@ -8,6 +8,8 @@ import qualified Temp
 import qualified Tree
 import qualified X64Frame
 
+import Control.Monad.Trans.State (State, get, put, runState)
+import Control.Monad (foldM)
 import Prelude hiding (exp)
 
 
@@ -233,3 +235,36 @@ while testExpE bodyExpE doneLab gen =
 
 break :: Temp.Label -> Exp
 break breakTarget = Nx $ Tree.JUMP (Tree.NAME breakTarget, [breakTarget])
+
+unExM :: Exp -> State Temp.Generator Tree.Exp
+unExM exp = do
+  gen <- get
+  let
+    (treeExp, gen') = unEx exp gen
+    in do
+    put gen'
+    return treeExp
+
+callM :: X64Level -> X64Level -> Temp.Label -> [Exp] -> State Temp.Generator Exp
+callM funLevel callerLevel funlab params = do
+  gen <- get
+  let
+    (treeParams, gen') = runState (mapM unExM params) gen
+    in do
+    put gen'
+    return $ Ex $ Tree.CALL ( Tree.NAME funlab
+                            , [staticLink] ++ treeParams)
+  where
+    staticLink :: Tree.Exp
+    {- TODO!!! p 166: "To do this computation, both the level of f
+       and the level of the function calling f are required. A chain of
+       (zero or more) offsets found in successive level descriptors is
+       fetched, starting with the frame pointer TEMP(FP) defined by the
+       Frame module.
+    -}
+    staticLink = undefined
+
+call :: X64Level -> X64Level -> Temp.Label -> [Exp] -> Temp.Generator
+  -> (Exp, Temp.Generator)
+call funLevel callerLevel funlab params gen =
+  runState (callM funLevel callerLevel funlab params) gen

@@ -237,9 +237,9 @@ transExp (A.StringExp _) = do
 transExp (A.CallExp funcSym argExps pos) = do
   funEntry <- lookupT pos venv' funcSym
   case funEntry of
-    (Env.FunEntry _ _ formalsTys resultTy) -> do
+    (Env.FunEntry funLevel label formalsTys resultTy) -> do
       paramExpTys <- mapM transExp argExps
-      let paramTys = map ty paramExpTys in
+      let paramTys = fmap ty paramExpTys in
         if (length formalsTys) /= (length paramTys)
         then
           throwT pos $ "function " ++ (show funcSym) ++
@@ -248,7 +248,20 @@ transExp (A.CallExp funcSym argExps pos) = do
         else
           case filter (\(ty1, ty2, _) -> ty1 /= ty2)
                (zip3 formalsTys paramTys [0 :: Integer ..]) of
-            [] -> return ExpTy{exp=emptyExp, ty=resultTy}
+            [] -> do
+              st@SemantState{level=thisLevel, generator=gen} <- get
+              let
+                argExpTrees = fmap exp paramExpTys
+                (callExp, gen') = Translate.call
+                                  funLevel
+                                  thisLevel
+                                  label
+                                  argExpTrees
+                                  gen
+                in do
+                put st{generator=gen'}
+                return ExpTy{ exp=callExp
+                            , ty=resultTy }
             ((formalTy, paramTy, ix):_) ->
               throwT pos $
               "parameter " ++ (show ix) ++ " of func " ++ (show funcSym) ++
