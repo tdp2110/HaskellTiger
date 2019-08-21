@@ -3,6 +3,7 @@ module Semant where
 import qualified Absyn as A
 import qualified Env as Env
 import qualified Frame
+import qualified X64Frame
 import qualified Translate as Translate
 import qualified Types as Types
 import Symbol
@@ -53,6 +54,7 @@ type Level = Translate.X64Level
 type Translate = Translate.X64Translate
 type Generator = Temp.Generator
 type Access = Translate.X64Access
+type Frag = X64Frame.Frag
 formalAccesses :: Level -> [Access]
 formalAccesses = Translate.x64TranslateFormals
 outermost :: Level

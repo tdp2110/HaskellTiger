@@ -24,6 +24,10 @@ data X64Frame = X64Frame { name :: Temp.Label
                          , fp :: Int }
   deriving (Show)
 
+data Frag = PROC { body :: Tree.Stm
+                 , fragFrame :: X64Frame }
+          | STRING (Temp.Label, String)
+
 maxNumRegisterParams :: Int
 maxNumRegisterParams = 6
 
