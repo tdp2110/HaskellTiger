@@ -3,15 +3,17 @@ module Main where
 import qualified Parser
 import qualified Semant
 import qualified Translate
+import qualified Tree
 import qualified Types
 
 import Test.HUnit
 import System.Exit
 import Data.Either
 import Data.List
+import Prelude hiding (exp)
 
 
-parseToSema :: String -> Either Semant.SemantError Semant.ExpTy
+parseToSema :: String -> Either Semant.SemantError (Semant.ExpTy, Semant.FragList)
 parseToSema text = let (Right ast) = Parser.parse text in
                      Semant.transProg ast
 
@@ -19,7 +21,7 @@ intLiteral :: Test
 intLiteral = TestCase (
   let
     text = "1337"
-    (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema text
+    (Right (Semant.ExpTy{Semant.exp=(Translate.Ex _), Semant.ty=ty}, _)) = parseToSema text
  in do
     assertEqual "int literal" Types.INT ty
   )
@@ -28,16 +30,19 @@ intArith1 :: Test
 intArith1 = TestCase (
   let
     text = "42 + 1337"
-    (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema text
+    (Right (Semant.ExpTy{Semant.exp=(Translate.Ex exp), Semant.ty=ty}, _)) = parseToSema text
  in do
     assertEqual "int arith 1" Types.INT ty
+    assertEqual "arith" exp $ Tree.BINOP ( Tree.PLUS
+                                         , Tree.CONST 42
+                                         , Tree.CONST 1337 )
   )
 
 intArith2 :: Test
 intArith2 = TestCase (
   let
     text = "42 * 1337"
-    (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema text
+    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _)) = parseToSema text
  in do
     assertEqual "int arith 2" Types.INT ty
   )
@@ -46,7 +51,7 @@ intArith3 :: Test
 intArith3 = TestCase (
   let
     text = "(1 + 2 - (3 / (4 - 5) - 6 *(7 + 8)))"
-    (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema text
+    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _)) = parseToSema text
  in do
     assertEqual "int arith 3" Types.INT ty
   )
@@ -55,7 +60,7 @@ strLiteral :: Test
 strLiteral = TestCase (
   let
     text = "\"hello world\""
-    (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema text
+    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _)) = parseToSema text
  in do
     assertEqual "str literal" Types.STRING ty
   )
@@ -73,7 +78,7 @@ substringCall1 :: Test
 substringCall1 = TestCase (
   let
     text = "substring(\"hello world\", 0, 1)"
-    (Right (Semant.ExpTy _ ty)) = parseToSema text
+    (Right ((Semant.ExpTy _ ty), _)) = parseToSema text
   in do
     assertEqual "substring returns string" Types.STRING ty
   )
@@ -108,7 +113,7 @@ letExp1 = TestCase (
            "    else n * (m + k)\n" ++
            "  end\n" ++
            "end"
-    (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema text
+    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _)) = parseToSema text
   in do
     assertEqual "letExp example1" Types.INT ty
   )
@@ -144,7 +149,7 @@ break1 :: Test
 break1 = TestCase (
   let
     text = "for j:=0 to 10 do if j = 5 then break"
-    (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema text
+    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _)) = parseToSema text
   in do
     assertEqual "break in forExp is ok" Types.UNIT ty
   )
@@ -156,7 +161,7 @@ nilRecord = TestCase (
            "  type intPair = { fst: int, snd: int }\n" ++
            "  var nilPair : intPair := nil\n" ++
            "in nilPair end"
-    (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema text
+    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _)) = parseToSema text
   in do
     assertBool "nil record has record type" $ isRecord ty
   )
@@ -173,7 +178,7 @@ listTy1 = TestCase (
            "  var nilIntList : intList := nil\n" ++
            "  var xs := intList{head = 0, tail = nilIntList}\n" ++
            "in xs end"
-    (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema text
+    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _)) = parseToSema text
   in do
     assertBool "instance of mutrec record has record ty" $ isRecord ty
   )
@@ -187,7 +192,7 @@ similarRecordDecs = TestCase (
            "  var p1:= pair1{ fst=1, snd=2 }\n" ++
            "  var p2:= pair2{ fst=3, snd=4 }\n" ++
            "in p1.fst + p2.snd end"
-    (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema text
+    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _)) = parseToSema text
   in do
     assertEqual "similar records" Types.INT ty
   )
@@ -201,7 +206,7 @@ arrayOfTypeAlias = TestCase (
            "  type intArray = array of int\n" ++
            "  var xs := intArray [N] of 0\n" ++
            "in xs[8] end"
-    (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema text
+    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty},_)) = parseToSema text
   in do
     assertEqual "similar records" Types.INT ty
   )
@@ -324,7 +329,7 @@ mutuallyRecFuns = TestCase (
            "  function isEven(x:int) : int = \n" ++
            "    if x = 0 then 1 else isOdd(x-1)\n" ++
            "in isEven(140) end"
-    (Right Semant.ExpTy{Semant.exp=_, Semant.ty=ty}) = parseToSema text
+    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _)) = parseToSema text
   in do
     assertEqual "mutrec isEven/Odd" Types.INT ty
   )
@@ -335,7 +340,7 @@ ifExp1 = TestCase (
     text = "let\n" ++
            "  var x := 0\n" ++
            "in if x = 1 then x := 2\n end"
-    (Right Semant.ExpTy{Semant.exp=(Translate.Nx _), Semant.ty=ty}) = parseToSema text
+    (Right (Semant.ExpTy{Semant.exp=(Translate.Nx _), Semant.ty=ty}, _)) = parseToSema text
   in do
     assertEqual "well-formed if then exp has UNIT ty" Types.UNIT ty
   )
@@ -358,7 +363,7 @@ ifExp3 = TestCase (
     text = "let\n" ++
            "  var x := 0\n" ++
            "in if x = 1 then 2 else 3\n end"
-    (Right Semant.ExpTy{Semant.exp=(Translate.Ex _), Semant.ty=ty}) = parseToSema text
+    (Right (Semant.ExpTy{Semant.exp=(Translate.Ex _), Semant.ty=ty}, _)) = parseToSema text
   in do
     assertEqual "well-formed if then else types match"
       Types.INT ty
@@ -385,7 +390,7 @@ while1 = TestCase (
            "  while x < 10 do\n" ++
            "    x := x + 1\n" ++
            "end"
-    (Right Semant.ExpTy{Semant.exp=(Translate.Nx _), Semant.ty=ty}) = parseToSema text
+    (Right (Semant.ExpTy{Semant.exp=(Translate.Nx _), Semant.ty=ty}, _)) = parseToSema text
   in do
     assertEqual "well-formed while has UNIT ty" Types.UNIT ty
   )
@@ -400,7 +405,7 @@ while2 = TestCase (
            "    (x := x + 1;\n" ++
            "    if x = 5 then break)\n" ++
            "end"
-    (Right Semant.ExpTy{Semant.exp=(Translate.Nx _), Semant.ty=ty}) = parseToSema text
+    (Right (Semant.ExpTy{Semant.exp=(Translate.Nx _), Semant.ty=ty}, _)) = parseToSema text
   in do
     assertEqual "well-formed while has UNIT ty" Types.UNIT ty
   )

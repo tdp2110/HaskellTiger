@@ -286,6 +286,12 @@ call :: X64Level -> X64Level -> Temp.Label -> [Exp] -> Temp.Generator
 call funLevel callerLevel funlab params gen =
   runState (callM funLevel callerLevel funlab params) gen
 
+nilexp :: Exp
+nilexp = Ex $ Tree.CONST 0
+
+intexp :: Int -> Exp
+intexp i = Ex $ Tree.CONST i
+
 staticLink :: X64Level -> X64Level -> Tree.Exp
 staticLink X64Outermost _ = error "outermost can't find static links"
 staticLink _ X64Outermost = error "can't find static links to outermost"

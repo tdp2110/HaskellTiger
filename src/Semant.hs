@@ -16,8 +16,10 @@ import Control.Monad (join, foldM)
 import Control.Monad.Trans.Except (ExceptT, throwE, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, ask, asks, runReaderT)
 import Control.Monad.Trans.State (StateT, get, put, evalStateT, runStateT)
+import Control.Monad.Trans.Writer (WriterT, runWriterT)
 import Data.Functor.Identity
 import qualified Data.Map as Map
+import qualified Data.DList as DList
 import Data.Either
 import Data.List
 import Data.Graph
@@ -29,7 +31,7 @@ instance Show SemantError where
 
 data ExpTy = ExpTy{exp :: Translate.Exp, ty :: Types.Ty } deriving (Show)
 
-transProg :: A.Exp -> Either SemantError ExpTy
+transProg :: A.Exp -> Either SemantError (ExpTy, FragList)
 transProg expr =
   let
     gen = Temp.newGen
@@ -76,31 +78,37 @@ data SemantState = SemantState { level :: Level
                                , counter' :: Integer
                                , generator :: Generator }
 
-type Translator = StateT SemantState (ReaderT SemantEnv (ExceptT SemantError Identity))
+type FragList = DList.DList Frag
+
+type Translator = StateT SemantState
+  (WriterT FragList
+   (ReaderT SemantEnv (ExceptT SemantError Identity)))
 
 throwT :: A.Pos -> String -> Translator a
 throwT posn str = throwErr SemantError{what=str, at=posn}
 
 throwErr :: SemantError -> Translator a
-throwErr err = (lift . lift . throwE) err
+throwErr err = (lift .lift . lift . throwE) err
 
 askEnv :: Translator SemantEnv
-askEnv = lift ask
+askEnv = (lift . lift) ask
 
 lookupT :: A.Pos -> (SemantEnv -> Map.Map Symbol a) -> Symbol -> Translator a
 lookupT posn f sym = do
-  env <- lift $ asks f
+  env <- (lift . lift) $ asks f
   case Map.lookup sym env of
     Nothing -> throwT posn $ "unbound variable " ++ (show sym)
     Just x -> return x
 
-runTransT :: SemantState -> SemantEnv -> Translator a -> Either SemantError (a, SemantState)
+runTransT :: SemantState -> SemantEnv -> Translator a
+  -> Either SemantError ((a, SemantState), FragList)
 runTransT st env =
-  runIdentity . runExceptT . flip runReaderT env . flip runStateT st
+  runIdentity . runExceptT . flip runReaderT env . runWriterT . flip runStateT st
 
-evalTransT :: SemantState -> SemantEnv -> Translator a -> Either SemantError a
+evalTransT :: SemantState -> SemantEnv -> Translator a
+  -> Either SemantError (a, FragList)
 evalTransT st env =
-  runIdentity . runExceptT . flip runReaderT env . flip evalStateT st
+  runIdentity . runExceptT . flip runReaderT env . runWriterT . flip evalStateT st
 
 nextId :: Translator Integer
 nextId = do
@@ -140,7 +148,7 @@ allocLocal :: Bool -> SemantState -> SemantEnv -> (Access, SemantState)
 allocLocal escape st env =
   case runTransT st env $ allocLocalT escape of
     Left err -> error $ "unexpected error: " ++ show err
-    Right (access, st') -> (access, st')
+    Right ((access, st'), _) -> (access, st')
 
 transTy (A.NameTy(sym, posn)) = do
   typ <- lookupT posn tenv2 sym
@@ -204,7 +212,7 @@ transVar (A.FieldVar var sym pos) = do
     r@(Types.RECORD(sym2ty, _)) ->
       let
         symTyIxList =
-          map (\((s,t),ix) -> (s,(t,ix))) $ zip sym2ty [0 :: Int ..]
+          fmap (\((s,t),ix) -> (s,(t,ix))) $ zip sym2ty [0 :: Int ..]
       in
         case lookup sym symTyIxList  of
           Just (t, fieldNumber) ->
@@ -253,13 +261,13 @@ transExp (A.VarExp var) = do
   env <- askEnv
   case runTransT st env $ transVar var of
     Left err -> throwErr err
-    Right (res, newState) -> do
+    Right ((res, newState), _) -> do
       put newState
       return res
 transExp A.NilExp = do
-  return ExpTy{exp=emptyExp, ty=Types.NIL}
-transExp (A.IntExp _) = do
-  return ExpTy{exp=emptyExp, ty=Types.INT}
+  return ExpTy{exp=Translate.nilexp, ty=Types.NIL}
+transExp (A.IntExp i) = do
+  return ExpTy{exp=Translate.intexp i, ty=Types.INT}
 transExp (A.StringExp _) = do
   return ExpTy{exp=emptyExp, ty=Types.STRING}
 transExp (A.CallExp funcSym argExps pos) = do
@@ -346,8 +354,8 @@ transExp (A.RecordExp fieldSymExpPosns typSym pos) = do
   case maybeRecordTy of
     recordTy@(Types.RECORD(sym2ty, _)) ->
       let
-        expectedSyms = map fst sym2ty
-        actualSyms = map (\(sym,_,_) -> sym) fieldSymExpPosns
+        expectedSyms = fmap fst sym2ty
+        actualSyms = fmap (\(sym,_,_) -> sym) fieldSymExpPosns
       in
         if actualSyms /= expectedSyms
         then
@@ -358,9 +366,9 @@ transExp (A.RecordExp fieldSymExpPosns typSym pos) = do
         else do
           actualFieldExpTys <- mapM (\(_,expr,_) -> transExp expr) fieldSymExpPosns
           let
-            expectedFieldTys = map snd sym2ty
-            actualFieldTys = map ty actualFieldExpTys
-            fieldPosns = map (\(_,_,fieldPos) -> fieldPos) fieldSymExpPosns
+            expectedFieldTys = fmap snd sym2ty
+            actualFieldTys = fmap ty actualFieldExpTys
+            fieldPosns = fmap (\(_,_,fieldPos) -> fieldPos) fieldSymExpPosns
             in
             case filter (\(_,expectedTy,actualTy,_) -> expectedTy /= actualTy)
                  (zip4 expectedSyms expectedFieldTys actualFieldTys fieldPosns)
@@ -569,12 +577,12 @@ transExp (A.LetExp decs bodyExp letPos) = do
   st <- get
   case runTransT st env $ transLetDecs decs letPos of
     Left err -> throwErr err
-    Right (bodyEnv, st') ->
+    Right ((bodyEnv, st'), _) ->
       case
         runTransT st' bodyEnv (transExp bodyExp)
       of
         Left err -> throwErr err
-        Right (res, st'') -> do
+        Right ((res, st''), _) -> do
           put st''
           return res
 
@@ -589,7 +597,7 @@ transLetDecs decls letPos = do
       st <- get
       case runTransT st envAcc $ transDec decl of
         Left err -> throwErr err
-        Right (newEnv, newState) -> do
+        Right ((newEnv, newState), _) -> do
           put newState
           return newEnv
 
@@ -631,24 +639,24 @@ flattenDecls :: [A.Dec] -> [DeclElt]
 flattenDecls decls = do
   decl <- decls
   case decl of
-    A.FunctionDec funDecs -> map (\funDec -> FunDec (A.fundecName funDec) (A.funPos funDec)) funDecs
+    A.FunctionDec funDecs -> fmap (\funDec -> FunDec (A.fundecName funDec) (A.funPos funDec)) funDecs
     A.VarDec name _ _ _ posn -> return $ VarDec name posn
-    A.TypeDec tydecs -> map (\tyDec -> TyDec (A.tydecName tyDec) (A.tydecPos tyDec)) tydecs
+    A.TypeDec tydecs -> fmap (\tyDec -> TyDec (A.tydecName tyDec) (A.tydecPos tyDec)) tydecs
 
 checkForVarNotAssigned :: Symbol -> A.Exp -> Either SemantError ()
 checkForVarNotAssigned forVar (A.CallExp _ exps _) =
-  case sequence $ map (\e -> checkForVarNotAssigned forVar e) exps of
+  case sequence $ fmap (\e -> checkForVarNotAssigned forVar e) exps of
     Left err -> Left err
     Right _ -> Right ()
 checkForVarNotAssigned forVar (A.OpExp leftExp _ rightExp _) = do
   checkForVarNotAssigned forVar leftExp
   checkForVarNotAssigned forVar rightExp
 checkForVarNotAssigned forVar (A.RecordExp fields _ _) =
-  case sequence $ map (\(_,e,_) -> checkForVarNotAssigned forVar e) fields of
+  case sequence $ fmap (\(_,e,_) -> checkForVarNotAssigned forVar e) fields of
     Left err -> Left err
     Right _ -> Right ()
 checkForVarNotAssigned forVar (A.SeqExp seqElts) =
-  case sequence $ map (\(e,_) -> checkForVarNotAssigned forVar e) seqElts of
+  case sequence $ fmap (\(e,_) -> checkForVarNotAssigned forVar e) seqElts of
     Left err -> Left err
     Right _ -> Right ()
 checkForVarNotAssigned forVar (A.AssignExp (A.SimpleVar var _) e pos) =
@@ -732,7 +740,7 @@ transDec (A.FunctionDec fundecs) = do
   env <- askEnv
   let
     resultMaybeTys =
-      map (\fundec ->
+      fmap (\fundec ->
               (join $ fmap (\(typename,_) ->
                               Map.lookup
                               typename
@@ -740,7 +748,7 @@ transDec (A.FunctionDec fundecs) = do
                 $ A.result fundec))
       fundecs
     maybeFormalsTys =
-      sequence $ map (\fundec -> sequence $
+      sequence $ fmap (\fundec -> sequence $
                                  fmap
                                  (computeFormalTy env)
                                  (A.params fundec)) fundecs
@@ -749,7 +757,7 @@ transDec (A.FunctionDec fundecs) = do
       Left err -> throwErr err
       Right formalsTys ->
         let
-          resultTys = map resultTyFun resultMaybeTys
+          resultTys = fmap resultTyFun resultMaybeTys
         in
           case runTransT
                st
@@ -757,7 +765,7 @@ transDec (A.FunctionDec fundecs) = do
                $ extractHeaderM (venv' env) fundecs formalsTys resultTys
           of
             Left err -> throwErr err
-            Right (headerVEnv, newState) -> do
+            Right ((headerVEnv, newState), _) -> do
               put newState
               foldM
                 transBody
@@ -779,12 +787,12 @@ transDec (A.FunctionDec fundecs) = do
       let
         venv = venv' env
         bodyVEnv = Map.union venv $ Map.fromList $
-          map (\(sym,typ,_) -> (sym, Env.VarEntry (formalAccess sym) typ)) formalsTys
+          fmap (\(sym,typ,_) -> (sym, Env.VarEntry (formalAccess sym) typ)) formalsTys
         bodyEnv = env{venv'=bodyVEnv}
         formalAccess :: Symbol -> Access
         formalAccess sym = case
           lookup sym $ zip
-            (map A.fieldName $ A.params fundec)
+            (fmap A.fieldName $ A.params fundec)
             (formalAccesses $ level st)
           of
             Just acc -> acc
@@ -794,7 +802,7 @@ transDec (A.FunctionDec fundecs) = do
           runTransT st bodyEnv (transExp $ A.funBody fundec)
         of
           Left err -> throwErr err
-          Right (ExpTy{exp=_, ty=bodyTy}, state') ->
+          Right ((ExpTy{exp=_, ty=bodyTy}, state'), _) ->
             if resultTy /= Types.UNIT && resultTy /= bodyTy
             then
               throwT (A.funPos fundec) $ "computed type of function body " ++
@@ -838,12 +846,12 @@ extractHeaderM venv fundecs formalsTys resultTys =
           (A.fundecName fundec)
           Env.FunEntry{Env.level=nextLev,
                        Env.label=nextLab,
-                       Env.formals=map (\(_,elt,_) -> elt) paramTys,
+                       Env.formals=fmap (\(_,elt,_) -> elt) paramTys,
                        Env.result=resultTy}
           valEnv
     calcEscapes :: A.FunDec -> [Frame.EscapesOrNot]
     calcEscapes (A.FunDec _ params _ _ _) =
-      map
+      fmap
       (\ (A.Field _ escapesOrNot _ _) -> if escapesOrNot then
                                            Frame.Escapes
                                          else
@@ -855,8 +863,8 @@ transCyclicDecls env tydecs syms = do
   state <- get
   let
     tenv = tenv2 env
-    headers = map (\sym -> (sym, Types.NAME(sym, Nothing))) syms
-    bodies = map (\sym -> let (A.TyDec _ typ _) = lookupTypeSym sym tydecs
+    headers = fmap (\sym -> (sym, Types.NAME(sym, Nothing))) syms
+    bodies = fmap (\sym -> let (A.TyDec _ typ _) = lookupTypeSym sym tydecs
                           in typ) syms
     headerMap = Map.fromList headers
     tenv' = Map.union tenv headerMap
@@ -869,7 +877,7 @@ transCyclicDecls env tydecs syms = do
             runTransT state' env' (transTy typ)
             of
             Left err -> throwErr err
-            Right (typeTy, newState) -> do
+            Right ((typeTy, newState), _) -> do
               put newState
               return $ acc ++ [typeTy]
       )
@@ -880,7 +888,7 @@ transCyclicDecls env tydecs syms = do
       runTransT state env' maybeTranslatedBodiesM
     of
       Left err -> throwErr err
-      Right (translatedBodies, state') -> do
+      Right ((translatedBodies, state'), _) -> do
         put state'
         return $ env{tenv2=tieTheKnot tenv'
                            (Map.fromList $ zip syms translatedBodies)}
@@ -898,7 +906,7 @@ transCyclicDecls env tydecs syms = do
             tieFieldEntry (fieldName, typ) =
               (fieldName, typ)
           in
-            (sym, Types.RECORD(map tieFieldEntry fieldMap, recordId))
+            (sym, Types.RECORD(fmap tieFieldEntry fieldMap, recordId))
         tieEntry (sym, Types.ARRAY (Types.NAME(sym',_), arrayId)) =
           (sym, Types.ARRAY (newTyMap Map.! sym', arrayId))
         tieEntry (sym, Types.NAME(sym', _)) =
@@ -919,7 +927,7 @@ transAcyclicDecl env tydecs sym = do
          env
          $ transTy typ of
       Left err -> throwErr err
-      Right (typesTy, state') -> do
+      Right ((typesTy, state'), _) -> do
         put state'
         return $ env{tenv2=Map.insert sym typesTy $ tenv2 env}
 
@@ -945,7 +953,7 @@ typeSCCs :: [A.TyDec] -> [SCC Symbol]
 typeSCCs tydecs =
   let
     typeGraph = calcTypeGraph tydecs
-    typeEdges = map (\(sym, _, syms) -> (sym, sym, syms)) typeGraph
+    typeEdges = fmap (\(sym, _, syms) -> (sym, sym, syms)) typeGraph
   in
     reverse $ stronglyConnComp typeEdges
 
@@ -970,7 +978,7 @@ calcTypeGraph tydecs = fmap calcNeighbors tydecs
     calcNeighbors (A.TyDec name (A.NameTy(name',_)) posn) =
       (name, posn, [name'])
     calcNeighbors (A.TyDec name (A.RecordTy fields) posn) =
-      (name, posn, map A.fieldTyp fields)
+      (name, posn, fmap A.fieldTyp fields)
     calcNeighbors (A.TyDec name (A.ArrayTy(name',_)) posn) =
       (name, posn, [name'])
 
