@@ -5,9 +5,11 @@ import qualified Semant
 import qualified Translate
 import qualified Tree
 import qualified Types
+import qualified X64Frame
 
 import Test.HUnit
 import System.Exit
+import qualified Data.DList as DList
 import Data.Either
 import Data.List
 import Prelude hiding (exp)
@@ -59,9 +61,14 @@ intArith3 = TestCase (
 strLiteral :: Test
 strLiteral = TestCase (
   let
-    text = "\"hello world\""
-    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _)) = parseToSema text
+    str1 = "hello world"
+    literal = "\"" ++ str1 ++ "\""
+    (Right (Semant.ExpTy{ Semant.exp=(Translate.Ex (Tree.NAME lab1))
+                        , Semant.ty=ty}, frags)) = parseToSema literal
+    [ X64Frame.STRING (lab2, str2) ] = DList.toList frags
  in do
+    assertEqual "labels match" lab1 lab2
+    assertEqual "literals match" str1 str2
     assertEqual "str literal" Types.STRING ty
   )
 

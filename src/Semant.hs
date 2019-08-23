@@ -16,7 +16,7 @@ import Control.Monad (join, foldM)
 import Control.Monad.Trans.Except (ExceptT, throwE, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, ask, asks, runReaderT)
 import Control.Monad.Trans.State (StateT, get, put, evalStateT, runStateT)
-import Control.Monad.Trans.Writer (WriterT, runWriterT)
+import Control.Monad.Trans.Writer (WriterT, runWriterT, tell)
 import Data.Functor.Identity
 import qualified Data.Map as Map
 import qualified Data.DList as DList
@@ -88,7 +88,10 @@ throwT :: A.Pos -> String -> Translator a
 throwT posn str = throwErr SemantError{what=str, at=posn}
 
 throwErr :: SemantError -> Translator a
-throwErr err = (lift .lift . lift . throwE) err
+throwErr = lift . lift . lift . throwE
+
+pushFrag :: Frag -> Translator ()
+pushFrag = lift . tell . DList.singleton
 
 askEnv :: Translator SemantEnv
 askEnv = (lift . lift) ask
@@ -268,8 +271,14 @@ transExp A.NilExp = do
   return ExpTy{exp=Translate.nilexp, ty=Types.NIL}
 transExp (A.IntExp i) = do
   return ExpTy{exp=Translate.intexp i, ty=Types.INT}
-transExp (A.StringExp _) = do
-  return ExpTy{exp=emptyExp, ty=Types.STRING}
+transExp (A.StringExp str) = do
+  st@SemantState{generator=gen} <- get
+  let
+    (strExp, gen', frag) = Translate.string str gen
+    in do
+    pushFrag frag
+    put st{generator=gen'}
+    return ExpTy{exp=strExp, ty=Types.STRING}
 transExp (A.CallExp funcSym argExps pos) = do
   funEntry <- lookupT pos venv' funcSym
   case funEntry of
