@@ -141,6 +141,15 @@ simpleVar :: X64Access -> X64Level -> Exp
 simpleVar X64Access{level=declaredLevel, access=accessInDeclaredFrame} levelAtUse =
   Ex $ X64Frame.exp accessInDeclaredFrame $ staticLink levelAtUse declaredLevel
 
+ptrCmp :: Exp -> Exp -> Absyn.Oper -> Temp.Generator -> (Exp, Temp.Generator)
+ptrCmp r1 r2 op gen =
+  if isEqualityOper then
+    relOp r1 r2 op gen
+  else
+    error "shouldn't get here"
+  where
+    isEqualityOper = op == Absyn.EqOp || op == Absyn.NeqOp
+
 stringCmp :: Exp -> Exp -> Absyn.Oper -> Temp.Generator -> (Exp, Temp.Generator)
 stringCmp s1 s2 op gen =
   let
