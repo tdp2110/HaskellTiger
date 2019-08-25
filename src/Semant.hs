@@ -375,11 +375,13 @@ transExp (A.RecordExp fieldSymExpPosns typSym pos) = do
             expectedFieldTys = fmap snd sym2ty
             actualFieldTys = fmap ty actualFieldExpTys
             fieldPosns = fmap (\(_,_,fieldPos) -> fieldPos) fieldSymExpPosns
+            exps = fmap exp actualFieldExpTys
             in
             case filter (\(_,expectedTy,actualTy,_) -> expectedTy /= actualTy)
                  (zip4 expectedSyms expectedFieldTys actualFieldTys fieldPosns)
             of
-              [] -> return ExpTy{exp=emptyExp, ty=recordTy}
+              [] ->
+                translate (Translate.record exps) recordTy
               ((sym,expectedTy,actualTy,fieldPos):_) ->
                 throwT fieldPos $
                 "in record exp, field " ++ (show sym) ++

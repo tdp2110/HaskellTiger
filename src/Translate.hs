@@ -11,6 +11,7 @@ import qualified X64Frame
 
 import Control.Monad.Trans.State (State, get, put, runState)
 import Control.Monad (mapM)
+import Data.List
 import Prelude hiding (exp)
 
 
@@ -97,6 +98,9 @@ instance Show Exp where
 zero :: Tree.Exp
 zero = Tree.CONST 0
 
+passStm :: Tree.Stm
+passStm = Tree.EXP zero
+
 unEx :: Exp -> Temp.Generator -> (Tree.Exp, Temp.Generator)
 unEx (Ex exp) gen = (exp, gen)
 unEx (Nx stm) gen = (Tree.ESEQ(stm, zero), gen)
@@ -165,6 +169,37 @@ stringCmp s1 s2 op gen =
                  , zero
                  , t
                  , f )
+  in
+    (resExp, gen'')
+
+record :: [Exp] -> Temp.Generator -> (Exp, Temp.Generator)
+record exps gen =
+  let
+    (r, gen') = Temp.newtemp gen
+    rExp = Tree.TEMP r
+    numExps = length exps
+    wordSize = X64Frame.wordSize
+    mallocStm = Tree.MOVE ( rExp
+                          , X64Frame.externalCall
+                            (Temp.Label $ Symbol.Symbol "tiger_malloc")
+                            [Tree.CONST $ numExps * wordSize] )
+    (initStm, gen'') = foldl'
+                       step
+                       (passStm, gen')
+                       $ zip exps [0 :: Int ..]
+    step :: (Tree.Stm, Temp.Generator) -> (Exp, Int) -> (Tree.Stm, Temp.Generator)
+    step (stm, g) (exp, idx) =
+      let
+        (expr, g') = unEx exp g
+        memExpr = Tree.MEM (Tree.BINOP (Tree.PLUS, rExp,  Tree.CONST $ idx * wordSize))
+      in
+        ( Tree.SEQ ( stm
+                   , Tree.MOVE ( memExpr
+                               , expr ))
+        , g' )
+    resExp = Ex $ Tree.ESEQ ( Tree.SEQ ( mallocStm
+                                       , initStm )
+                            , rExp)
   in
     (resExp, gen'')
 
