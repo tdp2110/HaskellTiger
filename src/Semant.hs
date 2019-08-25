@@ -465,8 +465,8 @@ transExp (A.ArrayExp arrayTySym sizeExp initExp pos) = do
   maybeArrayTy <- lookupT pos tenv2 arrayTySym
   case maybeArrayTy of
     arrayTy@(Types.ARRAY(arrayEltTy,_)) -> do
-      ExpTy{exp=_, ty=sizeTy} <- transExp sizeExp
-      ExpTy{exp=_, ty=initTy} <- transExp initExp
+      ExpTy{exp=sizeExpr, ty=sizeTy} <- transExp sizeExp
+      ExpTy{exp=initExpr, ty=initTy} <- transExp initExp
       if sizeTy /= Types.INT then
         throwT pos $"in ArrayExp, sizeExp must be an integer. " ++
         "Found type=" ++ (show sizeTy)
@@ -475,7 +475,7 @@ transExp (A.ArrayExp arrayTySym sizeExp initExp pos) = do
         (show initTy) ++ ", when it must have " ++
         (show arrayEltTy)
         else
-        return ExpTy{exp=emptyExp, ty=arrayTy}
+        translate (Translate.array sizeExpr initExpr) arrayTy
     t@(_) ->
           throwT pos $ "only array types may appear as the symbol in an " ++
           "array instance " ++

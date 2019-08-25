@@ -160,7 +160,7 @@ stringCmp s1 s2 op gen =
     (str1, gen') = unEx s1 gen
     (str2, gen'') = unEx s2 gen'
     cmpExp = X64Frame.externalCall
-             (Temp.Label $ Symbol.Symbol "tiger_StrCmp")
+             (Temp.Label $ Symbol.Symbol "__tiger_StrCmp")
              [str1, str2]
     treeOp = transRelOp op
     resExp = Cx $ \t f ->
@@ -181,7 +181,7 @@ record exps gen =
     wordSize = X64Frame.wordSize
     mallocStm = Tree.MOVE ( rExp
                           , X64Frame.externalCall
-                            (Temp.Label $ Symbol.Symbol "tiger_malloc")
+                            (Temp.Label $ Symbol.Symbol "__tiger_Alloc")
                             [Tree.CONST $ numExps * wordSize] )
     (initStm, gen'') = foldl'
                        step
@@ -191,17 +191,31 @@ record exps gen =
     step (stm, g) (exp, idx) =
       let
         (expr, g') = unEx exp g
-        memExpr = Tree.MEM (Tree.BINOP (Tree.PLUS, rExp,  Tree.CONST $ idx * wordSize))
+        memExpr = Tree.MEM $ Tree.BINOP (Tree.PLUS, rExp,  Tree.CONST $ idx * wordSize)
       in
         ( Tree.SEQ ( stm
-                   , Tree.MOVE ( memExpr
-                               , expr ))
+                   , Tree.MOVE (memExpr, expr))
         , g' )
     resExp = Ex $ Tree.ESEQ ( Tree.SEQ ( mallocStm
                                        , initStm )
                             , rExp)
   in
     (resExp, gen'')
+
+array :: Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
+array sizeExp initExp gen =
+  let
+    (r, gen') = Temp.newtemp gen
+    (sizeExpr, gen'') = unEx sizeExp gen'
+    (initExpr, gen''') = unEx initExp gen''
+    rExp = Tree.TEMP r
+    initStm = Tree.MOVE ( rExp
+                        , X64Frame.externalCall
+                          (Temp.Label $ Symbol.Symbol "__tiger_InitArray")
+                          [sizeExpr, initExpr] )
+    resExp = Ex $ Tree.ESEQ (initStm, rExp)
+  in
+    (resExp, gen''')
 
 relOp :: Exp -> Exp -> Absyn.Oper -> Temp.Generator -> (Exp, Temp.Generator)
 relOp expLeft expRight op gen =
