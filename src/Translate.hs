@@ -4,6 +4,7 @@ module Translate where
 
 import qualified Absyn
 import qualified Frame
+import qualified Symbol
 import qualified Temp
 import qualified Tree
 import qualified X64Frame
@@ -140,22 +141,43 @@ simpleVar :: X64Access -> X64Level -> Exp
 simpleVar X64Access{level=declaredLevel, access=accessInDeclaredFrame} levelAtUse =
   Ex $ X64Frame.exp accessInDeclaredFrame $ staticLink levelAtUse declaredLevel
 
+stringCmp :: Exp -> Exp -> Absyn.Oper -> Temp.Generator -> (Exp, Temp.Generator)
+stringCmp s1 s2 op gen =
+  let
+    (str1, gen') = unEx s1 gen
+    (str2, gen'') = unEx s2 gen'
+    cmpExp = X64Frame.externalCall
+             (Temp.Label $ Symbol.Symbol "tiger_StrCmp")
+             [str1, str2]
+    treeOp = transRelOp op
+    resExp = Cx $ \t f ->
+      Tree.CJUMP ( treeOp
+                 , cmpExp
+                 , zero
+                 , t
+                 , f )
+  in
+    (resExp, gen'')
+
 relOp :: Exp -> Exp -> Absyn.Oper -> Temp.Generator -> (Exp, Temp.Generator)
 relOp expLeft expRight op gen =
   let
     (expLeft', gen') = unEx expLeft gen
     (expRight', gen'') = unEx expRight gen'
-    op' = case op of
-            Absyn.EqOp -> Tree.EQ
-            Absyn.NeqOp -> Tree.NE
-            Absyn.LtOp -> Tree.LT
-            Absyn.LeOp -> Tree.LE
-            Absyn.GtOp -> Tree.GT
-            Absyn.GeOp -> Tree.GE
-            _ -> error "shouldn't get here"
-    resExp = Cx $ \t f -> Tree.CJUMP (op', expLeft', expRight', t, f)
+    treeOp = transRelOp op
+    resExp = Cx $ \t f -> Tree.CJUMP (treeOp, expLeft', expRight', t, f)
   in
     (resExp, gen'')
+
+transRelOp :: Absyn.Oper -> Tree.Relop
+transRelOp op = case op of
+                  Absyn.EqOp -> Tree.EQ
+                  Absyn.NeqOp -> Tree.NE
+                  Absyn.LtOp -> Tree.LT
+                  Absyn.LeOp -> Tree.LE
+                  Absyn.GtOp -> Tree.GT
+                  Absyn.GeOp -> Tree.GE
+                  _ -> error "shouldn't get here"
 
 binOp :: Exp -> Exp -> Absyn.Oper -> Temp.Generator -> (Exp, Temp.Generator)
 binOp expLeft expRight op gen =

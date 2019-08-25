@@ -334,29 +334,26 @@ transExp (A.OpExp leftExp op rightExp pos) = do
                     return ExpTy{exp=resExp, ty=Types.INT}
     else
     if isCmp op then
-      let
-        res = return ExpTy{exp=emptyExp, ty=Types.INT}
-      in
-        case (tyleft, tyright) of
-          (Types.INT, Types.INT) -> do
-            st@SemantState{generator=gen} <- get
-            let
-              (resExp, gen') = Translate.relOp expLeft expRight op gen
-              in do
-                put st{generator=gen'}
-                return ExpTy{exp=resExp, ty=Types.INT}
-          (Types.STRING, Types.STRING) -> res
-          (r1@(Types.RECORD _), r2@(Types.RECORD _)) ->
-            if r1 == r2 then res
-              else
-              throwT pos "only identical record types may be compared"
-          (arr1@(Types.ARRAY _), arr2@(Types.ARRAY _)) ->
-            if arr1 == arr2 then res
-            else
-              throwT pos "only identical array types may be compared"
-          _ -> throwT pos $
-               "incomparable types " ++ (show tyleft) ++
-               " and " ++ (show tyright)
+      case (tyleft, tyright) of
+        (Types.INT, Types.INT) -> do
+          st@SemantState{generator=gen} <- get
+          let
+            (resExp, gen') = Translate.relOp expLeft expRight op gen
+            in do
+            put st{generator=gen'}
+            return ExpTy{exp=resExp, ty=Types.INT}
+        (Types.STRING, Types.STRING) -> return ExpTy{exp=emptyExp, ty=Types.INT}
+        (r1@(Types.RECORD _), r2@(Types.RECORD _)) ->
+          if r1 == r2 then return ExpTy{exp=emptyExp, ty=Types.INT}
+          else
+            throwT pos "only identical record types may be compared"
+        (arr1@(Types.ARRAY _), arr2@(Types.ARRAY _)) ->
+          if arr1 == arr2 then return ExpTy{exp=emptyExp, ty=Types.INT}
+          else
+            throwT pos "only identical array types may be compared"
+        _ -> throwT pos $
+             "incomparable types " ++ (show tyleft) ++
+             " and " ++ (show tyright)
     else error $ show op
 transExp (A.RecordExp fieldSymExpPosns typSym pos) = do
   maybeRecordTy <- lookupT pos tenv2 typSym
