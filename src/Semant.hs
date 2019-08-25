@@ -108,6 +108,29 @@ runTransT :: SemantState -> SemantEnv -> Translator a
 runTransT st env =
   runIdentity . runExceptT . flip runReaderT env . runWriterT . flip runStateT st
 
+translate :: (Temp.Generator -> (Translate.Exp, Temp.Generator))
+                -> Types.Ty
+                -> Translator ExpTy
+translate transFn typ = do
+  st@SemantState{generator=gen} <- get
+  let
+    (resExp, gen') = transFn gen
+    in do
+    put st{generator=gen'}
+    return ExpTy{exp=resExp, ty=typ}
+
+translateWithFrag :: (Temp.Generator -> (Translate.Exp, Frag, Temp.Generator))
+                     -> Types.Ty
+                     -> Translator ExpTy
+translateWithFrag transFn typ = do
+  st@SemantState{generator=gen} <- get
+  let
+    (resExp, frag, gen') = transFn gen
+    in do
+    pushFrag frag
+    put st{generator=gen'}
+    return ExpTy{exp=resExp, ty=typ}
+
 evalTransT :: SemantState -> SemantEnv -> Translator a
   -> Either SemantError (a, FragList)
 evalTransT st env =
@@ -210,7 +233,6 @@ transVar (A.SimpleVar sym pos) = do
                               " has no non-function bindings."
 transVar (A.FieldVar var sym pos) = do
   ExpTy{exp=recordExp, ty=varTy} <- transVar var
-  st@SemantState{generator=gen} <- get
   case varTy of
     r@(Types.RECORD(sym2ty, _)) ->
       let
@@ -219,14 +241,7 @@ transVar (A.FieldVar var sym pos) = do
       in
         case lookup sym symTyIxList  of
           Just (t, fieldNumber) ->
-            let
-              (resExp, gen') = Translate.field
-                               recordExp
-                               fieldNumber
-                               gen
-            in do
-              put st{generator=gen'}
-              return ExpTy{exp=resExp, ty=t}
+            translate (Translate.field recordExp fieldNumber) t
           Nothing -> throwT pos $
                      "in field expr, record type " ++
                      (show r) ++ " has no " ++ (show sym) ++
@@ -237,20 +252,12 @@ transVar (A.FieldVar var sym pos) = do
 transVar (A.SubscriptVar var expr pos) = do
   ExpTy{exp=varExp, ty=varTy} <- transVar var
   ExpTy{exp=indexExp, ty=expTy} <- transExp expr
-  st@SemantState{generator=gen} <- get
   case varTy of
     Types.ARRAY(varEltTy, _) ->
       case expTy of
         Types.INT ->
-          let
-            {- In the case of a constexpr access, we could optimize -}
-            (resExp, gen') = Translate.subscript
-                             varExp
-                             indexExp
-                             gen
-          in do
-            put st{generator=gen'}
-            return ExpTy{exp=resExp, ty=varEltTy}
+          {- In the case of a constexpr access, we could optimize -}
+          translate (Translate.subscript varExp indexExp) varEltTy
         nonIntTy@(_) -> throwT pos $
                         "in subscript expr, subscript type " ++
                         "is not an INT, is an " ++ (show nonIntTy)
@@ -271,14 +278,8 @@ transExp A.NilExp = do
   return ExpTy{exp=Translate.nilexp, ty=Types.NIL}
 transExp (A.IntExp i) = do
   return ExpTy{exp=Translate.intexp i, ty=Types.INT}
-transExp (A.StringExp str) = do
-  st@SemantState{generator=gen} <- get
-  let
-    (strExp, gen', frag) = Translate.string str gen
-    in do
-    pushFrag frag
-    put st{generator=gen'}
-    return ExpTy{exp=strExp, ty=Types.STRING}
+transExp (A.StringExp str) =
+  translateWithFrag (Translate.string str) Types.STRING
 transExp (A.CallExp funcSym argExps pos) = do
   funEntry <- lookupT pos venv' funcSym
   case funEntry of
@@ -294,19 +295,13 @@ transExp (A.CallExp funcSym argExps pos) = do
           case filter (\(ty1, ty2, _) -> ty1 /= ty2)
                (zip3 formalsTys paramTys [0 :: Integer ..]) of
             [] -> do
-              st@SemantState{level=thisLevel, generator=gen} <- get
+              SemantState{level=thisLevel} <- get
               let
                 argExpTrees = fmap exp paramExpTys
-                (callExp, gen') = Translate.call
-                                  funLevel
-                                  thisLevel
-                                  label
-                                  argExpTrees
-                                  gen
-                in do
-                put st{generator=gen'}
-                return ExpTy{ exp=callExp
-                            , ty=resultTy }
+                in
+                translate
+                (Translate.call funLevel thisLevel label argExpTrees)
+                resultTy
             ((formalTy, paramTy, ix):_) ->
               throwT pos $
               "parameter " ++ (show ix) ++ " of func " ++ (show funcSym) ++
@@ -325,23 +320,13 @@ transExp (A.OpExp leftExp op rightExp pos) = do
     in
       case maybeError of
         Left err -> throwT pos $ "In OpExp, " ++ err
-        Right _ -> do
-                st@SemantState{generator=gen} <- get
-                let
-                  (resExp, gen') = Translate.binOp expLeft expRight op gen
-                  in do
-                    put st{generator=gen'}
-                    return ExpTy{exp=resExp, ty=Types.INT}
+        Right _ ->
+          translate (Translate.binOp expLeft expRight op) Types.INT
     else
     if isCmp op then
       case (tyleft, tyright) of
-        (Types.INT, Types.INT) -> do
-          st@SemantState{generator=gen} <- get
-          let
-            (resExp, gen') = Translate.relOp expLeft expRight op gen
-            in do
-            put st{generator=gen'}
-            return ExpTy{exp=resExp, ty=Types.INT}
+        (Types.INT, Types.INT) ->
+          translate (Translate.relOp expLeft expRight op) Types.INT
         (Types.STRING, Types.STRING) -> return ExpTy{exp=emptyExp, ty=Types.INT}
         (r1@(Types.RECORD _), r2@(Types.RECORD _)) ->
           if r1 == r2 then return ExpTy{exp=emptyExp, ty=Types.INT}
@@ -409,7 +394,6 @@ transExp (A.AssignExp var expr pos) = do
 transExp (A.IfExp testExpr thenExpr maybeElseExpr pos) = do
   ExpTy{exp=testExp, ty=testTy} <- transExp testExpr
   ExpTy{exp=thenExp, ty=thenTy} <- transExp thenExpr
-  st@SemantState{generator=gen} <- get
   let
     maybeElseExpTy = fmap transExp maybeElseExpr in
     if testTy /= Types.INT then
@@ -417,18 +401,12 @@ transExp (A.IfExp testExpr thenExpr maybeElseExpr pos) = do
       "found type=" ++ (show testTy)
     else
       case maybeElseExpTy of
-        Nothing -> let
-          (ifElseExp, gen') = Translate.ifThen
-                              testExp
-                              thenExp
-                              gen
-          in
+        Nothing ->
             if thenTy /= Types.UNIT then
                throwT pos $ "in if-then exp (without else), the if body " ++
                "must yield no value"
-             else do
-              put st{generator=gen'}
-              return ExpTy{exp=ifElseExp, ty=thenTy}
+            else
+              translate (Translate.ifThen testExp thenExp) thenTy
         Just elseExpTyM -> do
           ExpTy{exp=elseExp, ty=elseTy} <- elseExpTyM
           if thenTy /= elseTy then
@@ -437,15 +415,7 @@ transExp (A.IfExp testExpr thenExpr maybeElseExpr pos) = do
             " and " ++ (show elseTy) ++
             ", respectfully"
             else
-            let
-              (ifThenElseExp, gen') = Translate.ifThenElse
-                                      testExp
-                                      thenExp
-                                      elseExp
-                                      gen
-              in do
-              put st{generator=gen'}
-              return ExpTy{exp=ifThenElseExp, ty=thenTy}
+            translate (Translate.ifThenElse testExp thenExp elseExp) thenTy
 transExp (A.WhileExp testExp bodyExp pos) = do
   ExpTy{exp=testE, ty=testTy} <- transExp testExp
   breakTargetLab <- nextLabel
@@ -459,17 +429,8 @@ transExp (A.WhileExp testExp bodyExp pos) = do
     else if bodyTy /= Types.UNIT then
     throwT pos $ "in a whileExp, the body expression must yield no value: " ++
     "found type=" ++ (show bodyTy)
-    else do
-    st'@SemantState{generator=gen} <- get
-    let
-      (resExp, gen') = Translate.while
-                       testE
-                       bodyE
-                       breakTargetLab
-                       gen
-      in do
-      put st'{generator=gen'}
-      return ExpTy{exp=resExp, ty=Types.UNIT}
+    else
+    translate (Translate.while testE bodyE breakTargetLab) Types.UNIT
 transExp (A.BreakExp pos) = do
   SemantState{breakTarget=breakTargetMaybe} <- get
   case breakTargetMaybe of

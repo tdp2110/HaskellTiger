@@ -279,14 +279,14 @@ subscript arrExpE indexExpE gen =
 
 type Frag = X64Frame.Frag
 
-string :: String -> Temp.Generator -> (Exp, Temp.Generator, Frag)
+string :: String -> Temp.Generator -> (Exp, Frag, Temp.Generator)
 string str gen =
   let
     (label, gen') = Temp.newlabel gen
     resExp = Ex $ Tree.NAME(label)
     frag = X64Frame.STRING (label, str)
   in
-    (resExp, gen', frag)
+    (resExp, frag, gen')
 
 unExM :: Exp -> State Temp.Generator Tree.Exp
 unExM exp = do
