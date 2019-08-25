@@ -289,6 +289,15 @@ ifThenElse testExpE thenExpE elseExpE gen =
   in
     (resExp, gen6)
 
+assign :: Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
+assign lhs rhs gen =
+  let
+    (lhsExp, gen') = unEx lhs gen
+    (rhsExp, gen'') = unEx rhs gen'
+    resExp = Nx $ Tree.MOVE (lhsExp, rhsExp)
+  in
+    (resExp, gen'')
+
 while :: Exp -> Exp -> Temp.Label -> Temp.Generator -> (Exp, Temp.Generator)
 while testExpE bodyExpE doneLab gen =
   let

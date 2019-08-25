@@ -404,10 +404,10 @@ transExp (A.SeqExp expAndPosns) = do
     in
     translate transFn typ
 transExp (A.AssignExp var expr pos) = do
-  ExpTy{exp=_, ty=varTy} <- transVar var
-  ExpTy{exp=_, ty=exprTy} <- transExp expr
+  ExpTy{exp=lhs, ty=varTy} <- transVar var
+  ExpTy{exp=rhs, ty=exprTy} <- transExp expr
   if varTy == exprTy then
-    return ExpTy{exp=emptyExp, ty=Types.UNIT}
+    translate (Translate.assign lhs rhs) Types.UNIT
     else
     throwT pos $
     "in assignExp, variable has type " ++ (show varTy) ++
