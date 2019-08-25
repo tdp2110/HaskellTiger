@@ -393,9 +393,16 @@ transExp (A.SeqExp expAndPosns) = do
   expTys <- mapM
     (\(expr,_) -> transExp expr)
     expAndPosns
-  case expTys of
-    [] -> return ExpTy{exp=emptyExp, ty=Types.UNIT}
-    _ -> return $ last expTys
+  let
+    typ = case expTys of
+      [] -> Types.UNIT
+      _ -> ty $ last expTys
+    exps = fmap exp expTys
+    transFn = case typ of
+                Types.UNIT -> Translate.seqStm exps
+                _ -> Translate.seqExp exps
+    in
+    translate transFn typ
 transExp (A.AssignExp var expr pos) = do
   ExpTy{exp=_, ty=varTy} <- transVar var
   ExpTy{exp=_, ty=exprTy} <- transExp expr

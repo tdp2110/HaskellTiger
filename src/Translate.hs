@@ -217,6 +217,54 @@ ifThen testExpE thenExpE gen =
   in
     (resExp, gen''')
 
+seqExp :: [Exp] -> Temp.Generator -> (Exp, Temp.Generator)
+seqExp [] gen = (Ex zero, gen)
+seqExp (exp:exps) gen =
+  let
+    (headStm, gen') = unNx exp gen
+    (tailExp, gen'') = seqExp exps gen'
+    (tailExp', gen''') = unEx tailExp gen''
+    resExp = Ex $ Tree.ESEQ (headStm, tailExp')
+  in
+    (resExp, gen''')
+
+seqStm :: [Exp] -> Temp.Generator -> (Exp, Temp.Generator)
+seqStm [] gen = (Ex zero, gen)
+seqStm (exp:exps) gen =
+  let
+    (headStm, gen') = unNx exp gen
+    (tailExp, gen'') = seqExp exps gen'
+    (tailStm, gen''') = unNx tailExp gen''
+    resStm = Nx $ Tree.SEQ (headStm, tailStm)
+  in
+    (resStm, gen''')
+
+{-
+--TODO: I'd like to DRY the last two functions with something like below,
+but it doesn't quite compile
+
+data StmOrExp = IsStm | IsExp
+
+seqExpOrStm :: StmOrExp -> [Exp] -> Temp.Generator -> (Exp, Temp.Generator)
+seqStm seqOrStm [] gen =
+  case seqOrStm of
+    IsStm -> (Nx zero, gen)
+    IsExp -> (Ex zerp, gen)
+seqStm seqOrStm (exp:exps) gen =
+  let
+    (headExpOrStm, gen') = unNx exp gen
+    (tailExpOrStm, gen'') = seqExpOrStm seqOrStm exps gen'
+    unFn = case seqOrStm of
+             IsStm -> unNx
+             IsExp -> unEx
+    (tailExpOrStm', gen''') = unFn tailExpOrStm gen''
+    res = case seqOrStm of
+            IsStm -> Nx $ Tree.SEQ (headExpOrStm, tailExpOrStm)
+            IsExp -> Ex $ Tree.ESEQ (headExpOrStm, tailExpOrStm)
+  in
+    (res, gen''')
+-}
+
 {-
 TODO page 162 notes that this should be optimized
 -}
