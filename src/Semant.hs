@@ -327,7 +327,8 @@ transExp (A.OpExp leftExp op rightExp pos) = do
       case (tyleft, tyright) of
         (Types.INT, Types.INT) ->
           translate (Translate.relOp expLeft expRight op) Types.INT
-        (Types.STRING, Types.STRING) -> return ExpTy{exp=emptyExp, ty=Types.INT}
+        (Types.STRING, Types.STRING) ->
+          translate (Translate.stringCmp expLeft expRight op) Types.INT
         (r1@(Types.RECORD _), r2@(Types.RECORD _)) ->
           if r1 == r2 then
             if isEqOrNe then
