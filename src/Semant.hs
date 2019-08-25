@@ -219,9 +219,6 @@ checkInt nonIntTy maybeCtx =
     convertCtx Nothing = ""
     convertCtx (Just str) = str ++ ", "
 
-emptyExp :: Translate.Exp
-emptyExp = Translate.Ex $ Tree.CONST 0
-
 transVar (A.SimpleVar sym pos) = do
   val <- lookupT pos venv' sym
   (SemantState lev _ _ _) <- get
