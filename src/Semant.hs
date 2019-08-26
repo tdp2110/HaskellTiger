@@ -9,7 +9,6 @@ import qualified Types as Types
 import Symbol
 import FindEscape (escapeExp)
 import qualified Temp
-import qualified Tree
 
 import Control.Monad.Trans.Class
 import Control.Monad (join, foldM)
@@ -48,9 +47,9 @@ transProg expr =
 transVar :: A.Var -> Translator ExpTy
 transExp :: A.Exp -> Translator ExpTy
 transTy :: A.Ty -> Translator Types.Ty
-transLetDecs :: [A.Dec] -> A.Pos -> Translator SemantEnv
+transLetDecs :: [A.Dec] -> A.Pos -> Translator (SemantEnv, [Translate.Exp])
 
-transDec :: A.Dec -> Translator SemantEnv
+transDec :: A.Dec -> Translator (SemantEnv, [Translate.Exp])
 
 type Level = Translate.X64Level
 type Translate = Translate.X64Translate
@@ -559,35 +558,47 @@ transExp (A.ForExp forVar escape loExp hiExp body pos) = do
         ast' = A.LetExp{ A.decs=[forVarDec, limitVarDec]
                        , A.body=letBody
                        , A.pos=pos }
-        in transExp ast'
+        in
+        transExp ast'
 transExp (A.LetExp decs bodyExp letPos) = do
   env <- askEnv
   st <- get
   case runTransT st env $ transLetDecs decs letPos of
     Left err -> throwErr err
-    Right ((bodyEnv, st'), _) ->
+    Right (((bodyEnv, initializers), st'), _) ->
       case
         runTransT st' bodyEnv (transExp bodyExp)
       of
         Left err -> throwErr err
-        Right ((res, st''), _) -> do
+        Right ((ExpTy{exp=bodyTree, ty=typ}, st''), _) -> do
           put st''
-          return res
+          e@ExpTy{exp=expr, ty=t} <- translate
+                                     (Translate.letExp initializers bodyTree)
+                                     typ
+          case t of
+            Types.UNIT -> do
+              st3@SemantState{generator=gen} <- get
+              let
+                (stm, gen') = Translate.unNx expr gen
+                in do
+                put st3{generator=gen'}
+                return ExpTy{exp=Translate.Nx stm, ty=t}
+            _ -> return e
 
 transLetDecs decls letPos = do
   env <- askEnv
   case checkDeclNamesDistinctInLet decls letPos of
     Left err -> throwErr err
     Right () ->
-      foldM step env decls
+      foldM step (env, []) decls
   where
-    step envAcc decl = do
+    step (envAcc, initsAcc) decl = do
       st <- get
       case runTransT st envAcc $ transDec decl of
         Left err -> throwErr err
-        Right ((newEnv, newState), _) -> do
+        Right (((newEnv, initializers), newState), _) -> do
           put newState
-          return newEnv
+          return (newEnv, initsAcc ++ initializers)
 
 checkDeclNamesDistinctInLet :: [A.Dec] -> A.Pos -> Either SemantError ()
 checkDeclNamesDistinctInLet decls letPos =
@@ -687,19 +698,21 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
   maybeTypeAnnotation <- mapM
                          (\(typename,_) -> lookupT posn tenv2 typename)
                          maybeTypenameAndPos
-  ExpTy{exp=_, ty=actualInitTy} <- transExp initExp
+  ExpTy{exp=initExpr, ty=actualInitTy} <- transExp initExp
   env <- askEnv
-  st <- get
+  st@SemantState{level=lev, generator=gen} <- get
   if actualInitTy == Types.NIL then
     case maybeTypeAnnotation of
       Just recTy@(Types.RECORD _) ->
         let
           (access, st') = allocLocal escape st env
+          (initTree, gen') = Translate.initExp access lev initExpr gen
         in do
-            put st'
-            return env{ venv'=Map.insert
-                              name (Env.VarEntry access recTy)
-                              (venv' env) }
+          put st'{generator=gen'}
+          return ( env{ venv'=Map.insert
+                            name (Env.VarEntry access recTy)
+                            (venv' env) }
+                 , [initTree] )
       _ -> throwT posn $ "nil expression declarations must be " ++
            "constrained by a RECORD type"
     else
@@ -707,12 +720,14 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
       result =
         let
           (access, st') = allocLocal escape st env
+          (initTree, gen') = Translate.initExp access lev initExpr gen
         in do
-          put st'
-          return env { venv'=Map.insert
-                            name
-                            (Env.VarEntry access actualInitTy)
-                            (venv' env) }
+          put st'{generator=gen'}
+          return ( env { venv'=Map.insert
+                               name
+                               (Env.VarEntry access actualInitTy)
+                               (venv' env) }
+                 , [initTree] )
     in
       case maybeTypeAnnotation of
         Just typeAnnotation ->
@@ -757,7 +772,7 @@ transDec (A.FunctionDec fundecs) = do
               put newState
               foldM
                 transBody
-                env{venv'=headerVEnv}
+                (env{venv'=headerVEnv}, [])
                 (zip3 fundecs formalsTys resultTys)
   where
     computeFormalTy env (A.Field fieldName esc fieldTyp fieldPos) =
@@ -770,7 +785,7 @@ transDec (A.FunctionDec fundecs) = do
     resultTyFun maybeResultTy = case maybeResultTy of
                                   Nothing -> Types.UNIT
                                   Just typ -> typ
-    transBody env (fundec,formalsTys,resultTy) = do
+    transBody (env, initializers) (fundec,formalsTys,resultTy) = do
       st <- get
       let
         venv = venv' env
@@ -798,7 +813,7 @@ transDec (A.FunctionDec fundecs) = do
               (show resultTy) ++ " do not match"
             else do
               put state'
-              return env
+              return (env, initializers)
 transDec (A.TypeDec tydecs) =
   let
     stronglyConnComps = typeSCCs tydecs
@@ -808,10 +823,12 @@ transDec (A.TypeDec tydecs) =
       Right () -> do
         env <- askEnv
         let
-          step env' (CyclicSCC syms) = transCyclicDecls env' tydecs syms
-          step env' (AcyclicSCC sym) = transAcyclicDecl env' tydecs sym
+          step (env', initializers) (CyclicSCC syms) =
+            transCyclicDecls (env', initializers) tydecs syms
+          step (env', initializers) (AcyclicSCC sym) =
+            transAcyclicDecl (env', initializers) tydecs sym
           in
-          foldM step env stronglyConnComps
+          foldM step (env, []) stronglyConnComps
 
 extractHeaderM :: Map.Map Symbol Env.EnvEntry
                -> [A.FunDec]
@@ -846,8 +863,9 @@ extractHeaderM venv fundecs formalsTys resultTys =
                                            Frame.NoEscape)
       params
 
-transCyclicDecls :: SemantEnv -> [A.TyDec] -> [Symbol] -> Translator SemantEnv
-transCyclicDecls env tydecs syms = do
+transCyclicDecls :: (SemantEnv, [Translate.Exp]) -> [A.TyDec] -> [Symbol]
+                 -> Translator (SemantEnv, [Translate.Exp])
+transCyclicDecls (env, initializers) tydecs syms = do
   state <- get
   let
     tenv = tenv2 env
@@ -878,8 +896,9 @@ transCyclicDecls env tydecs syms = do
       Left err -> throwErr err
       Right ((translatedBodies, state'), _) -> do
         put state'
-        return $ env{tenv2=tieTheKnot tenv'
-                           (Map.fromList $ zip syms translatedBodies)}
+        return ( env{tenv2=tieTheKnot tenv'
+                          (Map.fromList $ zip syms translatedBodies)}
+               , initializers )
   where
     tieTheKnot :: Env.TEnv -> Map.Map Symbol Types.Ty -> Env.TEnv
     tieTheKnot tenv' bodyMap =
@@ -904,8 +923,9 @@ transCyclicDecls env tydecs syms = do
       in
         Map.union newTyMap tenv'
 
-transAcyclicDecl :: SemantEnv -> [A.TyDec] -> Symbol -> Translator SemantEnv
-transAcyclicDecl env tydecs sym = do
+transAcyclicDecl :: (SemantEnv, [Translate.Exp]) -> [A.TyDec] -> Symbol
+                 -> Translator (SemantEnv, [Translate.Exp])
+transAcyclicDecl (env, initializers) tydecs sym = do
   state <- get
   let
     (A.TyDec _ typ _) = lookupTypeSym sym tydecs
@@ -917,7 +937,7 @@ transAcyclicDecl env tydecs sym = do
       Left err -> throwErr err
       Right ((typesTy, state'), _) -> do
         put state'
-        return $ env{tenv2=Map.insert sym typesTy $ tenv2 env}
+        return (env{tenv2=Map.insert sym typesTy $ tenv2 env}, initializers)
 
 checkForIllegalCycles :: [A.TyDec] -> [SCC Symbol] -> Either SemantError ()
 checkForIllegalCycles tydecs stronglyConnectedComponents =

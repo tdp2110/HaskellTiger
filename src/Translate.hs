@@ -203,16 +203,16 @@ record exps gen =
     (resExp, gen'')
 
 array :: Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
-array sizeExp initExp gen =
+array sizeExp initExpr gen =
   let
     (r, gen') = Temp.newtemp gen
     (sizeExpr, gen'') = unEx sizeExp gen'
-    (initExpr, gen''') = unEx initExp gen''
+    (initExpr', gen''') = unEx initExpr gen''
     rExp = Tree.TEMP r
     initStm = Tree.MOVE ( rExp
                         , X64Frame.externalCall
                           (Temp.Label $ Symbol.Symbol "__tiger_InitArray")
-                          [sizeExpr, initExpr] )
+                          [sizeExpr, initExpr'] )
     resExp = Ex $ Tree.ESEQ (initStm, rExp)
   in
     (resExp, gen''')
@@ -347,6 +347,20 @@ assign lhs rhs gen =
   in
     (resExp, gen'')
 
+letExpM :: [Exp] -> Exp -> State Temp.Generator Exp
+letExpM initializers bodyExp = do
+  gen <- get
+  let
+    (body, gen') = unEx bodyExp gen
+    (initializerStms, gen'') = runState (mapM unNxM initializers) gen'
+    in do
+    put gen''
+    return $ Ex $ Tree.ESEQ (makeSeq initializerStms, body)
+
+letExp :: [Exp] -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
+letExp initializers body gen =
+  runState (letExpM initializers body) gen
+
 while :: Exp -> Exp -> Temp.Label -> Temp.Generator -> (Exp, Temp.Generator)
 while testExpE bodyExpE doneLab gen =
   let
@@ -376,7 +390,6 @@ field recordExpE fieldNumber gen =
              , Tree.CONST $ fieldNumber * X64Frame.wordSize )
   in
     (resExp, gen')
-
 
 subscript :: Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
 subscript arrExpE indexExpE gen =
@@ -412,6 +425,16 @@ unExM exp = do
     put gen'
     return treeExp
 
+-- TODO: how to dry up unExM and unNxM? C++ templates (with duck-typing) could do it ...
+unNxM :: Exp -> State Temp.Generator Tree.Stm
+unNxM exp = do
+  gen <- get
+  let
+    (treeStm, gen') = unNx exp gen
+    in do
+    put gen'
+    return treeStm
+
 callM :: X64Level -> X64Level -> Temp.Label -> [Exp] -> State Temp.Generator Exp
 callM funLevel callerLevel funlab params = do
   gen <- get
@@ -439,6 +462,11 @@ nilexp = Ex $ Tree.CONST 0
 
 intexp :: Int -> Exp
 intexp i = Ex $ Tree.CONST i
+
+initExp :: X64Access -> X64Level -> Exp -> Temp.Generator
+           -> (Exp, Temp.Generator)
+initExp acc lev exp gen =
+  assign (simpleVar acc lev) exp gen
 
 staticLink :: X64Level -> X64Level -> Tree.Exp
 staticLink X64Outermost _ = error "outermost can't find static links"
