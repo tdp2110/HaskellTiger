@@ -98,6 +98,9 @@ instance Show Exp where
 zero :: Tree.Exp
 zero = Tree.CONST 0
 
+zeroExp :: Exp
+zeroExp = Ex zero
+
 passStm :: Tree.Stm
 passStm = Tree.EXP zero
 
@@ -396,14 +399,28 @@ subscript arrExpE indexExpE gen =
   let
     (arrExp, gen') = unEx arrExpE gen
     (indexExp, gen'') = unEx indexExpE gen'
-    resExp = Ex $ Tree.MEM $ Tree.BINOP
-             ( Tree.PLUS
-             , arrExp
-             , Tree.BINOP (Tree.MUL,
-                          Tree.CONST X64Frame.wordSize,
-                          indexExp) )
+    sizeExp = Tree.MEM arrExp
+    wordSize = Tree.CONST $ X64Frame.wordSize
+    happyPath = Ex $ Tree.MEM $ Tree.BINOP
+                ( Tree.PLUS
+                , arrExp
+                , Tree.BINOP ( Tree.PLUS
+                             , Tree.BINOP ( Tree.MUL
+                                          , wordSize
+                                          , indexExp )
+                             , wordSize ) )
+    sadPath = Ex $ X64Frame.externalCall
+              (Temp.Label $ Symbol.Symbol "__tiger_IndexError")
+              [sizeExp, indexExp]
+    (gtZeroExp, gen3) = relOp indexExpE zeroExp Absyn.GeOp gen''
+    (gtZero, gen4) = unEx gtZeroExp gen3
+    (ltSizeExp, gen5) = relOp indexExpE (Ex sizeExp) Absyn.LtOp gen4
+    (ltSize, gen6) = unEx ltSizeExp gen5
+    testExp = Tree.BINOP (Tree.AND, gtZero, ltSize)
+    jumpExp = Cx $ \happyLab sadLab ->
+      Tree.CJUMP (Tree.NE, testExp, zero, happyLab, sadLab)
   in
-    (resExp, gen'')
+    ifThenElse jumpExp happyPath sadPath gen6
 
 type Frag = X64Frame.Frag
 
