@@ -768,7 +768,7 @@ transDec (A.FunctionDec fundecs) = do
                $ extractHeaderM (venv' env) fundecs formalsTys resultTys
           of
             Left err -> throwErr err
-            Right ((headerVEnv, newState), _) -> do
+            Right ((headerVEnv, newState), _) -> do -- TODO what to do with fraglist??
               put newState
               foldM
                 transBody
@@ -785,35 +785,53 @@ transDec (A.FunctionDec fundecs) = do
     resultTyFun maybeResultTy = case maybeResultTy of
                                   Nothing -> Types.UNIT
                                   Just typ -> typ
-    transBody (env, initializers) (fundec,formalsTys,resultTy) = do
+    transBody :: (SemantEnv, b)
+              -> (A.FunDec, [(Symbol, Types.Ty, c)], Types.Ty)
+              -> Translator (SemantEnv, b)
+    transBody (env, initializers) ( A.FunDec{ A.fundecName=funName
+                                            , A.params=funParams
+                                            , A.funBody=funBody
+                                            , A.funPos=funPos }
+                                  , formalsTys
+                                  , resultTy) = do
       st <- get
       let
         venv = venv' env
+        Just Env.FunEntry{ Env.level=funLevel } = Map.lookup funName venv
         bodyVEnv = Map.union venv $ Map.fromList $
           fmap (\(sym,typ,_) -> (sym, Env.VarEntry (formalAccess sym) typ)) formalsTys
         bodyEnv = env{venv'=bodyVEnv}
         formalAccess :: Symbol -> Access
         formalAccess sym = case
           lookup sym $ zip
-            (fmap A.fieldName $ A.params fundec)
+            (fmap A.fieldName funParams)
             (formalAccesses $ level st)
           of
             Just acc -> acc
             _ -> error "must not get here"
         in
         case
-          runTransT st bodyEnv (transExp $ A.funBody fundec)
+          runTransT st bodyEnv (transExp funBody)
         of
           Left err -> throwErr err
-          Right ((ExpTy{exp=_, ty=bodyTy}, state'), _) ->
+          Right ((ExpTy{exp=bodyExp, ty=bodyTy}, state'), _) ->
             if resultTy /= Types.UNIT && resultTy /= bodyTy
             then
-              throwT (A.funPos fundec) $ "computed type of function body " ++
+              throwT funPos $ "computed type of function body " ++
               (show bodyTy) ++ " and annotated type " ++
               (show resultTy) ++ " do not match"
             else do
               put state'
-              return (env, initializers)
+              state''@SemantState{generator=gen} <- get
+              let
+                (frag, gen') = Translate.functionDec
+                               funLevel
+                               bodyExp
+                               gen
+                in do
+                pushFrag frag
+                put state''{generator=gen'}
+                return (env, initializers)
 transDec (A.TypeDec tydecs) =
   let
     stronglyConnComps = typeSCCs tydecs

@@ -490,6 +490,27 @@ initExp :: X64Access -> X64Level -> Exp -> Temp.Generator
 initExp acc lev exp gen =
   assign (simpleVar acc lev) exp gen
 
+functionDec :: X64Level -> Exp -> Temp.Generator -> (Frag, Temp.Generator)
+functionDec lev@X64Level{x64Frame=frame} bodyExp gen =
+  let
+    (bodyExpr, gen') = unEx bodyExp gen
+    bodyStm = Nx $ Tree.MOVE ( Tree.TEMP $ X64Frame.rv frame
+                             , X64Frame.procEntryExit1 frame bodyExpr )
+  in
+    procEntryExit lev bodyStm gen'
+functionDec X64Outermost _ _ = error "should not get here"
+
+procEntryExit :: X64Level -> Exp -> Temp.Generator -> (Frag, Temp.Generator)
+procEntryExit X64Level{x64Frame=frame} bodyExp gen =
+  let
+    (bodyStm, gen') = unNx bodyExp gen
+    resBody = Tree.SEQ (Tree.LABEL $ X64Frame.name frame, bodyStm)
+  in
+    ( X64Frame.PROC { X64Frame.body=resBody
+                    , X64Frame.fragFrame=frame }
+    , gen')
+procEntryExit X64Outermost _ _ = error "should not get here"
+
 staticLink :: X64Level -> X64Level -> Tree.Exp
 staticLink X64Outermost _ = error "outermost can't find static links"
 staticLink _ X64Outermost = error "can't find static links to outermost"

@@ -21,7 +21,8 @@ RDI, RSI, RDX, RCX, R8, R9
 data X64Frame = X64Frame { name :: Temp.Label
                          , formals :: [X64Access]
                          , locals :: [X64Access]
-                         , fp :: Int }
+                         , fp :: Int
+                         , rv :: Int }
   deriving (Show)
 
 data Frag = PROC { body :: Tree.Stm
@@ -63,11 +64,14 @@ freshFrame :: Temp.Label -> Temp.Generator -> (X64Frame, Temp.Generator)
 freshFrame frameName gen =
   let
     (fpId, gen') = Temp.newtemp gen
+    (rvId, gen'') = Temp.newtemp gen'
   in
-    (X64Frame{ name=frameName
-             , formals=[]
-             , locals=[]
-             , fp=fpId }, gen')
+    ( X64Frame{ name=frameName
+              , formals=[]
+              , locals=[]
+              , fp=fpId
+              , rv=rvId }
+    , gen'' )
 
 instance Frame.Frame X64Frame where
   type (Access X64Frame) = X64Access
@@ -114,3 +118,6 @@ allocLocal gen frame escapesOrNot =
       access = InReg regLabel
     in
       (gen', frame{locals=(locals frame) ++ [access]}, access)
+
+procEntryExit1 :: X64Frame -> Tree.Exp -> Tree.Exp
+procEntryExit1 _ bodyExp = bodyExp
