@@ -387,12 +387,17 @@ field :: Exp -> Int -> Temp.Generator -> (Exp, Temp.Generator)
 field recordExpE fieldNumber gen =
   let
     (recordExp, gen') = unEx recordExpE gen
-    resExp = Ex $ Tree.MEM $ Tree.BINOP
-             ( Tree.PLUS
-             , recordExp
-             , Tree.CONST $ fieldNumber * X64Frame.wordSize )
+    happyPath = Ex $ Tree.MEM $ Tree.BINOP
+                ( Tree.PLUS
+                , recordExp
+                , Tree.CONST $ fieldNumber * X64Frame.wordSize )
+    sadPath = Ex $ X64Frame.externalCall
+              (Temp.Label $ Symbol.Symbol "__tiger_NullRecordDereference")
+              []
+    jumpExp = Cx $ \happyLab sadLab ->
+      Tree.CJUMP (Tree.NE, recordExp, zero, happyLab, sadLab)
   in
-    (resExp, gen')
+    ifThenElse jumpExp happyPath sadPath gen'
 
 subscript :: Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
 subscript arrExpE indexExpE gen =
