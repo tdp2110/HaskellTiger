@@ -1,0 +1,5 @@
+let
+    var x := 8
+in
+    print (chr(x))
+end
