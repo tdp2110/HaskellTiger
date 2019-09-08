@@ -1,10 +1,12 @@
 module Env where
 
+import qualified Frame
 import Symbol
 import qualified Temp
 import qualified Translate
 import Types
 
+import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -27,76 +29,42 @@ baseTEnv = Map.fromList [(Symbol "string", STRING),
 outermost :: Translate.X64Level
 outermost = Translate.X64Outermost
 
-baseVEnv :: VEnv
-baseVEnv = Map.fromList [
+baseVEnv :: Temp.Generator -> (VEnv, Temp.Generator)
+baseVEnv gen =
   let
-    sym = Symbol "print"
+    signatures = [ ("print", [STRING], UNIT)
+                 , ("flush", [], UNIT)
+                 , ("getchar", [], STRING)
+                 , ("ord", [STRING], INT)
+                 , ("chr", [INT], STRING)
+                 , ("size", [STRING], INT)
+                 , ("substring", [STRING, INT, INT], STRING)
+                 , ("concat", [STRING, STRING], STRING)
+                 , ("not", [INT], INT)
+                 , ("exit", [INT], UNIT)
+                 ]
+    (builtinList, gen') = foldl'
+                          enterBuiltin
+                          ([], gen)
+                          signatures
+    builtinMap = Map.fromList builtinList
   in
-    (sym, FunEntry{ level=outermost
-                  , label=Temp.Label sym
-                  , formals=[STRING]
-                  , result=UNIT }),
-  let
-    sym = Symbol "flush"
-  in
-    (sym, FunEntry{ level=outermost
-                  , label=Temp.Label sym
-                  , formals=[]
-                  , result=UNIT }),
-  let
-    sym = Symbol "getchar"
-  in
-    (sym, FunEntry{ level=outermost
-                  , label=Temp.Label sym
-                  , formals=[]
-                  , result=STRING }),
-  let
-    sym = Symbol "ord"
-  in
-    (sym, FunEntry{ level=outermost
-                  , label=Temp.Label sym
-                  , formals=[STRING]
-                  , result=INT }),
-  let
-    sym = Symbol "chr"
-  in
-    (sym, FunEntry{ level=outermost
-                  , label=Temp.Label sym
-                  , formals=[INT]
-                  , result=STRING }),
-  let
-    sym = Symbol "size"
-  in
-    (sym, FunEntry{ level=outermost
-                  , label=Temp.Label sym
-                  , formals=[STRING]
-                  , result=INT }),
-  let
-    sym = Symbol "substring"
-  in
-    (sym, FunEntry{ level=outermost
-                  , label=Temp.Label sym
-                  , formals=[STRING, INT, INT]
-                  , result=STRING }),
-  let
-    sym = Symbol "concat"
-  in
-    (sym, FunEntry{ level=outermost
-                  , label=Temp.Label sym
-                  , formals=[STRING, STRING]
-                  , result=STRING }),
-  let
-    sym = Symbol "not"
-  in
-    (sym, FunEntry{ level=outermost
-                  , label=Temp.Label sym
-                  , formals=[INT]
-                  , result=INT }),
-  let
-    sym = Symbol "exit"
-  in
-    (sym, FunEntry{ level=outermost
-                  , label=Temp.Label sym
-                  , formals=[INT]
-                  , result=UNIT })
-  ]
+    (builtinMap, gen')
+  where
+    enterBuiltin :: ([(Symbol, EnvEntry)], Temp.Generator)
+                 -> (String, [Types.Ty], Types.Ty)
+                 -> ([(Symbol, EnvEntry)], Temp.Generator)
+    enterBuiltin (acc, gen') (name, formalTys, returnTy) =
+      let
+        sym = Symbol name
+        lab = Temp.Label $ Symbol $ "__tiger_" ++ name
+        escapes = fmap (\_ -> Frame.NoEscape) formalTys
+        (gen'', lev) = Translate.x64NewLevel
+                         (Translate.X64Outermost, lab, escapes)
+                         gen'
+        entry = (sym, FunEntry { level=lev
+                               , label=lab
+                               , formals=formalTys
+                               , result=returnTy })
+      in
+        (acc ++ [entry], gen'')

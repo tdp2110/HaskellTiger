@@ -295,7 +295,8 @@ escapeExpPath arrayExp@(A.ArrayExp _ sizeExp _ _) (ArraySize:path') =
   arrayExp{A.size=escapeExpPath sizeExp path'}
 escapeExpPath arrayExp@(A.ArrayExp _ _ initExp _) (ArrayInit:path') =
   arrayExp{A.init=escapeExpPath initExp path'}
-escapeExpPath _ _ = error "shouldn't get here"
+escapeExpPath expr path' = error $ "shouldn't get here: expr = " ++ (show expr) ++
+                          "\npath = " ++ (show path')
 
 escapeDecPath :: A.Dec -> AstPath -> A.Dec
 escapeDecPath (A.FunctionDec funDecs) [FunDec(funIdx), FunParam(paramIdx)] =

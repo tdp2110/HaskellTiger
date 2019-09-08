@@ -35,11 +35,12 @@ transProg expr =
   let
     gen = Temp.newGen
     (gen', mainLevel) = newLevelFn (outermost, Temp.Label $ Symbol "main", []) gen
+    (baseVEnv, gen'') = Env.baseVEnv gen'
     startState = SemantState{ level=mainLevel
                             , breakTarget=Nothing
                             , counter'=0
-                            , generator=gen'}
-    env = SemantEnv{ venv'=Env.baseVEnv
+                            , generator=gen''}
+    env = SemantEnv{ venv'=baseVEnv
                    , tenv2=Env.baseTEnv }
   in
     evalTransT startState env $ transExp $ escapeExp expr

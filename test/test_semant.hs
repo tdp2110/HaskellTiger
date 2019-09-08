@@ -436,42 +436,54 @@ while3 = TestCase (
       err
   )
 
+builtinFuncs :: Test
+builtinFuncs = TestCase (
+  let
+    text = "let\n" ++
+           "  var x := 42" ++
+           "in print(chr(x)) end"
+    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _)) = parseToSema text
+  in do
+    assertEqual "" Types.UNIT ty
+  )
+
 tests :: Test
-tests = TestList [TestLabel "ints" intLiteral,
-                  TestLabel "int arith 1" intArith1,
-                  TestLabel "int arith 2" intArith2,
-                  TestLabel "int arith 3" intArith3,
-                  TestLabel "str literal" strLiteral,
-                  TestLabel "str plus int" strPlusIntIsErr,
-                  TestLabel "substring1" substringCall1,
-                  TestLabel "nilRecord" nilRecord,
-                  TestLabel "listTy1" listTy1,
-                  TestLabel "similarRecordDecs" similarRecordDecs,
-                  TestLabel "break1" break1,
-                  TestLabel "break2" break2,
-                  TestLabel "forVar1" forVar1,
-                  TestLabel "forVar2" forVar2,
-                  TestLabel "illegalDecls1" illegalDecls1,
-                  TestLabel "illegalDecls2" illegalDecls2,
-                  TestLabel "illegalDecls3" illegalDecls3,
-                  TestLabel "illegalDecls4" illegalDecls4,
-                  TestLabel "illegalDecls5" illegalDecls5,
-                  TestLabel "illegalDecls6" illegalDecls6,
-                  TestLabel "illegalDecls7" illegalDecls7,
-                  TestLabel "illegalDecls8" illegalDecls8,
-                  TestLabel "substring2" substringCall2,
-                  TestLabel "substring3" substringCall2,
-                  TestLabel "letExp1" letExp1,
-                  TestLabel "arrayOfTypeAlias" arrayOfTypeAlias,
-                  TestLabel "intUncallable" intUncallable,
-                  TestLabel "mutuallyRecFuns" mutuallyRecFuns,
-                  TestLabel "ifExp1" ifExp1,
-                  TestLabel "ifExp2" ifExp2,
-                  TestLabel "ifExp3" ifExp3,
-                  TestLabel "ifExp4" ifExp4,
-                  TestLabel "while1" while1,
-                  TestLabel "while2" while2,
-                  TestLabel "while3" while3
+tests = TestList [ TestLabel "ints" intLiteral
+                 , TestLabel "int arith 1" intArith1
+                 , TestLabel "int arith 2" intArith2
+                 , TestLabel "int arith 3" intArith3
+                 , TestLabel "str literal" strLiteral
+                 , TestLabel "str plus int" strPlusIntIsErr
+                 , TestLabel "substring1" substringCall1
+                 , TestLabel "nilRecord" nilRecord
+                 , TestLabel "listTy1" listTy1
+                 , TestLabel "similarRecordDecs" similarRecordDecs
+                 , TestLabel "break1" break1
+                 , TestLabel "break2" break2
+                 , TestLabel "forVar1" forVar1
+                 , TestLabel "forVar2" forVar2
+                 , TestLabel "illegalDecls1" illegalDecls1
+                 , TestLabel "illegalDecls2" illegalDecls2
+                 , TestLabel "illegalDecls3" illegalDecls3
+                 , TestLabel "illegalDecls4" illegalDecls4
+                 , TestLabel "illegalDecls5" illegalDecls5
+                 , TestLabel "illegalDecls6" illegalDecls6
+                 , TestLabel "illegalDecls7" illegalDecls7
+                 , TestLabel "illegalDecls8" illegalDecls8
+                 , TestLabel "substring2" substringCall2
+                 , TestLabel "substring3" substringCall2
+                 , TestLabel "letExp1" letExp1
+                 , TestLabel "arrayOfTypeAlias" arrayOfTypeAlias
+                 , TestLabel "intUncallable" intUncallable
+                 , TestLabel "mutuallyRecFuns" mutuallyRecFuns
+                 , TestLabel "ifExp1" ifExp1
+                 , TestLabel "ifExp2" ifExp2
+                 , TestLabel "ifExp3" ifExp3
+                 , TestLabel "ifExp4" ifExp4
+                 , TestLabel "while1" while1
+                 , TestLabel "while2" while2
+                 , TestLabel "while3" while3
+                 , TestLabel "builtinFuncs" builtinFuncs
                  ]
 
 main :: IO Counts
