@@ -1,0 +1,6 @@
+let
+    var x := 42
+    function f(x: int) = x + 1
+in
+    f(x)
+end

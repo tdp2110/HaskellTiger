@@ -1,0 +1,6 @@
+let
+    var x := 42
+    function f(x: int, y: int) = x + y
+in
+    f(x, x)
+end
