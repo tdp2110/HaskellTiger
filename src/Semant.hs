@@ -439,11 +439,11 @@ transExp (A.IfExp testExpr thenExpr maybeElseExpr pos) = do
             translate (Translate.ifThenElse testExp thenExp elseExp) thenTy
 transExp (A.WhileExp testExp bodyExp pos) = do
   ExpTy{exp=testE, ty=testTy} <- transExp testExp
-  breakTargetLab <- nextLabel
-  st <- get
-  put st{breakTarget=Just breakTargetLab}
+  nextBreakTarget <- nextLabel
+  st@SemantState{breakTarget=originalBreakTarget} <- get
+  put st{breakTarget=Just nextBreakTarget}
   ExpTy{exp=bodyE, ty=bodyTy} <- transExp bodyExp
-  put st{breakTarget=Nothing}
+  put st{breakTarget=originalBreakTarget}
   if testTy /= Types.INT then
     throwT pos $ "in whileExp, the test expression must be integral: " ++
     "found type=" ++ (show testTy)
@@ -451,7 +451,7 @@ transExp (A.WhileExp testExp bodyExp pos) = do
     throwT pos $ "in a whileExp, the body expression must yield no value: " ++
     "found type=" ++ (show bodyTy)
     else
-    translate (Translate.while testE bodyE breakTargetLab) Types.UNIT
+    translate (Translate.while testE bodyE nextBreakTarget) Types.UNIT
 transExp (A.BreakExp pos) = do
   SemantState{breakTarget=breakTargetMaybe} <- get
   case breakTargetMaybe of
