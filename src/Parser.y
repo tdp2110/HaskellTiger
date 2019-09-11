@@ -143,7 +143,7 @@ dec :: { A.Dec }
 
 vardec :: { A.Dec }
   : var id optTypeId ':=' exp { A.VarDec{A.name=(identifier $2),
-                                         A.vardecEscape=True,
+                                         A.vardecEscape=False,
                                          A.varDecTyp=$3,
                                          A.decInit=$5,
                                          A.decPos=(posn $1)} }

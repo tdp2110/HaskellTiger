@@ -3,6 +3,7 @@ module Main where
 import qualified Absyn
 import FindEscape
 import qualified Parser
+import Symbol
 
 import Test.HUnit
 import System.Exit
@@ -30,7 +31,7 @@ test_directions1 = TestCase (
     ast = parse text1
     escapes = findEscapes ast
   in do
-    assertEqual "directions1" escapes [[LetDec 0, FunDec 0, FunParam 1]]
+    assertEqual "directions1" [ (Symbol "y", [LetDec 0, FunDec 0])] escapes
   )
 
 test_escapes1 :: Test
@@ -38,22 +39,80 @@ test_escapes1 = TestCase (
   let
     unescapedAst = parse text1
     escapedAst = escapeExp unescapedAst
-    pathToX = [LetDec 0, FunDec 0, FunParam 0]
-    pathToY = [LetDec 0, FunDec 0, FunParam 1]
-    pathToZ = [LetDec 0, FunDec 0, FunBody, LetDec 0, FunDec 0, FunParam 0]
+    pathToX = (Symbol "x", [LetDec 0, FunDec 0])
+    pathToY = (Symbol "y", [LetDec 0, FunDec 0])
+    pathToZ = (Symbol "z", [LetDec 0, FunDec 0, FunBody, LetDec 0, FunDec 0])
   in do
-    assertEqual "x starts unescaped" False (getEscape unescapedAst pathToX)
-    assertEqual "y starts unescaped" False (getEscape unescapedAst pathToY)
-    assertEqual "z starts unescaped" False (getEscape unescapedAst pathToZ)
-    assertEqual "x remains unescaped" False (getEscape escapedAst pathToX)
-    assertEqual "y becomes escaped" True (getEscape escapedAst pathToY)
+    assertEqual "x starts unescaped" False $ getEscape unescapedAst pathToX
+    assertEqual "y starts unescaped" False $ getEscape unescapedAst pathToY
+    assertEqual "z starts unescaped" False $ getEscape unescapedAst pathToZ
+    assertEqual "x remains unescaped" False $ getEscape escapedAst pathToX
+    assertEqual "y becomes escaped" True $ getEscape escapedAst pathToY
+    assertEqual "z remains unescaped" False $ getEscape unescapedAst pathToZ
+  )
+
+text2 :: String
+text2 = "let\n" ++
+        "  var N := 11\n" ++
+        "  var K := 12\n" ++
+        "  function foo(x:int, y:int) : int = \n" ++
+        "    let\n" ++
+        "      var M := 13\n"++
+        "      var L := 14\n"++
+        "      function bar(z: int) : int = \n" ++
+        "          z + y + N + M\n" ++
+        "    in bar(x) end\n" ++
+        "  in foo(1, 2) \n" ++
+        "end"
+
+test_directions2 :: Test
+test_directions2 = TestCase (
+  let
+    ast = parse text2
+    escapes = findEscapes ast
+  in do
+    assertEqual "directions1" [(Symbol "y", [LetDec 2,FunDec 0]),
+                               (Symbol "N",[]),
+                               (Symbol "M",[LetDec 2,FunDec 0,FunBody])]
+      escapes
+  )
+
+test_escapes2 :: Test
+test_escapes2 = TestCase (
+  let
+    unescapedAst = parse text2
+    escapedAst = escapeExp unescapedAst
+    pathToN = (Symbol "N", [])
+    pathToK = (Symbol "K", [])
+    pathToX = (Symbol "x", [LetDec 2,FunDec 0])
+    pathToY = (Symbol "y", [LetDec 2,FunDec 0])
+    pathToM = (Symbol "M", [LetDec 2,FunDec 0,FunBody,LetDec 0])
+    pathToL = (Symbol "L", [LetDec 2,FunDec 0,FunBody,LetDec 1])
+    pathToZ = (Symbol "z", [LetDec 2,FunDec 0,FunBody,LetDec 2,FunDec 0])
+  in do
+    assertEqual "N starts unescaped" False $ getEscape unescapedAst pathToN
+    assertEqual "K starts unescaped" False $ getEscape unescapedAst pathToK
+    assertEqual "x starts unescaped" False $ getEscape unescapedAst pathToX
+    assertEqual "y starts unescaped" False $ getEscape unescapedAst pathToY
+    assertEqual "M starts unescaped" False $ getEscape unescapedAst pathToM
+    assertEqual "L starts unescaped" False $ getEscape unescapedAst pathToL
+    assertEqual "Z starts unescaped" False $ getEscape unescapedAst pathToZ
+
+    assertEqual "N becomes escaped" True $ getEscape escapedAst pathToN
+    assertEqual "K remains unescaped" False $ getEscape escapedAst pathToK
+    assertEqual "x remains unescaped" False $ getEscape unescapedAst pathToX
+    assertEqual "y becomes escaped" True $ getEscape escapedAst pathToY
+    assertEqual "M becomes escaped" True $ getEscape escapedAst pathToM
+    assertEqual "L remains unescaped" False $ getEscape escapedAst pathToL
+    assertEqual "Z remains unescaped" False $ getEscape escapedAst pathToZ
   )
 
 tests :: Test
-tests = TestList [
-  TestLabel "test_directions1" test_directions1,
-  TestLabel "test_escapes1" test_escapes1
-  ]
+tests = TestList [ TestLabel "test_directions1" test_directions1
+                 , TestLabel "test_escapes1" test_escapes1
+                 , TestLabel "test_directions2" test_directions2
+                 , TestLabel "test_escapes2" test_escapes2
+                 ]
 
 main :: IO Counts
 main = do
