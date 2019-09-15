@@ -1,0 +1,8 @@
+let
+    var x:= 42
+in
+    if x = 44 then
+        45 < 46
+    else
+        47 > 48
+end

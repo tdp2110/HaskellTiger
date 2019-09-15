@@ -1,0 +1,13 @@
+let
+    var x := 42
+    var b := if x = 43
+            then
+                44 < 45
+            else
+                46 > 47
+in
+    if b then
+        print("hello")
+    else
+        print("goodbye")
+end

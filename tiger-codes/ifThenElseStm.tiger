@@ -1,0 +1,9 @@
+let
+    var x := 42
+in
+    if x = 1337
+    then
+        print("cat")
+    else
+        print("dog")
+end

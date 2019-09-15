@@ -1,0 +1,9 @@
+let
+    var x := 42
+in
+    if x = 43
+    then
+        44
+    else
+        45
+end

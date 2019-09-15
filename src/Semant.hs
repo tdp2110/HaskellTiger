@@ -436,7 +436,10 @@ transExp (A.IfExp testExpr thenExpr maybeElseExpr pos) = do
             " and " ++ (show elseTy) ++
             ", respectfully"
             else
-            translate (Translate.ifThenElse testExp thenExp elseExp) thenTy
+            if thenTy == Types.UNIT then
+              translate (Translate.ifThenElseStm testExp thenExp elseExp) thenTy
+            else
+              translate (Translate.ifThenElse testExp thenExp elseExp) thenTy
 transExp (A.WhileExp testExp bodyExp pos) = do
   ExpTy{exp=testE, ty=testTy} <- transExp testExp
   nextBreakTarget <- nextLabel
