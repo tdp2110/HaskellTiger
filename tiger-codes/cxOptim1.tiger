@@ -1,0 +1,10 @@
+let
+    var x := 1337
+    var a := 42
+    var b := 1984
+in
+    if x < 5 then
+        a > b
+    else
+        0
+end

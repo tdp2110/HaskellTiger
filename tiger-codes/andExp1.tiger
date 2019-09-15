@@ -1,0 +1,9 @@
+let
+    var x := 1
+    var y := 0
+in
+    if x > 0 & y < 10 then
+        42
+    else
+        1337
+end

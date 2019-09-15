@@ -88,7 +88,9 @@ x64AllocLocal lev gen escapeOrNot =
 data Exp =
     Ex Tree.Exp
   | Nx Tree.Stm
-  | Cx (Temp.Label -> Temp.Label -> Tree.Stm)
+  | Cx CxFun
+
+type CxFun = Temp.Label -> Temp.Label -> Tree.Stm
 
 instance Show Exp where
   show (Ex exp) = "Exp.Ex " ++ show exp
@@ -336,11 +338,32 @@ ifThenElseStm testExpE thenExp elseExp gen =
   in
     (resExp, gen5)
 
+ifThenElseCx :: CxFun -> CxFun -> CxFun -> Temp.Generator -> (Exp, Temp.Generator)
+ifThenElseCx testGen thenGen elseGen gen =
+  let
+    (z, gen') = Temp.newlabel gen
+    (w, gen'') = Temp.newlabel gen'
+    resExp = Cx $ \t f -> makeSeq [ testGen z f
+                                  , Tree.LABEL z
+                                  , thenGen w f
+                                  , Tree.LABEL w
+                                  , elseGen t f ]
+  in
+    (resExp, gen'')
 
-{-
-TODO page 162 notes that this should be optimized
--}
 ifThenElse :: Exp -> Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
+ifThenElse testExpE (Cx thenGen) elseE gen =
+  let
+    testGen = unCx testExpE
+    elseGen = unCx elseE
+  in
+    ifThenElseCx testGen thenGen elseGen gen
+ifThenElse testExpE thenE (Cx elseGen) gen =
+  let
+    testGen = unCx testExpE
+    thenGen = unCx thenE
+  in
+    ifThenElseCx testGen thenGen elseGen gen
 ifThenElse testExpE thenExpE elseExpE gen =
   let
     testGen = unCx testExpE
