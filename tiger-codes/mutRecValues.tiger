@@ -1,0 +1,6 @@
+let
+    var x := y + 1
+    var y := x - 1
+in
+    x
+end
