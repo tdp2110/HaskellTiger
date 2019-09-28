@@ -264,13 +264,7 @@ transVar (A.SubscriptVar var expr pos) = do
                       (show nonArrayTy)
 
 transExp (A.VarExp var) = do
-  st <- get
-  env <- askEnv
-  case runTransT st env $ transVar var of
-    Left err -> throwErr err
-    Right ((res, newState), _) -> do
-      put newState
-      return res
+  transVar var
 transExp A.NilExp = do
   return ExpTy{exp=Translate.nilexp, ty=Types.NIL}
 transExp (A.IntExp i) = do
