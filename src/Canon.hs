@@ -123,3 +123,39 @@ From an arbitrary Tree statement, produce a list of cleaned satisfying the follo
 linearize :: T.Stm -> Temp.Generator -> ([T.Stm], Temp.Generator)
 linearize s gen =
   runState (linearizeM s) gen
+
+type Block = [T.Stm]
+
+basicBlocks :: [T.Stm] -> State Temp.Generator ([Block], Temp.Label)
+basicBlocks stms = do
+  done <- newLabel
+  let
+    blocks :: [T.Stm] -> [Block] -> State Temp.Generator [Block]
+    blocks (labStm@(T.LABEL _) : stms') blist =
+      let
+        next :: [T.Stm] -> Block -> State Temp.Generator [Block]
+        next (s@(T.JUMP _) : rest) thisBlock =
+          endBlock rest (s : thisBlock)
+        next (s@(T.CJUMP _) : rest) thisBlock =
+          endBlock rest (s : thisBlock)
+        next stms''@(T.LABEL lab : _) thisBlock =
+          next ((T.JUMP (T.NAME lab, [lab])) : stms'') thisBlock
+        next (s : rest) thisBlock =
+          next rest (s : thisBlock)
+        next [] thisBlock =
+          next [T.JUMP (T.NAME done, [done])] thisBlock
+
+        endBlock :: [T.Stm] -> Block -> State Temp.Generator [Block]
+        endBlock stms'' thisBlock =
+          blocks stms'' $ reverse thisBlock : blist
+      in
+        next stms' [labStm]
+    blocks [] blist = do
+      pure $ reverse blist
+    blocks stms' blist = do
+      t <- newLabel
+      blocks ((T.LABEL t) : stms') blist
+    in
+    do
+      res <- blocks stms []
+      pure (res, done)
