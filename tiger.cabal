@@ -36,15 +36,15 @@ test-suite test_semant
   default-language:    Haskell2010
   hs-source-dirs:      src, test
 
-executable test_canon
+test-suite test_canon
   type:                exitcode-stdio-1.0
   main-is:             test_canon.hs
-  build-depends:       base ^>=4.12.0.0, HUnit >= 1.6.0.0,
+  build-depends:       base ^>=4.12.0.0,
                        containers >= 0.6.0.1, array >= 0.5.3.0,
-                       transformers >= 0.5.6.0, dlist >= 0.8.0.0
+                       transformers >= 0.5.6.0, dlist >= 0.8.0.0, QuickCheck
   other-modules:       Semant, Types, Symbol, Env, Absyn, Translate, Parser, Lexer,
                        FindEscape, X64Frame, Frame, Temp, Tree, Canon
-  ghc-options:         -Wall -fwarn-incomplete-patterns
+  ghc-options:         -Wall -fwarn-incomplete-patterns -fno-warn-orphans
   default-language:    Haskell2010
   hs-source-dirs:      src, test
 

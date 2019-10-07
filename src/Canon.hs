@@ -112,7 +112,7 @@ linear (T.SEQ (a,b)) l = do
   stms <- linear b l
   linear a stms
 linear s l = do
-  pure (s:l)
+  pure $ s:l
 
 linearizeM :: T.Stm -> State Temp.Generator [T.Stm]
 linearizeM s = do
