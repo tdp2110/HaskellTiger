@@ -3,6 +3,10 @@ module Canon where
 import qualified Temp
 import qualified Tree as T
 
+import Data.Foldable (foldr')
+import Data.Map (Map)
+import qualified Data.Map as Map
+
 import Control.Monad.Trans.State (State, get, put, runState)
 
 (%) :: T.Stm -> T.Stm -> T.Stm
@@ -159,3 +163,77 @@ basicBlocks stms = do
     do
       res <- blocks stms []
       pure (res, done)
+
+impossible :: a
+impossible = error "shouldn't get here"
+
+type Table = Map Temp.Label Block
+
+enterBlock :: Block -> Table -> Table
+enterBlock b@(T.LABEL(s) : _) table =
+    Map.insert s b table
+enterBlock _ table = table
+
+splitLast :: [a] -> ([a], a)
+splitLast [x] = ([], x)
+splitLast (h : t) =
+  let
+    (t', l) = splitLast t
+  in
+    (h : t', l)
+splitLast _ = impossible
+
+trace :: Map Temp.Label [T.Stm]
+                      -> [T.Stm]
+                      -> [[T.Stm]]
+                      -> State Temp.Generator Block
+trace table' (b@(T.LABEL lab : _)) rest =
+  let
+    table = Map.insert lab [] table'
+  in
+    case splitLast b of
+      (most, T.JUMP (T.NAME lab', _)) ->
+        case Map.lookup lab' table of
+          Just (b'@(_:_)) -> do
+            tl <- trace table b' rest
+            pure $ most ++ tl
+          _ -> do
+            next <- getNext table rest
+            pure $ b ++ next
+      (most, T.CJUMP (op,x,y,t,f)) ->
+        case (Map.lookup t table, Map.lookup f table) of
+          (_, Just (b'@(_:_))) -> do
+            tl <- trace table b' rest
+            pure $ b ++ tl
+          (Just (b'@(_:_)), _) -> do
+            tl <- trace table b' rest
+            pure $ most ++ [T.CJUMP (T.notRel op,x,y,f,t)]
+                 ++ tl
+          _ -> do
+            f' <- newLabel
+            next <- getNext table rest
+            pure $ most ++ [ T.CJUMP (op,x,y,t,f')
+                           , T.LABEL f'
+                           , T.JUMP (T.NAME f,[f]) ] ++
+               next
+      (_, T.JUMP _) -> do
+        next <- getNext table rest
+        pure $ b ++ next
+      _ -> impossible
+trace _ _ _ = impossible
+
+getNext :: Map Temp.Label [T.Stm]
+                 -> [[T.Stm]]
+                 -> State Temp.Generator Block
+getNext table (b@((T.LABEL lab):_) : rest) =
+  case Map.lookup lab table of
+    Just (_:_) -> trace table b rest
+    _ -> getNext table rest
+getNext _ [] = do
+  pure []
+getNext _ _ = impossible
+
+traceSchedule :: [Block] -> Temp.Label -> State Temp.Generator Block
+traceSchedule blocks done = do
+  allExceptDone <- getNext (foldr' enterBlock Map.empty blocks) blocks
+  pure$ allExceptDone ++ [T.LABEL done]
