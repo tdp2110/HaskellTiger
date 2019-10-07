@@ -32,10 +32,11 @@ instance Arbitrary T.Exp where
       4 -> do
         e <- arbitrary
         pure $ T.MEM e
-      {-5 -> do
+      5 -> do
         funcExp <- arbitrary
-        args <- listOf ...
-        pure $ T.CALL funcExp args-}
+        argSize <- choose (0, 2) :: Gen Int
+        args <- vectorOf argSize arbitrary
+        pure $ T.CALL (funcExp, args)
       _ -> do
         s <- arbitrary
         e <- arbitrary
@@ -52,10 +53,10 @@ instance Arbitrary T.Stm where
       1 -> do
         e <- arbitrary
         pure $ T.EXP e
-      {-2 -> do
+      2 -> do
         e <- arbitrary
-        labs <- listOf $ Gen Temp.Label
-        pure $ T.JUMP (e, labs)-}
+        labs <- listOf arbitrary
+        pure $ T.JUMP (e, labs)
       3 -> do
         op <- arbitrary
         e1 <- arbitrary
@@ -105,12 +106,22 @@ prop_canonHasNoSeq stm =
   let
     (stms, _) = C.linearize stm gen
   in
-    all hasNoSeq stms
+    all stmHasNoSeq stms
   where
-    hasNoSeq :: T.Stm -> Bool
-    hasNoSeq (T.SEQ _) = False
-    hasNoSeq _ = True
+    stmHasNoSeq :: T.Stm -> Bool
+    stmHasNoSeq (T.MOVE (e1, e2)) = expHasNoSeq e1 && expHasNoSeq e2
+    stmHasNoSeq (T.EXP e) = expHasNoSeq e
+    stmHasNoSeq (T.JUMP (e, _)) = expHasNoSeq e
+    stmHasNoSeq (T.CJUMP (_, e1, e2, _, _)) = expHasNoSeq e1 && expHasNoSeq e2
+    stmHasNoSeq (T.SEQ _) = False
+    stmHasNoSeq _ = True
 
+    expHasNoSeq :: T.Exp -> Bool
+    expHasNoSeq (T.BINOP (_, e1, e2)) = expHasNoSeq e1 && expHasNoSeq e2
+    expHasNoSeq (T.MEM e) = expHasNoSeq e
+    expHasNoSeq (T.CALL (e, es)) = expHasNoSeq e && (all expHasNoSeq es)
+    expHasNoSeq (T.ESEQ (s, e)) = stmHasNoSeq s && expHasNoSeq e
+    expHasNoSeq _ = True
 
 main :: IO ()
 main = quickCheck prop_canonHasNoSeq
