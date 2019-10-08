@@ -12,8 +12,28 @@ instance Arbitrary Temp.Label where
     pure $ Temp.Label $ Symbol $ "L" ++ show n
 
 instance Arbitrary T.Exp where
-  arbitrary = do
-    n <- choose (0, 6) :: Gen Int
+  arbitrary = sized arbExp
+
+arbExp :: Int -> Gen T.Exp
+arbExp 0 = do
+  n <- choose (0, 4) :: Gen Int
+  case n of
+    0 -> do
+      i <- arbitrary
+      pure $ T.CONST i
+    1 -> do
+      lab <- arbitrary
+      pure $ T.NAME lab
+    _ -> do
+      i <- arbitrary
+      pure $ T.TEMP i
+arbExp sz =
+  let
+    sz' = sz `div` 2
+    expGen = arbExp sz'
+    stmGen = arbStm sz'
+  in do
+    n <- choose (0, 7) :: Gen Int
     case n of
       0 -> do
         i <- choose (0, 500)
@@ -26,47 +46,59 @@ instance Arbitrary T.Exp where
         pure $ T.TEMP i
       3 -> do
         op <- arbitrary
-        e1 <- arbitrary
-        e2 <- arbitrary
+        e1 <- expGen
+        e2 <- expGen
         pure $ T.BINOP (op, e1, e2)
       4 -> do
-        e <- arbitrary
+        e <- expGen
         pure $ T.MEM e
       5 -> do
-        funcExp <- arbitrary
+        funcExp <- expGen
         argSize <- choose (0, 2) :: Gen Int
-        args <- vectorOf argSize arbitrary
+        args <- vectorOf argSize expGen
         pure $ T.CALL (funcExp, args)
       _ -> do
-        s <- arbitrary
-        e <- arbitrary
+        s <- stmGen
+        e <- expGen
         pure $ T.ESEQ (s, e)
 
 instance Arbitrary T.Stm where
-  arbitrary = do
+  arbitrary = sized arbStm
+
+arbStm :: Int -> Gen T.Stm
+arbStm 0 = do
+  lab <- arbitrary
+  pure $ T.LABEL lab
+arbStm sz =
+  let
+    sz' = sz `div` 2
+    expGen = arbExp sz'
+    stmGen = arbStm sz'
+  in do
     n <- choose (0, 6) :: Gen Int
     case n of
       0 -> do
-        e1 <- arbitrary
-        e2 <- arbitrary
+        e1 <- expGen
+        e2 <- expGen
         pure $ T.MOVE (e1, e2)
       1 -> do
-        e <- arbitrary
+        e <- expGen
         pure $ T.EXP e
       2 -> do
-        e <- arbitrary
-        labs <- listOf arbitrary
+        e <- expGen
+        labsSize <- choose (0, 10) :: Gen Int
+        labs <- vectorOf labsSize arbitrary
         pure $ T.JUMP (e, labs)
       3 -> do
         op <- arbitrary
-        e1 <- arbitrary
-        e2 <- arbitrary
+        e1 <- expGen
+        e2 <- expGen
         t <- arbitrary
         f <- arbitrary
         pure $ T.CJUMP (op, e1, e2, t, f)
       4 -> do
-        s1 <- arbitrary
-        s2 <- arbitrary
+        s1 <- stmGen
+        s2 <- stmGen
         pure $ T.SEQ (s1, s2)
       _ -> do
         lab <- arbitrary
@@ -158,4 +190,4 @@ prop_parentOfCallIsOk stm =
 main :: IO ()
 main = do
   quickCheck prop_canonHasNoSeq
-  quickCheck prop_parentOfCallIsOk
+  --quickCheck prop_parentOfCallIsOk
