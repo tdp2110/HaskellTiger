@@ -123,5 +123,39 @@ prop_canonHasNoSeq stm =
     expHasNoSeq (T.ESEQ (s, e)) = stmHasNoSeq s && expHasNoSeq e
     expHasNoSeq _ = True
 
+prop_parentOfCallIsOk :: T.Stm -> Bool
+prop_parentOfCallIsOk stm =
+  let
+    (stms, _) = C.linearize stm gen
+  in
+    all callParentOkStm stms
+  where
+    callParentOkExp :: T.Exp -> Bool
+    callParentOkExp (T.BINOP (_, T.CALL _, _)) = False
+    callParentOkExp (T.BINOP (_, _, T.CALL _)) = False
+    callParentOkExp (T.MEM (T.CALL _)) = False
+    callParentOkExp c@(T.CALL _) = callOk c
+    callParentOkExp (T.ESEQ (s, e)) =
+      callParentOkStm s && callParentOkExp e
+    callParentOkExp _ = True
+
+    callParentOkStm :: T.Stm -> Bool
+    callParentOkStm (T.MOVE (T.TEMP _, c@(T.CALL _))) = callOk c
+    callParentOkStm (T.MOVE (_, T.CALL _)) = False
+    callParentOkStm (T.MOVE (T.CALL _, _)) = False
+    callParentOkStm (T.EXP c@(T.CALL _)) = callOk c
+    callParentOkStm (T.JUMP (T.CALL _, _)) = False
+    callParentOkStm (T.CJUMP (_, (T.CALL _), _, _, _)) = False
+    callParentOkStm (T.CJUMP (_, _, (T.CALL _), _, _)) = False
+    callParentOkStm (T.SEQ (s1, s2)) = callParentOkStm s1 && callParentOkStm s2
+    callParentOkStm _ = True
+
+    callOk :: T.Exp -> Bool
+    callOk (T.CALL (f, args)) =
+      callParentOkExp f && all callParentOkExp args
+    callOk _ = error "shouldn't get here"
+
 main :: IO ()
-main = quickCheck prop_canonHasNoSeq
+main = do
+  quickCheck prop_canonHasNoSeq
+  quickCheck prop_parentOfCallIsOk
