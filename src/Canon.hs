@@ -15,10 +15,15 @@ import Control.Monad.Trans.State (State, get, put, runState)
 (%) x y = T.SEQ (x, y)
 
 commute :: T.Stm -> T.Exp -> Bool
-commute (T.EXP (T.CONST _)) _ = True
+commute (T.EXP e) _ = isConst e
 commute _ (T.NAME _) = True
 commute _ (T.CONST _) = True
 commute _ _ = False
+
+isConst :: T.Exp -> Bool
+isConst (T.CONST _) = True
+isConst (T.BINOP (_, e1, e2)) = isConst e1 && isConst e2
+isConst _ = False
 
 nop :: T.Stm
 nop = T.EXP $ T.CONST 0
@@ -44,9 +49,9 @@ newLabel = do
       pure lab
 
 reorder :: [T.Exp] -> State Temp.Generator (T.Stm, [T.Exp])
-reorder (e@(T.CALL _):rest) = do
-    t <- newTemp
-    reorder $ (T.ESEQ (T.MOVE (T.TEMP t, e), T.TEMP t)) : rest
+reorder (c@(T.CALL _):rest) = do
+  t <- newTemp
+  reorder $ (T.ESEQ (T.MOVE (T.TEMP t, c), T.TEMP t)) : rest
 reorder (a:rest) = do
   (stms,e) <- doExp a
   (stms',el) <- reorder rest

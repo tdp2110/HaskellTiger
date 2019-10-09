@@ -190,4 +190,4 @@ prop_parentOfCallIsOk stm =
 main :: IO ()
 main = do
   quickCheck prop_canonHasNoSeq
-  --quickCheck prop_parentOfCallIsOk
+  quickCheck prop_parentOfCallIsOk
