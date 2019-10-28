@@ -13,3 +13,4 @@ data Inst = OPER { assem :: String
           | MOVE { assem :: String
                  , moveDst :: Int
                  , moveSrc :: Int }
+  deriving (Eq, Show)
