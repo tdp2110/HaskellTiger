@@ -34,14 +34,16 @@ transProg :: A.Exp -> Either SemantError (ExpTy, FragList)
 transProg expr =
   let
     gen = Temp.newGen
-    (gen', mainLevel) = newLevelFn (outermost, Temp.Label $ Symbol "main", []) gen
-    (baseVEnv, gen'') = Env.baseVEnv gen'
+    (x64', gen') = X64Frame.initX64 gen
+    (gen'', mainLevel) = newLevelFn x64' (outermost, Temp.Label $ Symbol "main", []) gen'
+    (baseVEnv, gen''') = Env.baseVEnv x64' gen''
     startState = SemantState{ level=mainLevel
                             , breakTarget=Nothing
                             , counter'=0
-                            , generator=gen''}
-    env = SemantEnv{ venv'=baseVEnv
-                   , tenv2=Env.baseTEnv }
+                            , generator=gen'''}
+    env = SemantEnv { venv'=baseVEnv
+                    , tenv2=Env.baseTEnv
+                    , x64=x64' }
   in
     evalTransT startState env $ transExp $ escapeExp expr
 
@@ -61,9 +63,9 @@ formalAccesses :: Level -> [Access]
 formalAccesses = Translate.x64TranslateFormals
 outermost :: Level
 outermost = Translate.X64Outermost
-newLevelFn :: (Level, Temp.Label, [Frame.EscapesOrNot]) -> Temp.Generator
+newLevelFn :: X64Frame.X64 -> (Level, Temp.Label, [Frame.EscapesOrNot]) -> Temp.Generator
   -> (Temp.Generator, Level)
-newLevelFn = Translate.x64NewLevel
+newLevelFn x64' = Translate.x64NewLevel x64'
 allocLocalFn :: Level -> Temp.Generator -> Frame.EscapesOrNot
   -> (Temp.Generator, Level, Access)
 allocLocalFn = Translate.x64AllocLocal
@@ -72,7 +74,9 @@ toEscape :: Bool -> Frame.EscapesOrNot
 toEscape True = Frame.Escapes
 toEscape _ = Frame.NoEscape
 
-data SemantEnv = SemantEnv {venv'::Env.VEnv, tenv2 :: Env.TEnv}
+data SemantEnv = SemantEnv { venv'::Env.VEnv
+                           , tenv2 :: Env.TEnv
+                           , x64 :: X64Frame.X64 }
 data SemantState = SemantState { level :: Level
                                , breakTarget :: Maybe Temp.Label
                                , counter' :: Integer
@@ -154,9 +158,10 @@ nextLabel = do
 newLevel :: [Frame.EscapesOrNot] -> Translator Level
 newLevel escapes = do
   st@(SemantState parentLev _ _ gen) <- get
+  env <- askEnv
   let
     (nextLab, gen') = Temp.newlabel gen
-    (gen'', lev') = newLevelFn (parentLev, nextLab, escapes) gen'
+    (gen'', lev') = newLevelFn (x64 env) (parentLev, nextLab, escapes) gen'
     in do
     put st{generator=gen''}
     return lev'

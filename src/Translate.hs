@@ -15,17 +15,17 @@ import Data.List
 import Prelude hiding (exp)
 
 
-class Translate f where
-  type Level f :: *
-  type Access f :: *
-  outermost :: f -> Level f
-  newLevel :: f -> (Level f, Temp.Label, [Frame.EscapesOrNot]) -> Temp.Generator
-    -> (Temp.Generator, Level f)
-  formals :: f -> Level f -> [Access f]
-  allocLocal :: f -> Level f -> Temp.Generator -> Frame.EscapesOrNot
-    -> (Temp.Generator, Level f, Access f)
+class Translate t where
+  type Level t :: *
+  type Access t :: *
+  outermost :: t -> Level t
+  newLevel :: t -> (Level t, Temp.Label, [Frame.EscapesOrNot]) -> Temp.Generator
+    -> (Temp.Generator, Level t)
+  formals :: t -> Level t -> [Access t]
+  allocLocal :: t -> Level t -> Temp.Generator -> Frame.EscapesOrNot
+    -> (Temp.Generator, Level t, Access t)
 
-data X64Translate = X64Translate
+data X64Translate = X64Translate { x64 :: X64Frame.X64 }
   deriving (Show)
 data X64Level = X64Level { x64Parent :: X64Level
                          , x64Name :: Temp.Label
@@ -47,21 +47,21 @@ instance Translate X64Translate where
   type (Level X64Translate) = X64Level
   type (Access X64Translate) = X64Access
   outermost _ = X64Outermost
-  newLevel _ = x64NewLevel
+  newLevel translate = x64NewLevel $ x64 translate
   formals _ lev = x64TranslateFormals lev
   allocLocal _ = x64AllocLocal
 
-x64NewLevel :: (X64Level, Temp.Label, [Frame.EscapesOrNot]) -> Temp.Generator
+x64NewLevel :: X64Frame.X64 -> (X64Level, Temp.Label, [Frame.EscapesOrNot]) -> Temp.Generator
   -> (Temp.Generator, X64Level)
 x64TranslateFormals :: X64Level -> [X64Access]
 x64AllocLocal :: X64Level -> Temp.Generator -> Frame.EscapesOrNot ->
   (Temp.Generator, X64Level, X64Access)
 
-x64NewLevel (parent, label, escapes) gen =
+x64NewLevel x64Inst (parent, label, escapes) gen =
   let
     escapes' = [Frame.Escapes] ++ escapes -- initial escape for static link
     (frameLabel, gen') = Temp.newlabel gen
-    (gen'', frame') = X64Frame.newFrame frameLabel gen' escapes'
+    (gen'', frame') = X64Frame.newFrame x64Inst frameLabel gen' escapes'
     (identity, gen''') = Temp.newtemp gen''
   in
     (gen''', X64Level{ x64Parent=parent
@@ -537,7 +537,7 @@ functionDec :: X64Level -> Exp -> Temp.Generator -> (Frag, Temp.Generator)
 functionDec lev@X64Level{x64Frame=frame} bodyExp gen =
   let
     (bodyExpr, gen') = unEx bodyExp gen
-    bodyStm = Nx $ Tree.MOVE ( Tree.TEMP $ X64Frame.rv frame
+    bodyStm = Nx $ Tree.MOVE ( Tree.TEMP $ Frame.rv frame
                              , X64Frame.procEntryExit1 frame bodyExpr )
   in
     procEntryExit lev bodyStm gen'

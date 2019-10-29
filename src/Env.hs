@@ -1,6 +1,7 @@
 module Env where
 
 import qualified Frame
+import qualified X64Frame
 import Symbol
 import qualified Temp
 import qualified Translate
@@ -29,8 +30,8 @@ baseTEnv = Map.fromList [(Symbol "string", STRING),
 outermost :: Translate.X64Level
 outermost = Translate.X64Outermost
 
-baseVEnv :: Temp.Generator -> (VEnv, Temp.Generator)
-baseVEnv gen =
+baseVEnv :: X64Frame.X64 -> Temp.Generator -> (VEnv, Temp.Generator)
+baseVEnv x64 gen =
   let
     signatures = [ ("print", [STRING], UNIT)
                  , ("flush", [], UNIT)
@@ -60,6 +61,7 @@ baseVEnv gen =
         lab = Temp.Label $ Symbol $ "__tiger_" ++ name
         escapes = fmap (\_ -> Frame.NoEscape) formalTys
         (gen'', lev) = Translate.x64NewLevel
+                         x64
                          (Translate.X64Outermost, lab, escapes)
                          gen'
         entry = (sym, FunEntry { level=lev
