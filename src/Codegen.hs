@@ -108,7 +108,7 @@ munchStm (Tree.CJUMP (op, e1, e2, t, f)) = do
 munchExp :: Tree.Exp -> CodeGenerator Int
 munchExp (Tree.CONST c) =
   result (\r -> let
-                  inst = A.OPER { A.assem = "MOV `d0, " ++ (show c) ++ "\n"
+                  inst = A.OPER { A.assem="MOV `d0, " ++ (show c) ++ "\n"
                                 , A.operDst = [r]
                                 , A.operSrc = []
                                 , A.jump = [] }
@@ -126,7 +126,7 @@ munchExp (Tree.BINOP (op, e1, e2)) =
     result (\r -> do
                     src1 <- munchExp e1
                     src2 <- munchExp e2
-                    pure [ A.MOVE { A.assem = "MOV `d0, `s0\n"
+                    pure [ A.MOVE { A.assem="MOV `d0, `s0\n"
                                   , A.moveDst=1337 -- FIXME!!!!! should be dividend register!
                                   , A.moveSrc=src1 }
                          , A.OPER { A.assem="IDIV `s0\n"
@@ -138,4 +138,26 @@ munchExp (Tree.BINOP (op, e1, e2)) =
                                   , A.moveSrc=1337 -- FIXME!!!!! should be divident register!
                                   } ])
   else
-    error "omg"
+    result (\r -> do
+                    src1 <- munchExp e1
+                    src2 <- munchExp e2
+                    pure [ A.MOVE { A.assem="MOV `d0, `s0\n"
+                                  , A.moveDst=r
+                                  , A.moveSrc=src1 }
+                         , A.OPER { A.assem=(convertOp op) ++ " `d0, `s0\n"
+                                  , A.operDst=[r]
+                                  , A.operSrc=[src2]
+                                  , A.jump=[] } ])
+  where
+    convertOp :: Tree.Binop -> String
+    convertOp oper = case oper of
+                       Tree.PLUS -> "ADD"
+                       Tree.MINUS -> "SUB"
+                       Tree.MUL -> "IMUL"
+                       Tree.DIV -> "IDIV"
+                       Tree.AND -> "AND"
+                       Tree.OR -> "OR"
+                       Tree.LSHIFT -> "SHL"
+                       Tree.RSHIFT -> "SHR"
+                       Tree.XOR -> "XOR"
+                       _ -> error $ "unsupported operator: " ++ (show oper)
