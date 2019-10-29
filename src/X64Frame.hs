@@ -42,6 +42,7 @@ data X64Frame = X64Frame { name :: Temp.Label
                          , r14 :: Int
                          , r15 :: Int
                          , dividendRegister :: Int
+                         , dividendDests :: [Int]
                          , calleeSaves :: [Int]
                          , callerSaves :: [Int] }
   deriving (Show)
@@ -123,6 +124,7 @@ freshFrame frameName gen =
               , r14=r14Id
               , r15=r15Id
               , dividendRegister=raxId
+              , dividendDests=[raxId, rdxId]
               , calleeSaves=[rbxId, rdiId, rsiId]
               , callerSaves=[rbxId, rbpId, r12Id, r13Id, r14Id, r15Id] }
     , gen16 )

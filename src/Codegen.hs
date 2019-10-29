@@ -1,12 +1,12 @@
 module Codegen where
 
---import qualified Frame as Frame
+import qualified X64Frame
 import qualified Symbol as S
 import qualified Temp
 import qualified Tree as Tree
 import qualified Assem as A
 
-
+import Control.Monad (forM_)
 import Control.Monad.Trans.Writer (WriterT, tell)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State (StateT, get, put)
@@ -31,11 +31,13 @@ emit :: A.Inst -> CodeGenerator ()
 emit inst = do
   lift . tell $ singleton inst
 
-result :: (Int -> CodeGenerator A.Inst) -> CodeGenerator Int
+result :: (Int -> CodeGenerator [A.Inst]) -> CodeGenerator Int
 result codegen = do
   t <- newTemp
-  inst <- codegen t
-  emit inst
+  insts <- codegen t
+  forM_
+    insts
+    (\inst -> emit inst)
   pure t
 
 noop :: CodeGenerator ()
@@ -112,10 +114,28 @@ munchExp (Tree.CONST c) =
                                 , A.jump = [] }
                 in
                   do
-                    pure inst
+                    pure [inst]
         )
 munchExp (Tree.TEMP t) = do
   pure t
 munchExp (Tree.ESEQ (s, e)) = do
   _ <- munchStm s
   munchExp e
+munchExp (Tree.BINOP (op, e1, e2)) =
+  if op == Tree.DIV then
+    result (\r -> do
+                    src1 <- munchExp e1
+                    src2 <- munchExp e2
+                    pure [ A.MOVE { A.assem = "MOV `d0, `s0\n"
+                                  , A.moveDst=1337 -- FIXME!!!!! should be dividend register!
+                                  , A.moveSrc=src1 }
+                         , A.OPER { A.assem="IDIV `s0\n"
+                                  , A.operDst=[1337] -- FIXME!!!! should be dividend dests!
+                                  , A.operSrc=[src2]
+                                  , A.jump=[] }
+                         , A.MOVE { A.assem="MOV `d0, `s0\n"
+                                  , A.moveDst=r
+                                  , A.moveSrc=1337 -- FIXME!!!!! should be divident register!
+                                  } ])
+  else
+    error "omg"
