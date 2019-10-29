@@ -37,7 +37,7 @@ data X64 = X64 { rax :: Int
                , r14 :: Int
                , r15 :: Int
                , dividendRegister :: Int
-               , dividendDests :: [Int]
+               , divideDests :: [Int]
                , calleeSaves :: [Int]
                , callerSaves :: [Int] }
   deriving (Show)
@@ -120,7 +120,7 @@ initX64 gen =
           , r14=r14Id
           , r15=r15Id
           , dividendRegister=raxId
-          , dividendDests=[raxId, rdxId]
+          , divideDests=[raxId, rdxId]
           , calleeSaves=[rbxId, rdiId, rsiId]
           , callerSaves=[rbxId, rbpId, r12Id, r13Id, r14Id, r15Id] }
     , gen16 )

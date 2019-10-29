@@ -10,11 +10,14 @@ import Control.Monad (forM_)
 import Control.Monad.Trans.Writer (WriterT, tell)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State (StateT, get, put)
+import Control.Monad.Trans.Reader (ReaderT, ask, asks, runReaderT)
 import Data.DList (DList, singleton)
 import Data.Functor.Identity
 
 
-type CodeGenerator = StateT Temp.Generator (WriterT (DList A.Inst) Identity)
+type CodeGenerator = StateT Temp.Generator (
+                       WriterT (DList A.Inst)
+                         (ReaderT X64Frame.X64 Identity))
 
 
 newTemp :: CodeGenerator Int
@@ -30,6 +33,9 @@ newTemp = do
 emit :: A.Inst -> CodeGenerator ()
 emit inst = do
   lift . tell $ singleton inst
+
+getArch :: CodeGenerator X64Frame.X64
+getArch = (lift . lift) ask
 
 result :: (Int -> CodeGenerator [A.Inst]) -> CodeGenerator Int
 result codegen = do
@@ -126,16 +132,17 @@ munchExp (Tree.BINOP (op, e1, e2)) =
     result (\r -> do
                     src1 <- munchExp e1
                     src2 <- munchExp e2
+                    x64 <- getArch
                     pure [ A.MOVE { A.assem="MOV `d0, `s0\n"
-                                  , A.moveDst=1337 -- FIXME!!!!! should be dividend register!
+                                  , A.moveDst=X64Frame.dividendRegister x64
                                   , A.moveSrc=src1 }
                          , A.OPER { A.assem="IDIV `s0\n"
-                                  , A.operDst=[1337] -- FIXME!!!! should be dividend dests!
+                                  , A.operDst=X64Frame.divideDests x64
                                   , A.operSrc=[src2]
                                   , A.jump=[] }
                          , A.MOVE { A.assem="MOV `d0, `s0\n"
                                   , A.moveDst=r
-                                  , A.moveSrc=1337 -- FIXME!!!!! should be divident register!
+                                  , A.moveSrc=X64Frame.dividendRegister x64
                                   } ])
   else
     result (\r -> do
