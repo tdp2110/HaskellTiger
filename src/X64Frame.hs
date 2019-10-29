@@ -15,14 +15,35 @@ data X64Access = InFrame Int | InReg Int
   deriving (Show)
 
 {-
-The first six integer or pointer arguments are passed in registers:
+On Linux and Mac (NOT windows) the first six integer or pointer arguments are passed in registers:
 RDI, RSI, RDX, RCX, R8, R9
+
+see https://en.wikipedia.org/wiki/X86_calling_conventions, "System V AMD64 ABI" subsection
 -}
 data X64Frame = X64Frame { name :: Temp.Label
                          , formals :: [X64Access]
                          , locals :: [X64Access]
                          , fp :: Int
-                         , rv :: Int }
+                         , rv :: Int
+                         , rax :: Int
+                         , rbx :: Int
+                         , rcx :: Int
+                         , rdx :: Int
+                         , rbp :: Int
+                         , rsi :: Int
+                         , rdi :: Int
+                         , rsp :: Int
+                         , r8 :: Int
+                         , r9 :: Int
+                         , r10 :: Int
+                         , r11 :: Int
+                         , r12 :: Int
+                         , r13 :: Int
+                         , r14 :: Int
+                         , r15 :: Int
+                         , dividendRegister :: Int
+                         , calleeSaves :: [Int]
+                         , callerSaves :: [Int] }
   deriving (Show)
 
 data Frag = PROC { body :: Tree.Stm
@@ -63,15 +84,48 @@ numFormalsInReg frame =
 freshFrame :: Temp.Label -> Temp.Generator -> (X64Frame, Temp.Generator)
 freshFrame frameName gen =
   let
-    (fpId, gen') = Temp.newtemp gen
-    (rvId, gen'') = Temp.newtemp gen'
+    (raxId, gen') = Temp.newtemp gen
+    (rbxId, gen'') = Temp.newtemp gen'
+    (rcxId, gen3) = Temp.newtemp gen''
+    (rdxId, gen4) = Temp.newtemp gen3
+    (rbpId, gen5) = Temp.newtemp gen4
+    (rsiId, gen6) = Temp.newtemp gen5
+    (rdiId, gen7) = Temp.newtemp gen6
+    (rspId, gen8) = Temp.newtemp gen7
+    (r8Id, gen9) = Temp.newtemp gen8
+    (r9Id, gen10) = Temp.newtemp gen9
+    (r10Id, gen11) = Temp.newtemp gen10
+    (r11Id, gen12) = Temp.newtemp gen11
+    (r12Id, gen13) = Temp.newtemp gen12
+    (r13Id, gen14) = Temp.newtemp gen13
+    (r14Id, gen15) = Temp.newtemp gen14
+    (r15Id, gen16) = Temp.newtemp gen15
   in
     ( X64Frame{ name=frameName
               , formals=[]
               , locals=[]
-              , fp=fpId
-              , rv=rvId }
-    , gen'' )
+              , fp=rbpId
+              , rv=raxId
+              , rax=raxId
+              , rbx=rbxId
+              , rcx=rcxId
+              , rdx=rdxId
+              , rbp=rbpId
+              , rsi=rsiId
+              , rdi=rdiId
+              , rsp=rspId
+              , r8=r8Id
+              , r9=r9Id
+              , r10=r10Id
+              , r11=r11Id
+              , r12=r12Id
+              , r13=r13Id
+              , r14=r14Id
+              , r15=r15Id
+              , dividendRegister=raxId
+              , calleeSaves=[rbxId, rdiId, rsiId]
+              , callerSaves=[rbxId, rbpId, r12Id, r13Id, r14Id, r15Id] }
+    , gen16 )
 
 instance Frame.Frame X64Frame where
   type (Access X64Frame) = X64Access
