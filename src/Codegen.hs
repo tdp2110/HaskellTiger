@@ -190,3 +190,33 @@ munchExp (Tree.CALL (expr, args)) =
                                 , A.moveDst=r
                                 , A.moveSrc=X64Frame.rax x64 } ]
          )
+munchExp (Tree.MEM (Tree.BINOP (Tree.PLUS, e, Tree.CONST c))) =
+  result (\r -> do
+                  src <- munchExp e
+                  pure [ A.OPER { A.assem="MOV `d0, [`s0" ++ (plusMinusInt c) ++ "]\n"
+                                , A.operDst=[r]
+                                , A.operSrc=[src]
+                                , A.jump=Nothing } ]
+         )
+  where
+    plusMinusInt :: Int -> String
+    plusMinusInt i
+      | i < 0     = show i
+      | otherwise = "+" ++ show i
+munchExp (Tree.MEM (Tree.BINOP (Tree.PLUS, Tree.CONST c, e))) =
+  munchExp (Tree.MEM (Tree.BINOP (Tree.PLUS, e, Tree.CONST c)))
+munchExp (Tree.MEM (Tree.CONST c)) =
+  result (\r -> do
+                  pure [ A.OPER { A.assem="MOV `d0, [" ++ (show c) ++ "]\n"
+                                , A.operDst=[r]
+                                , A.operSrc=[]
+                                , A.jump=Nothing } ]
+         )
+munchExp (Tree.MEM expr) =
+  result (\r -> do
+                  exprReg <- munchExp expr
+                  pure [ A.OPER { A.assem="MOV `d0, [`s0]\n"
+                                , A.operDst=[r]
+                                , A.operSrc=[exprReg]
+                                , A.jump=Nothing } ]
+         )
