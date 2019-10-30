@@ -71,32 +71,32 @@ munchStm (Tree.MOVE (Tree.MEM e1, e2)) = do
   emit $ A.OPER { A.assem = "MOV [`d0], `s0\n"
                 , A.operDst = [dst]
                 , A.operSrc = [src]
-                , A.jump = [] }
+                , A.jump = Nothing }
 munchStm (Tree.MOVE (Tree.TEMP t, e2)) = do
   src <- munchExp e2
   emit $ A.OPER { A.assem = "MOV `d0, `s0\n"
                 , A.operDst = [t]
                 , A.operSrc = [src]
-                , A.jump = [] }
+                , A.jump = Nothing }
 munchStm m@(Tree.MOVE _) = error $ "codegen can't handle move: " ++ show m
 munchStm (Tree.JUMP (Tree.NAME lab, _)) =
   emit $ A.OPER { A.assem = "JMP `j0\n"
                 , A.operDst = []
                 , A.operSrc = []
-                , A.jump = [lab] }
+                , A.jump = Just [lab] }
 munchStm (Tree.JUMP (e, labels)) = do
   src <- munchExp e
   emit $ A.OPER { A.assem = "JMP `s0\n"
                 , A.operSrc = [src]
                 , A.operDst = []
-                , A.jump = labels }
+                , A.jump = Just labels }
 munchStm (Tree.CJUMP (op, e1, e2, t, f)) = do
   src1 <- munchExp e1
   src2 <- munchExp e2
   emit $ A.OPER { A.assem = "CMP `s1, `s2\n" ++ (opToJump op) ++ " `j0\nJMP `j1\n"
                 , A.operDst = []
                 , A.operSrc = [src1, src2]
-                , A.jump = [t, f] }
+                , A.jump = Just [t, f] }
   where
     opToJump :: Tree.Relop -> String
     opToJump oper = case oper of
@@ -117,7 +117,7 @@ munchExp (Tree.CONST c) =
                   inst = A.OPER { A.assem="MOV `d0, " ++ (show c) ++ "\n"
                                 , A.operDst = [r]
                                 , A.operSrc = []
-                                , A.jump = [] }
+                                , A.jump = Nothing }
                 in
                   do
                     pure [inst]
@@ -139,7 +139,7 @@ munchExp (Tree.BINOP (op, e1, e2)) =
                          , A.OPER { A.assem="IDIV `s0\n"
                                   , A.operDst=X64Frame.divideDests x64
                                   , A.operSrc=[src2]
-                                  , A.jump=[] }
+                                  , A.jump=Nothing }
                          , A.MOVE { A.assem="MOV `d0, `s0\n"
                                   , A.moveDst=r
                                   , A.moveSrc=X64Frame.dividendRegister x64
@@ -154,7 +154,7 @@ munchExp (Tree.BINOP (op, e1, e2)) =
                          , A.OPER { A.assem=(convertOp op) ++ " `d0, `s0\n"
                                   , A.operDst=[r]
                                   , A.operSrc=[src2]
-                                  , A.jump=[] } ])
+                                  , A.jump=Nothing } ])
   where
     convertOp :: Tree.Binop -> String
     convertOp oper = case oper of

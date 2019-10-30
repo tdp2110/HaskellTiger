@@ -251,7 +251,7 @@ binOp expLeft expRight op gen =
             Absyn.PlusOp -> Tree.PLUS
             Absyn.MinusOp -> Tree.MINUS
             Absyn.TimesOp -> Tree.MUL
-            Absyn.DivideOp -> Tree.DIV
+            Absyn.DivideOp -> Tree.DIV -- TODO! check for division by zero!
             _ -> error "shouldn't get here"
     resExp = Ex $ Tree.BINOP (op', expLeft', expRight')
   in
