@@ -39,7 +39,8 @@ data X64 = X64 { rax :: Int
                , dividendRegister :: Int
                , divideDests :: [Int]
                , calleeSaves :: [Int]
-               , callerSaves :: [Int] }
+               , callerSaves :: [Int]
+               , callDests :: [Int] }
   deriving (Show)
 
 data X64Frame = X64Frame { name :: Temp.Label
@@ -122,7 +123,8 @@ initX64 gen =
           , dividendRegister=raxId
           , divideDests=[raxId, rdxId]
           , calleeSaves=[rbxId, rdiId, rsiId]
-          , callerSaves=[rbxId, rbpId, r12Id, r13Id, r14Id, r15Id] }
+          , callerSaves=[rbxId, rbpId, r12Id, r13Id, r14Id, r15Id]
+          , callDests=[raxId, rdxId] }
     , gen16 )
 
 freshFrame :: Temp.Label -> X64 -> X64Frame

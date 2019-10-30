@@ -6,7 +6,6 @@ import qualified Temp
 import qualified Tree as Tree
 import qualified Assem as A
 
-import Control.Monad (forM_)
 import Control.Monad.Trans.Writer (WriterT, tell)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State (StateT, get, put)
@@ -41,9 +40,7 @@ result :: (Int -> CodeGenerator [A.Inst]) -> CodeGenerator Int
 result codegen = do
   t <- newTemp
   insts <- codegen t
-  forM_
-    insts
-    (\inst -> emit inst)
+  mapM_ emit insts
   pure t
 
 noop :: CodeGenerator ()
@@ -168,3 +165,28 @@ munchExp (Tree.BINOP (op, e1, e2)) =
                        Tree.RSHIFT -> "SHR"
                        Tree.XOR -> "XOR"
                        _ -> error $ "unsupported operator: " ++ (show oper)
+munchExp (Tree.CALL (Tree.NAME lab, args)) =
+  result (\r -> do
+                  operSrc <- mapM munchExp args
+                  x64 <- getArch
+                  pure [ A.OPER { A.assem="CALL `j0\n"
+                                , A.operDst=X64Frame.callDests x64
+                                , A.operSrc=operSrc
+                                , A.jump=Just [lab] }
+                       , A.MOVE { A.assem="MOV `d0, `s0\n"
+                                , A.moveDst=r
+                                , A.moveSrc=X64Frame.rax x64 } ]
+         )
+munchExp (Tree.CALL (expr, args)) =
+  result (\r -> do
+                  argRegs <- mapM munchExp args
+                  exprReg <- munchExp expr
+                  x64 <- getArch
+                  pure [ A.OPER { A.assem="CALL `s0\n"
+                                , A.operDst=X64Frame.callDests x64
+                                , A.operSrc=[exprReg] ++ argRegs
+                                , A.jump=Nothing }
+                       , A.MOVE { A.assem="MOV `d0, `s0\n"
+                                , A.moveDst=r
+                                , A.moveSrc=X64Frame.rax x64 } ]
+         )
