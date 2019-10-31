@@ -19,6 +19,11 @@ type CodeGenerator = StateT Temp.Generator (
                          (ReaderT X64Frame.X64 Identity))
 
 
+plusMinusInt :: Int -> String
+plusMinusInt i
+  | i < 0     = show i
+  | otherwise = "+" ++ show i
+
 newTemp :: CodeGenerator Int
 newTemp = do
   gen <- get
@@ -62,6 +67,25 @@ munchStm (Tree.MOVE (Tree.TEMP dst, Tree.TEMP src)) =
    emit $ A.MOVE { A.assem = "MOV `d0, `s0\n"
                  , A.moveDst = dst
                  , A.moveSrc = src }
+munchStm (Tree.MOVE (Tree.TEMP d, Tree.MEM (Tree.BINOP (Tree.PLUS, Tree.TEMP s, Tree.CONST c)))) =
+  emit $ A.MOVE { A.assem = "MOV `d0, [`s0" ++ (plusMinusInt c) ++ "]\n"
+                , A.moveDst = d
+                , A.moveSrc = s }
+munchStm (Tree.MOVE (Tree.TEMP d, Tree.MEM (Tree.BINOP (Tree.PLUS, Tree.CONST c, Tree.TEMP s)))) =
+  munchStm (Tree.MOVE (Tree.TEMP d, Tree.MEM (Tree.BINOP (Tree.PLUS, Tree.TEMP s, Tree.CONST c))))
+munchStm (Tree.MOVE (Tree.TEMP d, Tree.MEM (Tree.BINOP (Tree.PLUS, Tree.TEMP s0, Tree.TEMP s1)))) =
+  emit $ A.OPER { A.assem = "MOV `d0, [`s0 + `s1]\n"
+                , A.operDst = [d]
+                , A.operSrc = [s0, s1]
+                , A.jump = Nothing }
+munchStm (Tree.MOVE (Tree.TEMP d, Tree.MEM (Tree.BINOP (Tree.MINUS, Tree.TEMP s, Tree.CONST c)))) =
+  munchStm $ Tree.MOVE (Tree.TEMP d, Tree.MEM (Tree.BINOP (Tree.PLUS, Tree.TEMP s, Tree.CONST $ -c)))
+munchStm (Tree.MOVE (Tree.MEM (Tree.TEMP d), e)) = do
+  eReg <- munchExp e
+  emit $ A.OPER { A.assem = "MOV QWORD PTR [`d0], `s0\n"
+                , A.operDst = [d]
+                , A.operSrc = [eReg]
+                , A.jump = Nothing }
 munchStm (Tree.MOVE (Tree.MEM e1, e2)) = do
   src <- munchExp e2
   dst <- munchExp e1
@@ -198,11 +222,6 @@ munchExp (Tree.MEM (Tree.BINOP (Tree.PLUS, e, Tree.CONST c))) =
                                 , A.operSrc=[src]
                                 , A.jump=Nothing } ]
          )
-  where
-    plusMinusInt :: Int -> String
-    plusMinusInt i
-      | i < 0     = show i
-      | otherwise = "+" ++ show i
 munchExp (Tree.MEM (Tree.BINOP (Tree.PLUS, Tree.CONST c, e))) =
   munchExp (Tree.MEM (Tree.BINOP (Tree.PLUS, e, Tree.CONST c)))
 munchExp (Tree.MEM (Tree.BINOP (Tree.MINUS, e, Tree.CONST c))) =
