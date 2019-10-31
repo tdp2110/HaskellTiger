@@ -205,6 +205,8 @@ munchExp (Tree.MEM (Tree.BINOP (Tree.PLUS, e, Tree.CONST c))) =
       | otherwise = "+" ++ show i
 munchExp (Tree.MEM (Tree.BINOP (Tree.PLUS, Tree.CONST c, e))) =
   munchExp (Tree.MEM (Tree.BINOP (Tree.PLUS, e, Tree.CONST c)))
+munchExp (Tree.MEM (Tree.BINOP (Tree.MINUS, e, Tree.CONST c))) =
+  munchExp (Tree.MEM (Tree.BINOP (Tree.PLUS, e, Tree.CONST $ -c)))
 munchExp (Tree.MEM (Tree.CONST c)) =
   result (\r -> do
                   pure [ A.OPER { A.assem="MOV `d0, [" ++ (show c) ++ "]\n"
@@ -219,4 +221,11 @@ munchExp (Tree.MEM expr) =
                                 , A.operDst=[r]
                                 , A.operSrc=[exprReg]
                                 , A.jump=Nothing } ]
+         )
+munchExp (Tree.NAME lab@(Temp.Label (S.Symbol s))) =
+  result (\r -> do
+                  pure [ A.OPER { A.assem="LEA `d0, [" ++ s ++ "]"
+                                , A.operDst=[r]
+                                , A.operSrc=[]
+                                , A.jump=Just [lab] } ]
          )
