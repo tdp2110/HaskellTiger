@@ -1,4 +1,4 @@
-module Codegen where
+module Codegen (codegen) where
 
 import qualified X64Frame
 import qualified Symbol as S
@@ -6,13 +6,21 @@ import qualified Temp
 import qualified Tree as Tree
 import qualified Assem as A
 
-import Control.Monad.Trans.Writer (WriterT, tell)
+import Control.Monad.Trans.Writer (WriterT, tell, runWriterT)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.State (StateT, get, put)
-import Control.Monad.Trans.Reader (ReaderT, ask, asks, runReaderT)
-import Data.DList (DList, singleton)
+import Control.Monad.Trans.State (StateT, get, put, runStateT)
+import Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
+import Data.DList (DList, singleton, toList)
 import Data.Functor.Identity
 
+
+codegen :: X64Frame.X64 -> Temp.Generator -> Tree.Stm -> ([A.Inst], Temp.Generator)
+codegen x64 gen stm =
+  let
+    ((_, gen'), instsDListReversed) =
+      (runIdentity . flip runReaderT x64 . runWriterT . flip runStateT gen) $ munchStm stm
+  in
+    ((reverse . toList) instsDListReversed, gen')
 
 type CodeGenerator = StateT Temp.Generator (
                        WriterT (DList A.Inst)
@@ -42,9 +50,9 @@ getArch :: CodeGenerator X64Frame.X64
 getArch = (lift . lift) ask
 
 result :: (Int -> CodeGenerator [A.Inst]) -> CodeGenerator Int
-result codegen = do
+result codeGenerator = do
   t <- newTemp
-  insts <- codegen t
+  insts <- codeGenerator t
   mapM_ emit insts
   pure t
 
