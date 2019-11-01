@@ -144,7 +144,7 @@ parseToExp text =
         in
           case semantResult of
             Left err -> error $ show err
-            Right (Semant.ExpTy{Semant.exp=expr}, _) -> expr
+            Right (Semant.ExpTy{Semant.exp=expr}, _, _, _) -> expr
 
 main :: IO ()
 main = do

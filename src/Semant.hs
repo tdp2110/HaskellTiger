@@ -30,7 +30,7 @@ instance Show SemantError where
 
 data ExpTy = ExpTy{exp :: Translate.Exp, ty :: Types.Ty } deriving (Show)
 
-transProg :: A.Exp -> Either SemantError (ExpTy, FragList)
+transProg :: A.Exp -> Either SemantError (ExpTy, FragList, Temp.Generator, X64Frame.X64)
 transProg expr =
   let
     gen = Temp.newGen
@@ -44,8 +44,12 @@ transProg expr =
     env = SemantEnv { venv'=baseVEnv
                     , tenv2=Env.baseTEnv
                     , x64=x64' }
+    res = runTransT startState env $ transExp $ escapeExp expr
   in
-    evalTransT startState env $ transExp $ escapeExp expr
+    case res of
+      Left err -> Left err
+      Right ((expTy, stopState), frags) ->
+        Right (expTy, frags, generator stopState, x64')
 
 transVar :: A.Var -> Translator ExpTy
 transExp :: A.Exp -> Translator ExpTy

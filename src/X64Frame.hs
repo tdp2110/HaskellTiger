@@ -7,6 +7,8 @@ import qualified Temp
 import qualified Tree
 
 import Data.List
+import Data.Map (Map)
+import qualified Data.Map as Map
 
 import Prelude hiding (exp)
 
@@ -40,7 +42,8 @@ data X64 = X64 { rax :: Int
                , divideDests :: [Int]
                , calleeSaves :: [Int]
                , callerSaves :: [Int]
-               , callDests :: [Int] }
+               , callDests :: [Int]
+               , tempMap :: Map Int String }
   deriving (Show)
 
 data X64Frame = X64Frame { name :: Temp.Label
@@ -124,7 +127,24 @@ initX64 gen =
           , divideDests=[raxId, rdxId]
           , calleeSaves=[rbxId, rdiId, rsiId]
           , callerSaves=[rbxId, rbpId, r12Id, r13Id, r14Id, r15Id]
-          , callDests=[raxId, rdxId] }
+          , callDests=[raxId, rdxId]
+          , tempMap = Map.fromList [ (raxId, "RAX")
+                                   , (rbxId, "RBX")
+                                   , (rcxId, "RCX")
+                                   , (rdxId, "RDX")
+                                   , (rbpId, "RBP")
+                                   , (rsiId, "RSI")
+                                   , (rdiId, "RDI")
+                                   , (rspId, "RSP")
+                                   , (r8Id, "R8")
+                                   , (r9Id, "R9")
+                                   , (r10Id, "R10")
+                                   , (r11Id, "R11")
+                                   , (r12Id, "R12")
+                                   , (r13Id, "R13")
+                                   , (r14Id, "R14")
+                                   , (r15Id, "R15")
+                                   ] }
     , gen16 )
 
 freshFrame :: Temp.Label -> X64 -> X64Frame
