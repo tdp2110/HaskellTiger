@@ -337,9 +337,14 @@ mutuallyRecFuns = TestCase (
            "  function isEven(x:int) : int = \n" ++
            "    if x = 0 then 1 else isOdd(x-1)\n" ++
            "in isEven(140) end"
-    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _, _, _)) = parseToSema text
+    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, frags, _, _)) = parseToSema text
+    isProc :: X64Frame.Frag -> Bool
+    isProc (X64Frame.PROC _ _) = True
+    isProc _ = False
   in do
     assertEqual "mutrec isEven/Odd" Types.INT ty
+    assertEqual "found to frags" 2 $ length frags
+    assertBool "all frags are proc" $ all isProc frags
   )
 
 ifExp1 :: Test
