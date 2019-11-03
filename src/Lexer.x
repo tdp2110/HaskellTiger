@@ -173,7 +173,7 @@ data LexemeClass =
       deriving (Show, Eq)
 
 mkL :: LexemeClass -> AlexInput -> Int -> Alex Lexeme
-mkL c (p, _, _, str) len = return (Lexeme p c (Just (take len str)))
+mkL c (p, _, _, str) len = pure (Lexeme p c (Just (take len str)))
 
 -- states
 
@@ -245,17 +245,17 @@ addControlToString i@(_, _, _, input) len = addCharToString c' i len
 leaveString (p, _, _, input) len =
     do s <- getLexerStringValue
        setLexerStringState False
-       return (Lexeme p (STRING (reverse s)) (Just (take len input)))
+       pure (Lexeme p (STRING (reverse s)) (Just (take len input)))
 
 getInteger (p, _, _, input) len = if (length r == 1)
-                                  then return (Lexeme p (INT (fst (head r))) (Just s))
+                                  then pure (Lexeme p (INT (fst (head r))) (Just s))
                                   else lexerError "Invalid number"
   where
     s = take len input
     r = readDec s
 
 -- a sequence of letters is an identifier, except for reserved words, which are tested for beforehand
-getVariable (p, _, _, input) len = return (Lexeme p (ID s) (Just s))
+getVariable (p, _, _, input) len = pure (Lexeme p (ID s) (Just s))
   where
     s = take len input
 
@@ -338,7 +338,7 @@ line_number (Just (AlexPn _ lig col)) = (lig, col)
 -- definition needed by Alex
 
 alexEOF :: Alex Lexeme
-alexEOF = return (Lexeme undefined EOF Nothing)
+alexEOF = pure (Lexeme undefined EOF Nothing)
 
 -- Execution
 
@@ -350,12 +350,12 @@ scanner str = let loop = do (t, m) <- alexComplementError alexMonadScan
                                then do f1 <- getLexerStringState
                                        d2 <- getLexerCommentDepth
                                        if ((not f1) && (d2 == 0))
-                                          then return []
+                                          then pure []
                                           else if (f1)
                                                then alexError "String not closed at end of file"
                                                else alexError "Comment not closed at end of file"
                                else do toks <- loop
-                                       return (tok : toks)
+                                       pure (tok : toks)
               in  runAlex str loop
 
 -- we capture the error message in order to complement it with the file position

@@ -101,6 +101,9 @@ throwErr = lift . lift . lift . throwE
 pushFrag :: Frag -> Translator ()
 pushFrag = lift . tell . DList.singleton
 
+pushFrags :: Foldable t => t Frag -> Translator ()
+pushFrags frags = mapM_ pushFrag frags
+
 askEnv :: Translator SemantEnv
 askEnv = (lift . lift) ask
 
@@ -109,7 +112,7 @@ lookupT posn f sym = do
   env <- (lift . lift) $ asks f
   case Map.lookup sym env of
     Nothing -> throwT posn $ "unbound variable " ++ (show sym)
-    Just x -> return x
+    Just x -> pure x
 
 runTransT :: SemantState -> SemantEnv -> Translator a
   -> Either SemantError ((a, SemantState), FragList)
@@ -125,7 +128,7 @@ translate transFn typ = do
     (resExp, gen') = transFn gen
     in do
     put st{generator=gen'}
-    return ExpTy{exp=resExp, ty=typ}
+    pure ExpTy{exp=resExp, ty=typ}
 
 translateWithFrag :: (Temp.Generator -> (Translate.Exp, Frag, Temp.Generator))
                      -> Types.Ty
@@ -137,7 +140,7 @@ translateWithFrag transFn typ = do
     in do
     pushFrag frag
     put st{generator=gen'}
-    return ExpTy{exp=resExp, ty=typ}
+    pure ExpTy{exp=resExp, ty=typ}
 
 evalTransT :: SemantState -> SemantEnv -> Translator a
   -> Either SemantError (a, FragList)
@@ -148,7 +151,7 @@ nextId :: Translator Integer
 nextId = do
   st@SemantState{counter'=currId} <- get
   put st{counter'=currId + 1}
-  return currId
+  pure currId
 
 nextLabel :: Translator Temp.Label
 nextLabel = do
@@ -157,7 +160,7 @@ nextLabel = do
     (lab, gen') = Temp.newlabel gen
     in do
     put st{generator=gen'}
-    return lab
+    pure lab
 
 newLevel :: [Frame.EscapesOrNot] -> Translator Level
 newLevel escapes = do
@@ -168,7 +171,7 @@ newLevel escapes = do
     (gen'', lev') = newLevelFn (x64 env) (parentLev, nextLab, escapes) gen'
     in do
     put st{generator=gen''}
-    return lev'
+    pure lev'
 
 allocLocalT :: Bool -> Translator Access
 allocLocalT escape = do
@@ -177,7 +180,7 @@ allocLocalT escape = do
     (gen', lev', access) = allocLocalFn lev gen $ toEscape escape
     in do
     put st{level=lev', generator=gen'}
-    return access
+    pure access
 
 allocLocal :: Bool -> SemantState -> SemantEnv -> (Access, SemantState)
 allocLocal escape st env =
@@ -187,20 +190,20 @@ allocLocal escape st env =
 
 transTy (A.NameTy(sym, posn)) = do
   typ <- lookupT posn tenv2 sym
-  return typ
+  pure typ
 transTy (A.RecordTy fields) =  do
   symAndTys <- mapM mapFunc fields
   typeId <- nextId
-  return $ Types.RECORD(symAndTys, typeId)
+  pure $ Types.RECORD(symAndTys, typeId)
   where
     mapFunc (A.Field fieldName _ fieldTypSym fieldPos) = do
       typ <- lookupT fieldPos tenv2 fieldTypSym
-      return (fieldName, typ)
+      pure (fieldName, typ)
 
 transTy (A.ArrayTy(arrayEltTypeSym, posn)) = do
   typ <- lookupT posn tenv2 arrayEltTypeSym
   typeId <- nextId
-  return $ Types.ARRAY(typ, typeId)
+  pure $ Types.ARRAY(typ, typeId)
 
 isArith :: A.Oper -> Bool
 isArith A.PlusOp = True
@@ -232,7 +235,7 @@ transVar (A.SimpleVar sym pos) = do
   val <- lookupT pos venv' sym
   (SemantState lev _ _ _) <- get
   case val of
-    (Env.VarEntry access t) -> return ExpTy{ exp=Translate.simpleVar access lev
+    (Env.VarEntry access t) -> pure ExpTy{ exp=Translate.simpleVar access lev
                                            , ty=t}
     (Env.FunEntry _ _ _ _) -> throwT pos $
                               "variable " ++ (show sym) ++
@@ -275,9 +278,9 @@ transVar (A.SubscriptVar var expr pos) = do
 transExp (A.VarExp var) = do
   transVar var
 transExp A.NilExp = do
-  return ExpTy{exp=Translate.nilexp, ty=Types.NIL}
+  pure ExpTy{exp=Translate.nilexp, ty=Types.NIL}
 transExp (A.IntExp i) = do
-  return ExpTy{exp=Translate.intexp i, ty=Types.INT}
+  pure ExpTy{exp=Translate.intexp i, ty=Types.INT}
 transExp (A.StringExp str) =
   translateWithFrag (Translate.string str) Types.STRING
 transExp (A.CallExp funcSym argExps pos) = do
@@ -462,7 +465,7 @@ transExp (A.BreakExp pos) = do
   SemantState{breakTarget=breakTargetMaybe} <- get
   case breakTargetMaybe of
     Nothing -> throwT pos "break expression not enclosed in a while or for"
-    Just doneLabel -> return ExpTy{ exp=Translate.break doneLabel
+    Just doneLabel -> pure ExpTy{ exp=Translate.break doneLabel
                                   , ty=Types.UNIT}
 transExp (A.ArrayExp arrayTySym sizeExp initExp pos) = do
   maybeArrayTy <- lookupT pos tenv2 arrayTySym
@@ -572,13 +575,15 @@ transExp (A.LetExp decs bodyExp letPos) = do
   st <- get
   case runTransT st env $ transLetDecs decs letPos of
     Left err -> throwErr err
-    Right (((bodyEnv, initializers), st'), _) ->
+    Right (((bodyEnv, initializers), st'), frags1) ->
       case
         runTransT st' bodyEnv (transExp bodyExp)
       of
         Left err -> throwErr err
-        Right ((ExpTy{exp=bodyTree, ty=typ}, st''), _) -> do
+        Right ((ExpTy{exp=bodyTree, ty=typ}, st''), frags2) -> do
           put st''
+          pushFrags frags1
+          pushFrags frags2
           e@ExpTy{exp=expr, ty=t} <- translate
                                      (Translate.letExp initializers bodyTree)
                                      typ
@@ -589,8 +594,8 @@ transExp (A.LetExp decs bodyExp letPos) = do
                 (stm, gen') = Translate.unNx expr gen
                 in do
                 put st3{generator=gen'}
-                return ExpTy{exp=Translate.Nx stm, ty=t}
-            _ -> return e
+                pure ExpTy{exp=Translate.Nx stm, ty=t}
+            _ -> pure e
 
 transLetDecs decls letPos = do
   env <- askEnv
@@ -603,9 +608,10 @@ transLetDecs decls letPos = do
       st <- get
       case runTransT st envAcc $ transDec decl of
         Left err -> throwErr err
-        Right (((newEnv, initializers), newState), _) -> do
+        Right (((newEnv, initializers), newState), frags) -> do
           put newState
-          return (newEnv, initsAcc ++ initializers)
+          pushFrags frags
+          pure (newEnv, initsAcc ++ initializers)
 
 checkDeclNamesDistinctInLet :: [A.Dec] -> A.Pos -> Either SemantError ()
 checkDeclNamesDistinctInLet decls letPos =
@@ -646,7 +652,7 @@ flattenDecls decls = do
   decl <- decls
   case decl of
     A.FunctionDec funDecs -> fmap (\funDec -> FunDec (A.fundecName funDec) (A.funPos funDec)) funDecs
-    A.VarDec name _ _ _ posn -> return $ VarDec name posn
+    A.VarDec name _ _ _ posn -> pure $ VarDec name posn
     A.TypeDec tydecs -> fmap (\tyDec -> TyDec (A.tydecName tyDec) (A.tydecPos tyDec)) tydecs
 
 checkForVarNotAssigned :: Symbol -> A.Exp -> Either SemantError ()
@@ -716,7 +722,7 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
           (initTree, gen') = Translate.initExp access lev initExpr gen
         in do
           put st'{generator=gen'}
-          return ( env{ venv'=Map.insert
+          pure ( env{ venv'=Map.insert
                             name (Env.VarEntry access recTy)
                             (venv' env) }
                  , [initTree] )
@@ -730,7 +736,7 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
           (initTree, gen') = Translate.initExp access lev initExpr gen
         in do
           put st'{generator=gen'}
-          return ( env { venv'=Map.insert
+          pure ( env { venv'=Map.insert
                                name
                                (Env.VarEntry access actualInitTy)
                                (venv' env) }
@@ -775,8 +781,9 @@ transDec (A.FunctionDec fundecs) = do
                $ extractHeaderM (venv' env) fundecs formalsTys resultTys
           of
             Left err -> throwErr err
-            Right ((headerVEnv, newState), _) -> do -- TODO what to do with fraglist??
+            Right ((headerVEnv, newState), frags) -> do
               put newState
+              pushFrags frags
               foldM
                 transBody
                 (env{venv'=headerVEnv}, [])
@@ -821,7 +828,7 @@ transDec (A.FunctionDec fundecs) = do
           runTransT st bodyEnv (transExp funBody)
         of
           Left err -> throwErr err
-          Right ((ExpTy{exp=bodyExp, ty=bodyTy}, state'), _) ->
+          Right ((ExpTy{exp=bodyExp, ty=bodyTy}, state'), frags) ->
             if resultTy /= Types.UNIT && resultTy /= bodyTy
             then
               throwT funPos $ "computed type of function body " ++
@@ -829,16 +836,18 @@ transDec (A.FunctionDec fundecs) = do
               (show resultTy) ++ " do not match"
             else do
               put state'
+              pushFrags frags
               state''@SemantState{generator=gen} <- get
               let
                 (frag, gen') = Translate.functionDec
                                funLevel
                                bodyExp
                                gen
-                in do
+                in
+                do
                 pushFrag frag
                 put state''{generator=gen'}
-                return (env, initializers)
+                pure (env, initializers)
 transDec (A.TypeDec tydecs) =
   let
     stronglyConnComps = typeSCCs tydecs
@@ -862,9 +871,9 @@ extractHeaderM :: Map.Map Symbol Env.EnvEntry
                -> Translator Env.VEnv
 extractHeaderM venv fundecs formalsTys resultTys =
   foldM
-  extractHeader
-  venv
-  (zip3 fundecs formalsTys resultTys)
+    extractHeader
+    venv
+    (zip3 fundecs formalsTys resultTys)
   where
     extractHeader valEnv (fundec,paramTys,resultTy) =
       let
@@ -872,7 +881,7 @@ extractHeaderM venv fundecs formalsTys resultTys =
       in do
         nextLev <- newLevel escapes
         nextLab <- nextLabel
-        return $ Map.insert
+        pure $ Map.insert
           (A.fundecName fundec)
           Env.FunEntry{Env.level=nextLev,
                        Env.label=nextLab,
@@ -902,26 +911,27 @@ transCyclicDecls (env, initializers) tydecs syms = do
     env' = env{tenv2=tenv'}
     maybeTranslatedBodiesM =
       foldM
-      (\acc typ -> do
-          state' <- get
-          case
-            runTransT state' env' (transTy typ)
-            of
-            Left err -> throwErr err
-            Right ((typeTy, newState), _) -> do
-              put newState
-              return $ acc ++ [typeTy]
-      )
-      []
-      bodies
+        (\acc typ -> do
+            state' <- get
+            case
+              runTransT state' env' (transTy typ)
+              of
+              Left err -> throwErr err
+              Right ((typeTy, newState), _) -> do
+                put newState
+                pure $ acc ++ [typeTy]
+        )
+        []
+        bodies
     in
     case
       runTransT state env' maybeTranslatedBodiesM
     of
       Left err -> throwErr err
-      Right ((translatedBodies, state'), _) -> do
+      Right ((translatedBodies, state'), frags) -> do
         put state'
-        return ( env{tenv2=tieTheKnot tenv'
+        pushFrags frags
+        pure ( env{tenv2=tieTheKnot tenv'
                           (Map.fromList $ zip syms translatedBodies)}
                , initializers )
   where
@@ -960,9 +970,10 @@ transAcyclicDecl (env, initializers) tydecs sym = do
          env
          $ transTy typ of
       Left err -> throwErr err
-      Right ((typesTy, state'), _) -> do
+      Right ((typesTy, state'), frags) -> do
         put state'
-        return (env{tenv2=Map.insert sym typesTy $ tenv2 env}, initializers)
+        pushFrags frags
+        pure (env{tenv2=Map.insert sym typesTy $ tenv2 env}, initializers)
 
 checkForIllegalCycles :: [A.TyDec] -> [SCC Symbol] -> Either SemantError ()
 checkForIllegalCycles tydecs stronglyConnectedComponents =
@@ -1018,3 +1029,7 @@ calcTypeGraph tydecs = fmap calcNeighbors tydecs
 isCyclicSCC :: SCC vertex -> Bool
 isCyclicSCC (CyclicSCC _) = True
 isCyclicSCC _ = False
+
+fragTy :: X64Frame.Frag -> String
+fragTy (X64Frame.PROC _ _) = "PROC"
+fragTy (X64Frame.STRING _ ) = "STRING"

@@ -12,6 +12,7 @@ import Test.HUnit
 import System.Exit
 import qualified Data.DList as DList
 import Data.Either
+import Data.Foldable
 import Data.List
 import Prelude hiding (exp)
 
@@ -338,13 +339,75 @@ mutuallyRecFuns = TestCase (
            "    if x = 0 then 1 else isOdd(x-1)\n" ++
            "in isEven(140) end"
     (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, frags, _, _)) = parseToSema text
-    isProc :: X64Frame.Frag -> Bool
-    isProc (X64Frame.PROC _ _) = True
-    isProc _ = False
   in do
     assertEqual "mutrec isEven/Odd" Types.INT ty
-    assertEqual "found to frags" 2 $ length frags
+    assertEqual "found twoo frags" 2 $ length frags
+  )
+
+isProc :: X64Frame.Frag -> Bool
+isProc (X64Frame.PROC _ _) = True
+isProc _ = False
+
+isString :: X64Frame.Frag -> Bool
+isString (X64Frame.STRING _) = True
+isString _ = False
+
+frags1 :: Test
+frags1 = TestCase (
+  let
+    text = "let\n" ++
+           "  function isOdd(x:int) : int = \n" ++
+           "    if x = 1 then 1 else isEven(x-1)\n" ++
+           "  function isEven(x:int) : int = \n" ++
+           "    if x = 0 then 1 else isOdd(x-1)\n" ++
+           "in isEven(140) end"
+    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=_}, frags, _, _)) = parseToSema text
+  in do
+    assertEqual "found two frags" 2 $ length frags
     assertBool "all frags are proc" $ all isProc frags
+  )
+
+frags2 :: Test
+frags2 = TestCase (
+  let
+    text = "let\n" ++
+           "  var s1 := \"hello\"\n" ++
+           "  var s2 := \"world\"\n" ++
+           "in size(s1) + size(s2) end"
+    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=_}, frags, _, _)) = parseToSema text
+  in do
+    assertEqual "found two frags" 2 $ length frags
+    assertBool "all frags are string" $ all isString frags
+    assertEqual
+      "frags are coorect"
+      ["hello", "world"]
+      $ toList $ fmap
+        (\(X64Frame.STRING(_,s)) -> s)
+        frags
+  )
+
+frags3 :: Test
+frags3 = TestCase (
+  let
+    text = "let\n" ++
+           "  function f(x:int) : int = \n" ++
+           "    let\n" ++
+           "      function g(y:int) : int = \n" ++
+           "        let function h(z:int) : int = x + y + z\n" ++
+           "            var s2 := \"dog\"\n" ++
+           "        in h(x) + size(s2) end\n" ++
+           "      var s := \"cat\"" ++
+           "    in g(size(s)) end\n" ++
+           "in f(1337) end"
+    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=_}, fragsDList, _, _)) = parseToSema text
+    frags = toList fragsDList
+  in do
+    assertEqual "found 5 frags" 5 $ length frags
+    assertEqual "3 procs" 3 $ length $ filter isProc frags
+    assertEqual
+      "string values"
+      ["dog", "cat"]
+      $ fmap (\(X64Frame.STRING(_,s)) -> s) $ filter isString frags
   )
 
 ifExp1 :: Test
@@ -490,6 +553,9 @@ tests = TestList [ TestLabel "ints" intLiteral
                  , TestLabel "while2" while2
                  , TestLabel "while3" while3
                  , TestLabel "builtinFuncs" builtinFuncs
+                 , TestLabel "frags1" frags1
+                 , TestLabel "frags2" frags2
+                 , TestLabel "frags3" frags3
                  ]
 
 main :: IO Counts

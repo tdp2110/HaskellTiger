@@ -12,7 +12,7 @@ import Prelude hiding (exp)
 
 indent :: Int -> IO ()
 indent 0 = do
-  return ()
+  pure ()
 indent i = do
   putStr "  "
   indent $ i - 1

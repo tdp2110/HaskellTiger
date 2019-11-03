@@ -57,7 +57,7 @@ result codeGenerator = do
   pure t
 
 noop :: CodeGenerator ()
-noop = do return ()
+noop = do pure ()
 
 munchStm :: Tree.Stm -> CodeGenerator ()
 munchStm (Tree.SEQ (a, b)) = do

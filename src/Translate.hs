@@ -401,7 +401,7 @@ letExpM initializers bodyExp = do
     (initializerStms, gen'') = runState (mapM unNxM initializers) gen'
     in do
     put gen''
-    return $ Ex $ Tree.ESEQ (makeSeq initializerStms, body)
+    pure $ Ex $ Tree.ESEQ (makeSeq initializerStms, body)
 
 letExp :: [Exp] -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
 letExp initializers body gen =
@@ -488,7 +488,7 @@ unExM exp = do
     (treeExp, gen') = unEx exp gen
     in do
     put gen'
-    return treeExp
+    pure treeExp
 
 -- TODO: how to dry up unExM and unNxM? C++ templates (with duck-typing) could do it ...
 unNxM :: Exp -> State Temp.Generator Tree.Stm
@@ -498,7 +498,7 @@ unNxM exp = do
     (treeStm, gen') = unNx exp gen
     in do
     put gen'
-    return treeStm
+    pure treeStm
 
 callM :: X64Level -> X64Level -> Temp.Label -> [Exp] -> State Temp.Generator Exp
 callM funLevel callerLevel funlab params = do
@@ -507,7 +507,7 @@ callM funLevel callerLevel funlab params = do
     (treeParams, gen') = runState (mapM unExM params) gen
     in do
     put gen'
-    return $ Ex $ case x64Parent funLevel of
+    pure $ Ex $ case x64Parent funLevel of
                     X64Outermost ->
                       X64Frame.externalCall funlab treeParams
                     funParentLevel ->

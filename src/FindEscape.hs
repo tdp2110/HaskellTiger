@@ -77,7 +77,7 @@ applyToStaticDepth :: (Int -> Int) -> Escaper ()
 applyToStaticDepth fn = do
   state <- lift get
   lift $ put state{depth=fn $ depth state}
-  return ()
+  pure ()
 
 pushDir :: (MonadTrans t, Monad m) =>
   EscaperState -> AstDir -> t (StateT EscaperState m) ()
@@ -106,7 +106,7 @@ findEscapesM (A.OpExp leftExp _ rightExp _) = do
   pushDir state OpRight
   _ <- findEscapesM rightExp
   lift $ put state
-  return ()
+  pure ()
 findEscapesM (A.RecordExp fields _ _) = forM_ (enumerate fields) mapFun
   where
     mapFun (fieldIdx, (_, exp, _)) = do
@@ -114,7 +114,7 @@ findEscapesM (A.RecordExp fields _ _) = forM_ (enumerate fields) mapFun
       pushDir state (RecField fieldIdx)
       _ <- findEscapesM exp
       lift $ put state
-      return ()
+      pure ()
 findEscapesM (A.SeqExp seqElts) = forM_ (enumerate seqElts) mapFun
   where
     mapFun (seqEltIdx, (exp, _)) = do
@@ -122,12 +122,12 @@ findEscapesM (A.SeqExp seqElts) = forM_ (enumerate seqElts) mapFun
       pushDir state (SeqElt seqEltIdx)
       _ <- findEscapesM exp
       lift $ put state
-      return ()
+      pure ()
 findEscapesM (A.AssignExp _ exp _) = do
   state <- lift get
   pushDir state AssignExp
   _ <- findEscapesM exp
-  return ()
+  pure ()
 findEscapesM (A.IfExp testExp thenExp elseExpMaybe _) = do
   state <- lift get
   pushDir state IfTest
@@ -136,17 +136,17 @@ findEscapesM (A.IfExp testExp thenExp elseExpMaybe _) = do
   _ <- findEscapesM thenExp
   pushDir state IfElse
   case elseExpMaybe of
-    Nothing -> return ()
+    Nothing -> pure ()
     Just elseExp -> do
       _ <- findEscapesM elseExp
-      return ()
+      pure ()
 findEscapesM (A.WhileExp testExp bodyExp _) = do
   state <- lift get
   pushDir state WhileTest
   _ <- findEscapesM testExp
   pushDir state WhileBody
   _ <- findEscapesM bodyExp
-  return ()
+  pure ()
 findEscapesM (A.ForExp forVar _ loExp hiExp bodyExp _) = do
   state <- lift get
   pushDir state ForLo
@@ -156,22 +156,22 @@ findEscapesM (A.ForExp forVar _ loExp hiExp bodyExp _) = do
   pushDir state ForBody
   pushBinding forVar Var
   _ <- findEscapesM bodyExp
-  return ()
+  pure ()
 findEscapesM (A.ArrayExp _ sizeExp initExp _) = do
   state <- lift get
   pushDir state ArraySize
   _ <- findEscapesM sizeExp
   pushDir state ArrayInit
   _ <- findEscapesM initExp
-  return ()
+  pure ()
 findEscapesM (A.LetExp decs bodyExp _) = do
   state <- lift get
   extendEnv decs
   pushDir state LetBody
   _ <- findEscapesM bodyExp
-  return ()
+  pure ()
 findEscapesM _ = do
-  return ()
+  pure ()
 
 extendEnv :: [A.Dec] -> Escaper ()
 extendEnv decs = forM_ (enumerate decs) mapFun
@@ -181,15 +181,15 @@ extendEnv decs = forM_ (enumerate decs) mapFun
       pushDir state (LetDec decIdx)
       extendEnvWithFunctionDec fundecs
       lift $ put state{astPath=astPath state}
-      return ()
+      pure ()
     mapFun (decIdx, (A.VarDec sym _ _ initExp _)) = do
       state <- lift get
       pushDir state (LetDec decIdx)
       _ <- findEscapesM initExp
       lift $ put state
       pushBinding sym Var
-      return ()
-    mapFun (_, (A.TypeDec _)) = do return ()
+      pure ()
+    mapFun (_, (A.TypeDec _)) = do pure ()
 
 extendEnvWithFunctionDec :: [A.FunDec] -> Escaper ()
 extendEnvWithFunctionDec fundecs = do
@@ -197,7 +197,7 @@ extendEnvWithFunctionDec fundecs = do
   incrStaticDepth
   _ <- processBodies $ zip (map A.params fundecs) (map A.funBody fundecs)
   decrStaticDepth
-  return ()
+  pure ()
   where
     insertHeaders :: [Symbol] -> Escaper ()
     insertHeaders syms = forM_ (enumerate syms) insertHeadersMapFun
@@ -207,7 +207,7 @@ extendEnvWithFunctionDec fundecs = do
       pushDir state (FunDec fundecIdx)
       pushBinding sym Fun
       lift $ put state
-      return ()
+      pure ()
     processBodies :: [([A.Field], A.Exp)] -> Escaper ()
     processBodies paramsAndExps = forM_
       (enumerate paramsAndExps)
@@ -221,11 +221,11 @@ extendEnvWithFunctionDec fundecs = do
       pushDir state' FunBody
       _ <- findEscapesM bodyExp
       lift $ put state
-      return ()
+      pure ()
     extendByParams :: A.Field -> Escaper ()
     extendByParams field = do
       pushBinding (A.fieldName field) Var
-      return ()
+      pure ()
 
 findSym :: A.Var -> Symbol
 findSym (A.SimpleVar sym _) = sym
@@ -245,11 +245,11 @@ findEscapesVar sym = do
         if ourDepth > boundDepth then
           do
             tell $ singleton (sym, boundPath)
-            return ()
+            pure ()
         else
-          return ()
-      _ -> return ()
-  return ()
+          pure ()
+      _ -> pure ()
+  pure ()
 
 escapePaths :: A.Exp -> [(Symbol, AstPath)] -> A.Exp
 escapePaths exp paths =
