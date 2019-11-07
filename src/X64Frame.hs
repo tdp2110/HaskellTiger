@@ -2,7 +2,9 @@
 
 module X64Frame where
 
+import qualified Assem
 import qualified Frame
+import qualified Symbol
 import qualified Temp
 import qualified Tree
 
@@ -205,3 +207,28 @@ allocLocal gen frame escapesOrNot =
 
 procEntryExit1 :: X64Frame -> Tree.Exp -> Tree.Exp
 procEntryExit1 _ bodyExp = bodyExp
+
+procEntryExit2 :: X64Frame -> [Assem.Inst] -> [Assem.Inst]
+procEntryExit2 frame bodyAsm =
+  let
+    x64' = x64 frame
+  in
+    bodyAsm ++ [
+        Assem.OPER { Assem.assem = ""
+                   , Assem.operDst = []
+                   , Assem.operSrc = [rax x64', rsp x64'] ++ calleeSaves x64'
+                   , Assem.jump = Just [] }
+            ]
+
+data ProcEntryExit = ProcEntryExit { prolog :: String
+                                   , procBody :: [Assem.Inst]
+                                   , epilog :: String }
+
+procEntryExit3 :: X64Frame -> [Assem.Inst] -> ProcEntryExit
+procEntryExit3 frame bodyAsm =
+  let
+    procName = Temp.name $ name frame
+  in
+    ProcEntryExit { prolog = ";; PROCEDURE " ++ procName ++ "\n"
+                  , procBody = bodyAsm
+                  , epilog = "RET\n;; END " ++ procName ++ "\n" }

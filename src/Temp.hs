@@ -6,6 +6,9 @@ import qualified Symbol
 newtype Label = Label Symbol.Symbol
   deriving (Eq, Ord, Show)
 
+name :: Label -> String
+name (Label s) = Symbol.name s
+
 data Generator = Generator {tempIdx :: Int, labelIdx :: Int}
 
 newGen :: Generator

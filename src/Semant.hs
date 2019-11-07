@@ -6,7 +6,7 @@ import qualified Frame
 import qualified X64Frame
 import qualified Translate as Translate
 import qualified Types as Types
-import Symbol
+import qualified Symbol
 import FindEscape (escapeExp)
 import qualified Temp
 
@@ -35,7 +35,7 @@ transProg expr =
   let
     gen = Temp.newGen
     (x64', gen') = X64Frame.initX64 gen
-    (gen'', mainLevel) = newLevelFn x64' (outermost, Temp.Label $ Symbol "main", []) gen'
+    (gen'', mainLevel) = newLevelFn x64' (outermost, Temp.Label $ Symbol.Symbol "main", []) gen'
     (baseVEnv, gen''') = Env.baseVEnv x64' gen''
     startState = SemantState{ level=mainLevel
                             , breakTarget=Nothing
@@ -107,7 +107,7 @@ pushFrags frags = mapM_ pushFrag frags
 askEnv :: Translator SemantEnv
 askEnv = (lift . lift) ask
 
-lookupT :: A.Pos -> (SemantEnv -> Map.Map Symbol a) -> Symbol -> Translator a
+lookupT :: A.Pos -> (SemantEnv -> Map.Map Symbol.Symbol a) -> Symbol.Symbol -> Translator a
 lookupT posn f sym = do
   env <- (lift . lift) $ asks f
   case Map.lookup sym env of
@@ -528,7 +528,7 @@ transExp (A.ForExp forVar escape loExp hiExp body pos) = do
                             , A.decPos=pos }
         forVar_ = A.SimpleVar forVar pos
         forVarExp = A.VarExp forVar_
-        limitVarName = Symbol "__limit"
+        limitVarName = Symbol.Symbol "__limit"
         limitVarDec = A.VarDec{ A.name=limitVarName
                               , A.vardecEscape=False
                               , A.varDecTyp=Nothing
@@ -643,9 +643,9 @@ checkDeclNamesDistinctInLet decls letPos =
                 at=letPos}
 
 data DeclElt =
-  VarDec{declName :: Symbol, declPos :: A.Pos}
-  | FunDec{declName :: Symbol, declPos :: A.Pos}
-  | TyDec{declName :: Symbol, declPos :: A.Pos}
+  VarDec{declName :: Symbol.Symbol, declPos :: A.Pos}
+  | FunDec{declName :: Symbol.Symbol, declPos :: A.Pos}
+  | TyDec{declName :: Symbol.Symbol, declPos :: A.Pos}
 
 flattenDecls :: [A.Dec] -> [DeclElt]
 flattenDecls decls = do
@@ -655,7 +655,7 @@ flattenDecls decls = do
     A.VarDec name _ _ _ posn -> pure $ VarDec name posn
     A.TypeDec tydecs -> fmap (\tyDec -> TyDec (A.tydecName tyDec) (A.tydecPos tyDec)) tydecs
 
-checkForVarNotAssigned :: Symbol -> A.Exp -> Either SemantError ()
+checkForVarNotAssigned :: Symbol.Symbol -> A.Exp -> Either SemantError ()
 checkForVarNotAssigned forVar (A.CallExp _ exps _) =
   case sequence $ fmap (\e -> checkForVarNotAssigned forVar e) exps of
     Left err -> Left err
@@ -800,7 +800,7 @@ transDec (A.FunctionDec fundecs) = do
                                   Nothing -> Types.UNIT
                                   Just typ -> typ
     transBody :: (SemantEnv, b)
-              -> (A.FunDec, [(Symbol, Types.Ty, c)], Types.Ty)
+              -> (A.FunDec, [(Symbol.Symbol, Types.Ty, c)], Types.Ty)
               -> Translator (SemantEnv, b)
     transBody (env, initializers) ( A.FunDec{ A.fundecName=funName
                                             , A.params=funParams
@@ -815,7 +815,7 @@ transDec (A.FunctionDec fundecs) = do
         bodyVEnv = Map.union venv $ Map.fromList $
           fmap (\(sym,typ,_) -> (sym, Env.VarEntry (formalAccess sym) typ)) formalsTys
         bodyEnv = env{venv'=bodyVEnv}
-        formalAccess :: Symbol -> Access
+        formalAccess :: Symbol.Symbol -> Access
         formalAccess sym = case
           lookup sym $ zip
             (fmap A.fieldName funParams)
@@ -864,7 +864,7 @@ transDec (A.TypeDec tydecs) =
           in
           foldM step (env, []) stronglyConnComps
 
-extractHeaderM :: Map.Map Symbol Env.EnvEntry
+extractHeaderM :: Map.Map Symbol.Symbol Env.EnvEntry
                -> [A.FunDec]
                -> [[(a, Types.Ty, c)]]
                -> [Types.Ty]
@@ -897,7 +897,7 @@ extractHeaderM venv fundecs formalsTys resultTys =
                                            Frame.NoEscape)
       params
 
-transCyclicDecls :: (SemantEnv, [Translate.Exp]) -> [A.TyDec] -> [Symbol]
+transCyclicDecls :: (SemantEnv, [Translate.Exp]) -> [A.TyDec] -> [Symbol.Symbol]
                  -> Translator (SemantEnv, [Translate.Exp])
 transCyclicDecls (env, initializers) tydecs syms = do
   state <- get
@@ -935,14 +935,14 @@ transCyclicDecls (env, initializers) tydecs syms = do
                           (Map.fromList $ zip syms translatedBodies)}
                , initializers )
   where
-    tieTheKnot :: Env.TEnv -> Map.Map Symbol Types.Ty -> Env.TEnv
+    tieTheKnot :: Env.TEnv -> Map.Map Symbol.Symbol Types.Ty -> Env.TEnv
     tieTheKnot tenv' bodyMap =
       let
         newTyMap = Map.fromList newTyList
         newTyList = [tieEntry elt | elt <- Map.toList bodyMap]
         tieEntry (sym, Types.RECORD (fieldMap, recordId)) =
           let
-            tieFieldEntry :: (Symbol, Types.Ty) -> (Symbol, Types.Ty)
+            tieFieldEntry :: (Symbol.Symbol, Types.Ty) -> (Symbol.Symbol, Types.Ty)
             tieFieldEntry (fieldName, Types.NAME(sym',_)) =
               (fieldName, newTyMap Map.! sym')
             tieFieldEntry (fieldName, typ) =
@@ -958,7 +958,7 @@ transCyclicDecls (env, initializers) tydecs syms = do
       in
         Map.union newTyMap tenv'
 
-transAcyclicDecl :: (SemantEnv, [Translate.Exp]) -> [A.TyDec] -> Symbol
+transAcyclicDecl :: (SemantEnv, [Translate.Exp]) -> [A.TyDec] -> Symbol.Symbol
                  -> Translator (SemantEnv, [Translate.Exp])
 transAcyclicDecl (env, initializers) tydecs sym = do
   state <- get
@@ -975,7 +975,7 @@ transAcyclicDecl (env, initializers) tydecs sym = do
         pushFrags frags
         pure (env{tenv2=Map.insert sym typesTy $ tenv2 env}, initializers)
 
-checkForIllegalCycles :: [A.TyDec] -> [SCC Symbol] -> Either SemantError ()
+checkForIllegalCycles :: [A.TyDec] -> [SCC Symbol.Symbol] -> Either SemantError ()
 checkForIllegalCycles tydecs stronglyConnectedComponents =
   let
     cyclicComponents = filter isCyclicSCC stronglyConnectedComponents
@@ -993,7 +993,7 @@ checkForIllegalCycles tydecs stronglyConnectedComponents =
           at=posn}
       _ -> error "shouldn't get here: we filtered on isCyclciSCC"
 
-typeSCCs :: [A.TyDec] -> [SCC Symbol]
+typeSCCs :: [A.TyDec] -> [SCC Symbol.Symbol]
 typeSCCs tydecs =
   let
     typeGraph = calcTypeGraph tydecs
@@ -1001,22 +1001,22 @@ typeSCCs tydecs =
   in
     reverse $ stronglyConnComp typeEdges
 
-allAreName :: [A.TyDec] -> SCC Symbol -> Bool
+allAreName :: [A.TyDec] -> SCC Symbol.Symbol -> Bool
 allAreName tydecs (AcyclicSCC sym) = isNameTy tydecs sym
 allAreName tydecs (CyclicSCC syms) = all (isNameTy tydecs) syms
 
-lookupTypeSym :: Symbol -> [A.TyDec] -> A.TyDec
+lookupTypeSym :: Symbol.Symbol -> [A.TyDec] -> A.TyDec
 lookupTypeSym sym tydecs = case filter (\tydec -> A.tydecName tydec == sym) tydecs of
   [] -> error "shouldn't get here"
   tydec : _ -> tydec
 
-isNameTy :: [A.TyDec] -> Symbol -> Bool
+isNameTy :: [A.TyDec] -> Symbol.Symbol -> Bool
 isNameTy tydecs sym =
   case lookupTypeSym sym tydecs of
     (A.TyDec _ (A.NameTy _) _) -> True
     (A.TyDec _ _ _) -> False
 
-calcTypeGraph :: [A.TyDec] -> [(Symbol, A.Pos, [Symbol])]
+calcTypeGraph :: [A.TyDec] -> [(Symbol.Symbol, A.Pos, [Symbol.Symbol])]
 calcTypeGraph tydecs = fmap calcNeighbors tydecs
   where
     calcNeighbors (A.TyDec name (A.NameTy(name',_)) posn) =
