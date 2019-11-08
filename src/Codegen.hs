@@ -17,10 +17,10 @@ import Data.Functor.Identity
 codegen :: X64Frame.X64 -> Temp.Generator -> Tree.Stm -> ([A.Inst], Temp.Generator)
 codegen x64 gen stm =
   let
-    ((_, gen'), instsDListReversed) =
-      (runIdentity . flip runReaderT x64 . runWriterT . flip runStateT gen) $ munchStm stm
+    ((_, gen'), instsDList) =
+      runIdentity . flip runReaderT x64 . runWriterT . flip runStateT gen $ munchStm stm
   in
-    ((reverse . toList) instsDListReversed, gen')
+    (toList instsDList, gen')
 
 type CodeGenerator = StateT Temp.Generator (
                        WriterT (DList A.Inst)
