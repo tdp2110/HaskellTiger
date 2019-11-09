@@ -55,10 +55,10 @@ baseVEnv x64 gen =
     enterBuiltin :: ([(Symbol, EnvEntry)], Temp.Generator)
                  -> (String, [Types.Ty], Types.Ty)
                  -> ([(Symbol, EnvEntry)], Temp.Generator)
-    enterBuiltin (acc, gen') (name, formalTys, returnTy) =
+    enterBuiltin (acc, gen') (nm, formalTys, returnTy) =
       let
-        sym = Symbol name
-        lab = Temp.Label $ Symbol $ "__tiger_" ++ name
+        sym = Symbol nm
+        lab = Temp.Label $ Symbol $ "__tiger_" ++ nm
         escapes = fmap (\_ -> Frame.NoEscape) formalTys
         (gen'', lev) = Translate.x64NewLevel
                          x64

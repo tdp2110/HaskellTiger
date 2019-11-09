@@ -24,6 +24,7 @@ import Data.List
 import Data.Graph
 import Prelude hiding (exp)
 
+
 data SemantError = SemantError{what :: String, at :: A.Pos} deriving (Eq)
 instance Show SemantError where
   show (SemantError err pos) = "semantic issue at " ++ (show pos) ++ ": " ++ (show err)
@@ -765,9 +766,10 @@ transDec (A.FunctionDec fundecs) = do
       fundecs
     maybeFormalsTys =
       sequence $ fmap (\fundec -> sequence $
-                                 fmap
-                                 (computeFormalTy env)
-                                 (A.params fundec)) fundecs
+                                    fmap
+                                      (computeFormalTy env)
+                                      (A.params fundec)
+                      ) fundecs
     in
     case maybeFormalsTys of
       Left err -> throwErr err
@@ -775,10 +777,10 @@ transDec (A.FunctionDec fundecs) = do
         let
           resultTys = fmap resultTyFun resultMaybeTys
         in
-          case runTransT
+          case (runTransT
                st
                env
-               $ extractHeaderM (venv' env) fundecs formalsTys resultTys
+               $ extractHeaderM (venv' env) fundecs formalsTys resultTys)
           of
             Left err -> throwErr err
             Right ((headerVEnv, newState), frags) -> do
@@ -812,17 +814,22 @@ transDec (A.FunctionDec fundecs) = do
       let
         venv = venv' env
         Just Env.FunEntry{ Env.level=funLevel } = Map.lookup funName venv
-        bodyVEnv = Map.union venv $ Map.fromList $
-          fmap (\(sym,typ,_) -> (sym, Env.VarEntry (formalAccess sym) typ)) formalsTys
+        paramEnv = Map.fromList $ fmap
+                                    (\(sym,typ,_) -> (sym, Env.VarEntry (formalAccess sym) typ))
+                                    formalsTys
+        bodyVEnv = Map.union venv paramEnv
         bodyEnv = env{venv'=bodyVEnv}
         formalAccess :: Symbol.Symbol -> Access
         formalAccess sym = case
-          lookup sym $ zip
-            (fmap A.fieldName funParams)
-            (formalAccesses $ level st)
-          of
-            Just acc -> acc
-            _ -> error "must not get here"
+          Map.lookup funName venv of
+            Just (Env.FunEntry{Env.level=funLev}) -> case
+              lookup sym $ zip
+                (fmap A.fieldName funParams)
+                (formalAccesses $ funLev)
+              of
+                Just acc -> acc
+                _ -> error $ "must not get here " ++ (show $ formalAccesses $ level st)
+            wtf@_ -> error $ "WTF: " ++ show wtf
         in
         case
           runTransT st bodyEnv (transExp funBody)
@@ -883,10 +890,10 @@ extractHeaderM venv fundecs formalsTys resultTys =
         nextLab <- nextLabel
         pure $ Map.insert
           (A.fundecName fundec)
-          Env.FunEntry{Env.level=nextLev,
-                       Env.label=nextLab,
-                       Env.formals=fmap (\(_,elt,_) -> elt) paramTys,
-                       Env.result=resultTy}
+          Env.FunEntry{ Env.level=nextLev
+                      , Env.label=nextLab
+                      , Env.formals=fmap (\(_,elt,_) -> elt) paramTys
+                      , Env.result=resultTy }
           valEnv
     calcEscapes :: A.FunDec -> [Frame.EscapesOrNot]
     calcEscapes (A.FunDec _ params _ _ _) =

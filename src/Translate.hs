@@ -76,7 +76,7 @@ x64TranslateFormals lev =
     toTranslateAccess = \frameAccess -> X64Access{ level=lev
                                                  , access=frameAccess }
   in
-    map toTranslateAccess frameAccesses
+    fmap toTranslateAccess frameAccesses
 
 x64AllocLocal lev gen escapeOrNot =
   let

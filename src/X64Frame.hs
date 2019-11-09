@@ -4,7 +4,6 @@ module X64Frame where
 
 import qualified Assem
 import qualified Frame
-import qualified Symbol
 import qualified Temp
 import qualified Tree
 
@@ -180,14 +179,18 @@ newFrame x64Inst frameName gen escapes =
     allocFormal :: Temp.Generator -> X64Frame -> Frame.EscapesOrNot -> Int
       -> (Temp.Generator, X64Frame, Int)
     allocFormal gen' frame escapesOrNot numEscapesSeen =
-        if not (Frame.escapes escapesOrNot) &&
-           numFormalsInReg frame < maxNumRegisterParams then
-          let
-            (regNum, gen'') = Temp.newtemp gen'
-          in
-            (gen'', frame{formals=(formals frame) ++ [InReg regNum]}, numEscapesSeen)
-        else
-            (gen', frame{formals=(formals frame) ++ [InFrame numEscapesSeen]}, numEscapesSeen)
+        let
+          doesEscape = Frame.escapes escapesOrNot
+          numEscapesSeen' = if doesEscape then numEscapesSeen + 1 else numEscapesSeen
+        in
+          if not doesEscape &&
+             numFormalsInReg frame < maxNumRegisterParams then
+            let
+              (regNum, gen'') = Temp.newtemp gen'
+            in
+              (gen'', frame{formals=(formals frame) ++ [InReg regNum]}, numEscapesSeen')
+          else
+              (gen', frame{formals=(formals frame) ++ [InFrame numEscapesSeen]}, numEscapesSeen')
 
 allocLocal :: Temp.Generator -> X64Frame -> Frame.EscapesOrNot
   -> (Temp.Generator, X64Frame, X64Access)
