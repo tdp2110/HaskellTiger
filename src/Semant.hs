@@ -832,7 +832,7 @@ transDec (A.FunctionDec fundecs) = do
             wtf@_ -> error $ "WTF: " ++ show wtf
         in
         case
-          runTransT st bodyEnv (transExp funBody)
+          runTransT st{level=funLevel} bodyEnv (transExp funBody)
         of
           Left err -> throwErr err
           Right ((ExpTy{exp=bodyExp, ty=bodyTy}, state'), frags) ->
