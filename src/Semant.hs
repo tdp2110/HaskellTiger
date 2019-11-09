@@ -24,7 +24,6 @@ import Data.List
 import Data.Graph
 import Prelude hiding (exp)
 
-
 data SemantError = SemantError{what :: String, at :: A.Pos} deriving (Eq)
 instance Show SemantError where
   show (SemantError err pos) = "semantic issue at " ++ (show pos) ++ ": " ++ (show err)
@@ -224,10 +223,10 @@ isCmp _ = False
 
 
 checkInt :: Types.Ty -> Maybe String-> Either String ()
-checkInt Types.INT _ = Right $ ()
+checkInt Types.INT _ = Right ()
 checkInt nonIntTy maybeCtx =
   Left $ (convertCtx maybeCtx) ++
-  "expected type Ty.INT, but found " ++ show nonIntTy
+    "expected type Ty.INT, but found " ++ show nonIntTy
   where
     convertCtx Nothing = ""
     convertCtx (Just str) = str ++ ", "
@@ -237,7 +236,7 @@ transVar (A.SimpleVar sym pos) = do
   (SemantState lev _ _ _) <- get
   case val of
     (Env.VarEntry access t) -> pure ExpTy{ exp=Translate.simpleVar access lev
-                                           , ty=t}
+                                         , ty=t}
     (Env.FunEntry _ _ _ _) -> throwT pos $
                               "variable " ++ (show sym) ++
                               " has no non-function bindings."
@@ -825,7 +824,7 @@ transDec (A.FunctionDec fundecs) = do
             Just (Env.FunEntry{Env.level=funLev}) -> case
               lookup sym $ zip
                 (fmap A.fieldName funParams)
-                (formalAccesses $ funLev)
+                (tail $ formalAccesses $ funLev) -- drop first access, the static link
               of
                 Just acc -> acc
                 _ -> error $ "must not get here " ++ (show $ formalAccesses $ level st)
