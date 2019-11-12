@@ -24,6 +24,7 @@ import Data.List
 import Data.Graph
 import Prelude hiding (exp)
 
+
 data SemantError = SemantError{what :: String, at :: A.Pos} deriving (Eq)
 instance Show SemantError where
   show (SemantError err pos) = "semantic issue at " ++ (show pos) ++ ": " ++ (show err)
@@ -35,7 +36,7 @@ transProg expr =
   let
     gen = Temp.newGen
     (x64', gen') = X64Frame.initX64 gen
-    (gen'', mainLevel) = newLevelFn x64' (outermost, Temp.Label $ Symbol.Symbol "main", []) gen'
+    (gen'', mainLevel) = newLevelFn x64' (outermost, Temp.Label $ Symbol.Symbol "__tiger_main", []) gen'
     (baseVEnv, gen''') = Env.baseVEnv x64' gen''
     startState = SemantState{ level=mainLevel
                             , breakTarget=Nothing
@@ -102,7 +103,7 @@ pushFrag :: Frag -> Translator ()
 pushFrag = lift . tell . DList.singleton
 
 pushFrags :: Foldable t => t Frag -> Translator ()
-pushFrags frags = mapM_ pushFrag frags
+pushFrags = mapM_ pushFrag
 
 askEnv :: Translator SemantEnv
 askEnv = (lift . lift) ask
@@ -303,8 +304,8 @@ transExp (A.CallExp funcSym argExps pos) = do
                 argExpTrees = fmap exp paramExpTys
                 in
                 translate
-                (Translate.call funLevel thisLevel label argExpTrees)
-                resultTy
+                  (Translate.call funLevel thisLevel label argExpTrees)
+                  resultTy
             ((formalTy, paramTy, ix):_) ->
               throwT pos $
               "parameter " ++ (show ix) ++ " of func " ++ (show funcSym) ++
@@ -846,9 +847,9 @@ transDec (A.FunctionDec fundecs) = do
               state''@SemantState{generator=gen} <- get
               let
                 (frag, gen') = Translate.functionDec
-                               funLevel
-                               bodyExp
-                               gen
+                                 funLevel
+                                 bodyExp
+                                 gen
                 in
                 do
                 pushFrag frag
@@ -886,11 +887,10 @@ extractHeaderM venv fundecs formalsTys resultTys =
         escapes = calcEscapes fundec
       in do
         nextLev <- newLevel escapes
-        nextLab <- nextLabel
         pure $ Map.insert
           (A.fundecName fundec)
           Env.FunEntry{ Env.level=nextLev
-                      , Env.label=nextLab
+                      , Env.label=X64Frame.name $ Translate.x64Frame nextLev
                       , Env.formals=fmap (\(_,elt,_) -> elt) paramTys
                       , Env.result=resultTy }
           valEnv
