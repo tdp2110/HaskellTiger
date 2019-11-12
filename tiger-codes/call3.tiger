@@ -1,6 +1,6 @@
 let
     var x := 42
-    function f(a: int, b: int) = a + b
+    function f(a: int, b: int) : int = a + b
 in
     f(x, x)
 end

@@ -1,5 +1,5 @@
 let
-    function f(x: int, y: int) = x + y
+    function f(x: int, y: int) : int = x + y
 in
     f(1, 2)
 end

@@ -180,7 +180,7 @@ putExp (CALL (e,el)) d = do
   mapM_
     (\a -> do
              putStrLnW ","
-             putExp a $ d + 2
+             putExp a $ d + 1
     )
     el
   putStrW ")"
