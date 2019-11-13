@@ -208,9 +208,27 @@ allocLocal gen frame escapesOrNot =
     in
       (gen', frame{locals=(locals frame) ++ [access]}, access)
 
+-- | (From Appel, p 261) )For each incoming register parameter, move ti to the place
+-- from which it is seen within hte function. T?his could be a frame location (for
+-- escaping parameters) or a fresh temporary. One good way to handle this is for newFrame
+-- to create a sequence of Tree.MOVE statements as it creates all the formal parameter
+-- "accesses". newFrame can put this into the frame data structure, and procEntryExit1
+-- can just concatenate it onto the procedue body.
+--   Also concatenated to the body are statements for saving and restoring of callee-save registers.
+-- procEntryExit1 should make up new temporaries for each callee-save (and return-address) register.
+-- on entry, it should move all these registers to their new temporary locations,
+-- and on exit, it should move them back. Of course, these moves (for nonspilled registers) will be
+-- eliminated by register coalesching, so they cost nothing
 procEntryExit1 :: X64Frame -> Tree.Exp -> Tree.Exp
 procEntryExit1 _ bodyExp = bodyExp
 
+-- | This function appends a "sink" instruction to the function body to tell the register allocator
+-- that certain regisers are live at procedure exit. In the case of the Jouette machine, this is simply
+-- fun procEntryExit2(frame, body) =
+--   body @
+--   [A.OPER{assem="",
+--           src=[ZERO,RA,SP]@calleesaves,
+--           dst=[],jump=SOME[]}]
 procEntryExit2 :: X64Frame -> [Assem.Inst] -> [Assem.Inst]
 procEntryExit2 frame bodyAsm =
   let
@@ -227,6 +245,11 @@ data ProcEntryExit = ProcEntryExit { prolog :: String
                                    , procBody :: [Assem.Inst]
                                    , epilog :: String }
 
+-- | Creates the procedure prologue and epilogue assembly language. Calculates the size of the
+-- outgoing parameter space in the frame. This is equal to the maximum number of outgoing parameters
+-- of any CALL instruction in the procedure body. Once this is known, the assembly language
+-- for procedure entry, stack pointer adjustment, and procedure exit can be put together;
+-- these are the _prologue_ and _epilogue_.
 procEntryExit3 :: X64Frame -> [Assem.Inst] -> ProcEntryExit
 procEntryExit3 frame bodyAsm =
   let
