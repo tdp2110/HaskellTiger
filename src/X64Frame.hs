@@ -126,8 +126,8 @@ initX64 gen =
           , r15=r15Id
           , dividendRegister=raxId
           , divideDests=[raxId, rdxId]
-          , calleeSaves=[rbxId, rdiId, rsiId]
-          , callerSaves=[rbxId, rbpId, r12Id, r13Id, r14Id, r15Id]
+          , calleeSaves=[rbxId, rbpId, r12Id, r13Id, r14Id, r15Id]
+          , callerSaves=[raxId, rcxId, rdxId, rsiId, rdiId, r8Id, r9Id, r10Id, r11Id]
           , callDests=[raxId, rdxId]
           , tempMap = Map.fromList [ (raxId, "RAX")
                                    , (rbxId, "RBX")
