@@ -44,6 +44,7 @@ data X64 = X64 { rax :: Int
                , calleeSaves :: [Int]
                , callerSaves :: [Int]
                , callDests :: [Int]
+               , paramRegs :: [Int]
                , tempMap :: Map Int String }
   deriving (Show)
 
@@ -72,7 +73,7 @@ frameExp frame = Tree.TEMP $ Frame.fp frame
 
 externalCall :: Temp.Label -> [Tree.Exp] -> Tree.Exp
 externalCall funname params =
-  Tree.CALL (Tree.NAME funname, params)
+  Tree.CALL (Tree.NAME funname, params, fmap (\_ -> Frame.NoEscape) params)
 
 accessExp :: X64Frame -> X64Access -> Tree.Exp
 accessExp frame acc = exp acc $ frameExp frame
@@ -129,6 +130,7 @@ initX64 gen =
           , calleeSaves=[rbxId, rbpId, r12Id, r13Id, r14Id, r15Id]
           , callerSaves=[raxId, rcxId, rdxId, rsiId, rdiId, r8Id, r9Id, r10Id, r11Id]
           , callDests=[raxId, rdxId]
+          , paramRegs=[rdiId, rsiId, rdxId, rcxId, r8Id, r9Id]
           , tempMap = Map.fromList [ (raxId, "rax")
                                    , (rbxId, "rbx")
                                    , (rcxId, "rcx")
@@ -209,7 +211,7 @@ allocLocal gen frame escapesOrNot =
       (gen', frame{locals=(locals frame) ++ [access]}, access)
 
 -- | (From Appel, p 261) )For each incoming register parameter, move ti to the place
--- from which it is seen within hte function. T?his could be a frame location (for
+-- from which it is seen within hte function (aka the "view shift"). This could be a frame location (for
 -- escaping parameters) or a fresh temporary. One good way to handle this is for newFrame
 -- to create a sequence of Tree.MOVE statements as it creates all the formal parameter
 -- "accesses". newFrame can put this into the frame data structure, and procEntryExit1

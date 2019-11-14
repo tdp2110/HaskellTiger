@@ -5,7 +5,7 @@ module Frame where
 import qualified Temp
 
 data EscapesOrNot = Escapes | NoEscape
-  deriving (Show)
+  deriving (Eq, Show)
 
 escapes :: EscapesOrNot -> Bool
 escapes Escapes = True

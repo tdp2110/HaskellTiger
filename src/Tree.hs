@@ -1,5 +1,6 @@
 module Tree where
 
+import qualified Frame
 import qualified Symbol
 import qualified Temp
 
@@ -15,7 +16,7 @@ data Exp =
   | TEMP Int
   | BINOP (Binop, Exp, Exp)
   | MEM Exp
-  | CALL (Exp, [Exp])
+  | CALL (Exp, [Exp], [Frame.EscapesOrNot])
   | ESEQ (Stm, Exp)
   deriving (Eq)
 
@@ -173,7 +174,7 @@ putExp (CONST i) d = do
   indent d
   putStrW "CONST "
   putStrW $ show i
-putExp (CALL (e,el)) d = do
+putExp (CALL (e,el,_)) d = do
   indent d
   putStrLnW "CALL("
   putExp e $ d + 1

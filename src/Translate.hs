@@ -505,6 +505,7 @@ callM funLevel callerLevel funlab params = do
   gen <- get
   let
     (treeParams, gen') = runState (mapM unExM params) gen
+    escapes = x64Formals funLevel
     in do
     put gen'
     pure $ Ex $ case x64Parent funLevel of
@@ -515,7 +516,8 @@ callM funLevel callerLevel funlab params = do
                                 , [staticLink
                                     callerLevel
                                     funParentLevel]
-                                  ++ treeParams)
+                                  ++ treeParams
+                                , escapes)
 
 call :: X64Level -> X64Level -> Temp.Label -> [Exp] -> Temp.Generator
   -> (Exp, Temp.Generator)

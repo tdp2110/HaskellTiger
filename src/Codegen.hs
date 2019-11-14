@@ -1,10 +1,11 @@
 module Codegen (codegen) where
 
-import qualified X64Frame
+import qualified Assem as A
+import qualified Frame
 import qualified Symbol as S
 import qualified Temp
 import qualified Tree as Tree
-import qualified Assem as A
+import qualified X64Frame
 
 import Control.Monad.Trans.Writer (WriterT, tell, runWriterT)
 import Control.Monad.Trans.Class (lift)
@@ -12,6 +13,7 @@ import Control.Monad.Trans.State (StateT, get, put, runStateT)
 import Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
 import Data.DList (DList, singleton, toList)
 import Data.Functor.Identity
+import Data.List
 
 
 codegen :: X64Frame.X64 -> Temp.Generator -> Tree.Stm -> ([A.Inst], Temp.Generator)
@@ -231,11 +233,11 @@ munchExp (Tree.BINOP (op, e1, e2)) =
                        Tree.RSHIFT -> "SHR"
                        Tree.XOR -> "XOR"
                        _ -> error $ "unsupported operator: " ++ (show oper)
-munchExp (Tree.CALL (Tree.NAME lab, args)) =
+munchExp (Tree.CALL (Tree.NAME lab, args, escapes)) =
   result (\r -> do
                   operSrc <- mapM munchExp args
                   x64 <- getArch
-                  saveAndRestore
+                  saveRestoreAndSetupArgs
                     (A.OPER { A.assem="call `j0\n"
                             , A.operDst=X64Frame.callDests x64
                             , A.operSrc=operSrc
@@ -243,13 +245,15 @@ munchExp (Tree.CALL (Tree.NAME lab, args)) =
                     (A.MOVE { A.assem="mov `d0, `s0\n"
                             , A.moveDst=r
                             , A.moveSrc=X64Frame.rax x64 })
+                    operSrc
+                    escapes
          )
-munchExp (Tree.CALL (expr, args)) =
+munchExp (Tree.CALL (expr, args, escapes)) =
   result (\r -> do
                   argRegs <- mapM munchExp args
                   exprReg <- munchExp expr
                   x64 <- getArch
-                  saveAndRestore
+                  saveRestoreAndSetupArgs
                     (A.OPER { A.assem="call `s0\n"
                            , A.operDst=X64Frame.callDests x64
                            , A.operSrc=[exprReg] ++ argRegs
@@ -257,6 +261,8 @@ munchExp (Tree.CALL (expr, args)) =
                     (A.MOVE { A.assem="mov `d0, `s0\n"
                            , A.moveDst=r
                            , A.moveSrc=X64Frame.rax x64 })
+                    argRegs
+                    escapes
          )
 munchExp (Tree.MEM (Tree.BINOP (Tree.PLUS, e, Tree.CONST c))) =
   result (\r -> do
@@ -293,8 +299,9 @@ munchExp (Tree.NAME lab@(Temp.Label (S.Symbol s))) =
                                 , A.jump=Just [lab] } ]
          )
 
-saveAndRestore :: A.Inst -> A.Inst -> CodeGenerator [A.Inst]
-saveAndRestore callStm moveStm = do
+saveRestoreAndSetupArgs :: A.Inst -> A.Inst -> [Int] -> [Frame.EscapesOrNot]
+                             -> CodeGenerator [A.Inst]
+saveRestoreAndSetupArgs callStm moveStm callArgs escapes = do
   x64 <- getArch
   let
     callerSaves = X64Frame.callerSaves x64
@@ -305,7 +312,9 @@ saveAndRestore callStm moveStm = do
         saves = fmap save $ zip callerSaves callerSaveDests
         restores = fmap restore $ zip callerSaves callerSaveDests
         in
-        pure $ saves ++ [callStm, moveStm] ++ restores
+        pure $ saves ++ (setupArgs x64 $ zip callArgs escapes)
+                     ++ [callStm, moveStm]
+                     ++ restores
   where
     save :: (Int, Int) -> A.Inst
     save (reg, temp) = A.MOVE { A.assem = "mov `d0, `s0\n"
@@ -314,3 +323,37 @@ saveAndRestore callStm moveStm = do
 
     restore :: (Int, Int) -> A.Inst
     restore (reg, temp) = save (temp, reg)
+
+    setupArgs :: X64Frame.X64 -> [(Int, Frame.EscapesOrNot)] -> [A.Inst]
+    setupArgs x64 paramsAndEscapes =
+      let
+        (_, _, res) = foldl'
+                        (step x64)
+                        (X64Frame.paramRegs x64, [0..], [] :: [A.Inst])
+                        paramsAndEscapes
+      in
+        res
+
+    step :: X64Frame.X64 -> ([Int], [Int], [A.Inst]) -> (Int, Frame.EscapesOrNot)
+              -> ([Int], [Int], [A.Inst])
+    step x64 (paramRegs, nextStackOffsets, acc) (argReg, escapesOrNot) =
+      case escapesOrNot of
+        Frame.Escapes ->
+          let
+            (stackOffset:nextStackOffsets') = nextStackOffsets
+            inst = A.OPER { A.assem="mov qword ptr [`d0 + " ++ (show stackOffset) ++ "], `s0\n"
+                          , A.operDst=[X64Frame.rsp x64]
+                          , A.operSrc=[argReg]
+                          , A.jump=Nothing }
+          in
+            (paramRegs, nextStackOffsets', acc ++ [inst])
+        Frame.NoEscape ->
+          case paramRegs of
+            [] ->
+              step x64 (paramRegs, nextStackOffsets, acc) (argReg, Frame.Escapes)
+            (paramReg:paramRegs') ->
+              ( paramRegs'
+              , nextStackOffsets
+              , acc ++ [ A.MOVE { A.assem="mov `d0, `s0\n"
+                                , A.moveDst=paramReg
+                                , A.moveSrc=argReg } ])

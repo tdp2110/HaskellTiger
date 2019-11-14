@@ -83,16 +83,16 @@ doStm (T.JUMP (e,labs)) =
   reorderStm [e] (\[e'] -> T.JUMP (e', labs))
 doStm (T.CJUMP (p,a,b,t,f)) =
   reorderStm [a,b] $ \[a',b'] -> T.CJUMP (p,a',b',t,f)
-doStm (T.MOVE (T.TEMP t, T.CALL (e,el))) =
-  reorderStm (e:el) $ \(e':el') -> T.MOVE (T.TEMP t, T.CALL (e',el'))
+doStm (T.MOVE (T.TEMP t, T.CALL (e,el,escapes))) =
+  reorderStm (e:el) $ \(e':el') -> T.MOVE (T.TEMP t, T.CALL (e',el',escapes))
 doStm (T.MOVE (T.TEMP t, b)) =
   reorderStm [b] $ \[b'] -> T.MOVE (T.TEMP t, b')
 doStm (T.MOVE (T.MEM e, b)) =
   reorderStm [e,b] $ \[e',b'] -> T.MOVE (T.MEM e', b')
 doStm (T.MOVE (T.ESEQ (s,e), b)) =
   doStm $ T.SEQ (s, T.MOVE (e,b))
-doStm (T.EXP (T.CALL (e,el))) =
-  reorderStm (e:el) $ \(e':el') -> T.EXP $ T.CALL (e',el')
+doStm (T.EXP (T.CALL (e,el,escapes))) =
+  reorderStm (e:el) $ \(e':el') -> T.EXP $ T.CALL (e',el',escapes)
 doStm (T.EXP e) =
   reorderStm [e] $ \[e'] -> T.EXP e'
 doStm s =
@@ -107,8 +107,8 @@ doExp (T.ESEQ (s,e)) = do
   stms <- doStm s
   (stms',e') <- doExp e
   pure (stms % stms',e')
-doExp (T.CALL (e,el)) =
-  reorderExp (e:el) (\(e':el') -> T.CALL (e', el'))
+doExp (T.CALL (e,el,escapes)) =
+  reorderExp (e:el) (\(e':el') -> T.CALL (e', el', escapes))
 doExp e =
   reorderExp [] $ \[] -> e
 
