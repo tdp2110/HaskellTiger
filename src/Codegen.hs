@@ -235,26 +235,28 @@ munchExp (Tree.CALL (Tree.NAME lab, args)) =
   result (\r -> do
                   operSrc <- mapM munchExp args
                   x64 <- getArch
-                  pure [ A.OPER { A.assem="CALL `j0\n"
-                                , A.operDst=X64Frame.callDests x64
-                                , A.operSrc=operSrc
-                                , A.jump=Just [lab] }
-                       , A.MOVE { A.assem="MOV `d0, `s0\n"
-                                , A.moveDst=r
-                                , A.moveSrc=X64Frame.rax x64 } ]
+                  saveAndRestore
+                    (A.OPER { A.assem="CALL `j0\n"
+                            , A.operDst=X64Frame.callDests x64
+                            , A.operSrc=operSrc
+                            , A.jump=Just [lab] })
+                    (A.MOVE { A.assem="MOV `d0, `s0\n"
+                            , A.moveDst=r
+                            , A.moveSrc=X64Frame.rax x64 })
          )
 munchExp (Tree.CALL (expr, args)) =
   result (\r -> do
                   argRegs <- mapM munchExp args
                   exprReg <- munchExp expr
                   x64 <- getArch
-                  pure [ A.OPER { A.assem="CALL `s0\n"
-                                , A.operDst=X64Frame.callDests x64
-                                , A.operSrc=[exprReg] ++ argRegs
-                                , A.jump=Nothing }
-                       , A.MOVE { A.assem="MOV `d0, `s0\n"
-                                , A.moveDst=r
-                                , A.moveSrc=X64Frame.rax x64 } ]
+                  saveAndRestore
+                    (A.OPER { A.assem="CALL `s0\n"
+                           , A.operDst=X64Frame.callDests x64
+                           , A.operSrc=[exprReg] ++ argRegs
+                           , A.jump=Nothing })
+                    (A.MOVE { A.assem="MOV `d0, `s0\n"
+                           , A.moveDst=r
+                           , A.moveSrc=X64Frame.rax x64 })
          )
 munchExp (Tree.MEM (Tree.BINOP (Tree.PLUS, e, Tree.CONST c))) =
   result (\r -> do
@@ -290,3 +292,25 @@ munchExp (Tree.NAME lab@(Temp.Label (S.Symbol s))) =
                                 , A.operSrc=[]
                                 , A.jump=Just [lab] } ]
          )
+
+saveAndRestore :: A.Inst -> A.Inst -> CodeGenerator [A.Inst]
+saveAndRestore callStm moveStm = do
+  x64 <- getArch
+  let
+    callerSaves = X64Frame.callerSaves x64
+    in
+    do
+      callerSaveDests <- mapM (\_ -> newTemp) callerSaves
+      let
+        saves = fmap save $ zip callerSaves callerSaveDests
+        restores = fmap restore $ zip callerSaves callerSaveDests
+        in
+        pure $ saves ++ [callStm, moveStm] ++ restores
+  where
+    save :: (Int, Int) -> A.Inst
+    save (reg, temp) = A.MOVE { A.assem = "MOV `d0, `s0\n"
+                              , A.moveDst = temp
+                              , A.moveSrc = reg }
+
+    restore :: (Int, Int) -> A.Inst
+    restore (reg, temp) = save (temp, reg)
