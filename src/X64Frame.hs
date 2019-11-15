@@ -199,7 +199,7 @@ allocLocal :: Temp.Generator -> X64Frame -> Frame.EscapesOrNot
 allocLocal gen frame escapesOrNot =
   if Frame.escapes escapesOrNot then
     let
-      numLocals = length $ locals frame
+      numLocals = length $ filter isInFrame $ locals frame
       access = InFrame $ -1 - numLocals
     in
       (gen, frame{locals=(locals frame) ++ [access]}, access)
@@ -209,6 +209,10 @@ allocLocal gen frame escapesOrNot =
       access = InReg regLabel
     in
       (gen', frame{locals=(locals frame) ++ [access]}, access)
+  where
+    isInFrame :: X64Access -> Bool
+    isInFrame (InFrame _) = True
+    isInFrame _ = False
 
 -- | (From Appel, p 261) )For each incoming register parameter, move ti to the place
 -- from which it is seen within hte function (aka the "view shift"). This could be a frame location (for
