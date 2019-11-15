@@ -74,7 +74,7 @@ compileToAsm text =
                                                         [moveSrc]
                                                         Nothing
       in
-        ("PROC:\n" ++ join (fmap formatAsm insts), gen5)
+        (";; PROC:\n" ++ join (fmap formatAsm insts), gen5)
       where
         step1 :: ([Assem.Inst], Temp.Generator) -> Tree.Stm -> ([Assem.Inst], Temp.Generator)
         step1 (insts, g) stm =
@@ -83,7 +83,7 @@ compileToAsm text =
           in
             (insts ++ insts', g')
     emit (X64Frame.STRING (lab, str)) g =
-      ("STRING: " ++ (show lab) ++ ":\n" ++ str ++ "\n", g)
+      (";; STRING: " ++ (show lab) ++ ":\n" ++ str ++ "\n", g)
     step2 :: (String, Temp.Generator) -> X64Frame.Frag -> (String, Temp.Generator)
     step2 (s, g) f =
       let

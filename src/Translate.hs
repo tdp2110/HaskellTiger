@@ -187,7 +187,7 @@ record exps gen =
     (initStm, gen'') = foldl'
                        step
                        (passStm, gen')
-                       $ zip exps [0 :: Int ..]
+                       $ zip exps [1 :: Int ..]
     step :: (Tree.Stm, Temp.Generator) -> (Exp, Int) -> (Tree.Stm, Temp.Generator)
     step (stm, g) (exp, idx) =
       let
