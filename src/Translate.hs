@@ -115,18 +115,14 @@ unEx (Cx genstm) gen =
     (t, gen'') = Temp.newlabel gen'
     (f, gen''') = Temp.newlabel gen''
     expRes = Tree.ESEQ(
-      makeSeq [ Tree.MOVE(Tree.TEMP r, Tree.CONST 1)
-              , genstm t f
-              , Tree.LABEL f
-              , Tree.MOVE(Tree.TEMP r, zero)
-              , Tree.LABEL t],
+      Tree.makeSeq [ Tree.MOVE(Tree.TEMP r, Tree.CONST 1)
+                   , genstm t f
+                   , Tree.LABEL f
+                   , Tree.MOVE(Tree.TEMP r, zero)
+                   , Tree.LABEL t],
       Tree.TEMP r)
   in
     (expRes, gen''')
-
-makeSeq :: [Tree.Stm] -> Tree.Stm
-makeSeq [] = Tree.EXP $ zero
-makeSeq (stmt:stmts) = Tree.SEQ(stmt, makeSeq stmts)
 
 unCx :: Exp -> (Temp.Label -> Temp.Label -> Tree.Stm)
 unCx (Ex (Tree.CONST 0)) = \_ f -> Tree.JUMP(Tree.NAME f, [f])
@@ -142,7 +138,7 @@ unNx (Cx genstm) gen =
   let
     (t, gen') = Temp.newlabel gen
     (f, gen'') = Temp.newlabel gen'
-    stmtRes = makeSeq [genstm t f, Tree.LABEL t, Tree.LABEL f]
+    stmtRes = Tree.makeSeq [genstm t f, Tree.LABEL t, Tree.LABEL f]
   in
     (stmtRes, gen'')
 
@@ -264,10 +260,10 @@ ifThen testExpE thenExpE gen =
     (thenStm, gen') = unNx thenExpE gen
     (t, gen'') = Temp.newlabel gen'
     (f, gen''') = Temp.newlabel gen''
-    resExp = Nx $ makeSeq [ cx t f
-                          , Tree.LABEL t
-                          , thenStm
-                          , Tree.LABEL f ]
+    resExp = Nx $ Tree.makeSeq [ cx t f
+                               , Tree.LABEL t
+                               , thenStm
+                               , Tree.LABEL f ]
   in
     (resExp, gen''')
 
@@ -328,13 +324,13 @@ ifThenElseStm testExpE thenExp elseExp gen =
     (joinLab, gen''') = Temp.newlabel gen''
     (thenStm, gen4) = unNx thenExp gen'''
     (elseStm, gen5) = unNx elseExp gen4
-    resExp = Nx $ makeSeq [ testGen t f
-                          , Tree.LABEL t
-                          , thenStm
-                          , Tree.JUMP (Tree.NAME joinLab, [joinLab])
-                          , Tree.LABEL f
-                          , elseStm
-                          , Tree.LABEL joinLab ]
+    resExp = Nx $ Tree.makeSeq [ testGen t f
+                               , Tree.LABEL t
+                               , thenStm
+                               , Tree.JUMP (Tree.NAME joinLab, [joinLab])
+                               , Tree.LABEL f
+                               , elseStm
+                               , Tree.LABEL joinLab ]
   in
     (resExp, gen5)
 
@@ -343,11 +339,11 @@ ifThenElseCx testGen thenGen elseGen gen =
   let
     (z, gen') = Temp.newlabel gen
     (w, gen'') = Temp.newlabel gen'
-    resExp = Cx $ \t f -> makeSeq [ testGen z f
-                                  , Tree.LABEL z
-                                  , thenGen w f
-                                  , Tree.LABEL w
-                                  , elseGen t f ]
+    resExp = Cx $ \t f -> Tree.makeSeq [ testGen z f
+                                      , Tree.LABEL z
+                                      , thenGen w f
+                                      , Tree.LABEL w
+                                      , elseGen t f ]
   in
     (resExp, gen'')
 
@@ -373,13 +369,13 @@ ifThenElse testExpE thenExpE elseExpE gen =
     (f, gen4) = Temp.newlabel gen'''
     (joinLab, gen5) = Temp.newlabel gen4
     (r, gen6) = Temp.newtemp gen5
-    resExp = Ex $ Tree.ESEQ (makeSeq [ testGen t f
-                                     , Tree.LABEL t
-                                     , Tree.MOVE (Tree.TEMP r, thenExp)
-                                     , Tree.JUMP (Tree.NAME joinLab, [joinLab])
-                                     , Tree.LABEL f
-                                     , Tree.MOVE (Tree.TEMP r, elseExp)
-                                     , Tree.LABEL joinLab ]
+    resExp = Ex $ Tree.ESEQ (Tree.makeSeq [ testGen t f
+                                          , Tree.LABEL t
+                                          , Tree.MOVE (Tree.TEMP r, thenExp)
+                                          , Tree.JUMP (Tree.NAME joinLab, [joinLab])
+                                          , Tree.LABEL f
+                                          , Tree.MOVE (Tree.TEMP r, elseExp)
+                                          , Tree.LABEL joinLab ]
                             , Tree.TEMP r)
   in
     (resExp, gen6)
@@ -401,7 +397,7 @@ letExpM initializers bodyExp = do
     (initializerStms, gen'') = runState (mapM unNxM initializers) gen'
     in do
     put gen''
-    pure $ Ex $ Tree.ESEQ (makeSeq initializerStms, body)
+    pure $ Ex $ Tree.ESEQ (Tree.makeSeq initializerStms, body)
 
 letExp :: [Exp] -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
 letExp initializers body gen =
@@ -414,12 +410,12 @@ while testExpE bodyExpE doneLab gen =
     (bodyLab, gen'') = Temp.newlabel gen'
     (testExp, gen''') = unEx testExpE gen''
     (bodyExp, gen4) = unEx bodyExpE gen'''
-    resExp = Nx $ makeSeq [ Tree.LABEL testLab
-                          , Tree.CJUMP (Tree.NE, zero, testExp, doneLab, bodyLab)
-                          , Tree.LABEL bodyLab
-                          , Tree.EXP bodyExp
-                          , Tree.JUMP (Tree.NAME testLab, [testLab])
-                          , Tree.LABEL doneLab ]
+    resExp = Nx $ Tree.makeSeq [ Tree.LABEL testLab
+                               , Tree.CJUMP (Tree.NE, zero, testExp, doneLab, bodyLab)
+                               , Tree.LABEL bodyLab
+                               , Tree.EXP bodyExp
+                               , Tree.JUMP (Tree.NAME testLab, [testLab])
+                               , Tree.LABEL doneLab ]
   in
     (resExp, gen4)
 

@@ -29,6 +29,10 @@ data Stm =
   | LABEL Temp.Label
   deriving (Eq)
 
+makeSeq :: [Tree.Stm] -> Tree.Stm
+makeSeq [] = Tree.EXP $ Tree.CONST 0
+makeSeq (stmt:stmts) = Tree.SEQ(stmt, makeSeq stmts)
+
 instance Show Stm where
   show stm = toList $ execWriter $ putStm stm 0
 
