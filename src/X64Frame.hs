@@ -58,9 +58,6 @@ data Frag = PROC { body :: Tree.Stm
                  , fragFrame :: X64Frame }
           | STRING (Temp.Label, String)
 
-maxNumRegisterParams :: Int
-maxNumRegisterParams = 6
-
 wordSize :: Int
 wordSize = 8
 
@@ -186,7 +183,7 @@ newFrame x64Inst frameName gen escapes =
           numEscapesSeen' = if doesEscape then numEscapesSeen + 1 else numEscapesSeen
         in
           if not doesEscape &&
-             numFormalsInReg frame < maxNumRegisterParams then
+             numFormalsInReg frame < length (paramRegs x64Inst) then
             let
               (regNum, gen'') = Temp.newtemp gen'
             in
