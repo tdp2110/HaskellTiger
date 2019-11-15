@@ -18,10 +18,13 @@ data X64Access = InFrame Int | InReg Int
   deriving (Show)
 
 {-
+We're implementing the AMD64 System V x86_64 calling convention.
+
 On Linux and Mac (NOT windows) the first six integer or pointer arguments are passed in registers:
-RDI, RSI, RDX, RCX, R8, R9
+RDI, RSI, RDX, RCX, R8, R9. The rest are passed on the stack.
 
 see https://en.wikipedia.org/wiki/X86_calling_conventions, "System V AMD64 ABI" subsection
+or https://eli.thegreenplace.net/2011/09/06/stack-frame-layout-on-x86-64
 -}
 data X64 = X64 { rax :: Int
                , rbx :: Int
