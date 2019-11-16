@@ -341,7 +341,7 @@ saveRestoreAndSetupArgs callStm moveStm callArgs escapes = do
         Frame.Escapes ->
           let
             (stackOffset:nextStackOffsets') = nextStackOffsets
-            inst = A.OPER { A.assem="\tmov qword ptr [`d0 + " ++ (show stackOffset) ++ "], `s0\n"
+            inst = A.OPER { A.assem="\tmov qword ptr [`d0 - " ++ (show stackOffset) ++ "], `s0\n"
                           , A.operDst=[X64Frame.rsp x64]
                           , A.operSrc=[argReg]
                           , A.jump=Nothing }
