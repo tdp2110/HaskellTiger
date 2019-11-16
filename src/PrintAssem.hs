@@ -27,7 +27,8 @@ compileToAsm text =
     (Right ast) = Parser.parse text
     (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=_}, frags, gen, x64)) = Semant.transProg ast
     emit :: X64Frame.Frag -> Temp.Generator -> (String, Temp.Generator)
-    emit (X64Frame.PROC{X64Frame.body=bodyStm}) gen' =
+    emit (X64Frame.PROC { X64Frame.body=bodyStm
+                        , X64Frame.fragFrame=frame }) gen' =
       let
         (stmts, gen'') = Canon.linearize bodyStm gen'
         ((blocks, lab), gen3) = runState (Canon.basicBlocks stmts) gen''
@@ -36,6 +37,7 @@ compileToAsm text =
                           step1
                           ([], gen4)
                           stmts'
+        insts' = X64Frame.procEntryExit3 frame insts
         formatAsm :: Assem.Inst -> String
         formatAsm asm =
           let
@@ -74,7 +76,7 @@ compileToAsm text =
                                                         [moveSrc]
                                                         Nothing
       in
-        (";; PROC:\n" ++ join (fmap formatAsm insts), gen5)
+        (join (fmap formatAsm insts'), gen5)
       where
         step1 :: ([Assem.Inst], Temp.Generator) -> Tree.Stm -> ([Assem.Inst], Temp.Generator)
         step1 (insts, g) stm =

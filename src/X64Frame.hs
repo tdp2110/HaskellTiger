@@ -214,8 +214,8 @@ allocLocal gen frame escapesOrNot =
     isInFrame (InFrame _) = True
     isInFrame _ = False
 
--- | (From Appel, p 261) )For each incoming register parameter, move ti to the place
--- from which it is seen within hte function (aka the "view shift"). This could be a frame location (for
+-- | (From Appel, p 261) For each incoming register parameter, move it to the place
+-- from which it is seen within the function (aka the "view shift"). This could be a frame location (for
 -- escaping parameters) or a fresh temporary. One good way to handle this is for newFrame
 -- to create a sequence of Tree.MOVE statements as it creates all the formal parameter
 -- "accesses". newFrame can put this into the frame data structure, and procEntryExit1
@@ -247,20 +247,39 @@ procEntryExit2 frame bodyAsm =
                    , Assem.jump = Just [] }
             ]
 
-data ProcEntryExit = ProcEntryExit { prolog :: String
-                                   , procBody :: [Assem.Inst]
-                                   , epilog :: String }
-
 -- | Creates the procedure prologue and epilogue assembly language. Calculates the size of the
 -- outgoing parameter space in the frame. This is equal to the maximum number of outgoing parameters
 -- of any CALL instruction in the procedure body. Once this is known, the assembly language
 -- for procedure entry, stack pointer adjustment, and procedure exit can be put together;
 -- these are the _prologue_ and _epilogue_.
-procEntryExit3 :: X64Frame -> [Assem.Inst] -> ProcEntryExit
+procEntryExit3 :: X64Frame -> [Assem.Inst] -> [Assem.Inst]
 procEntryExit3 frame bodyAsm =
   let
+    (label:bodyAsm') = bodyAsm
     procName = Temp.name $ name frame
+    stackSize = 1024 :: Int
+    prologue = [ Assem.OPER { Assem.assem="\tpush `d0\t\t; " ++ procName ++ "\n"
+                            , Assem.operDst=[rsp $ x64 frame]
+                            , Assem.operSrc=[rbp $ x64 frame]
+                            , Assem.jump=Nothing }
+               , Assem.MOVE { Assem.assem="\tmov `d0, `s0\n"
+                            , Assem.moveDst=rbp $ x64 frame
+                            , Assem.moveSrc=rsp $ x64 frame }
+               , Assem.OPER { Assem.assem="\tsub `d0, " ++ (show stackSize) ++ "\n"
+                            , Assem.operDst=[rsp $ x64 frame]
+                            , Assem.operSrc=[]
+                            , Assem.jump=Nothing } ]
+    epilogue = [ Assem.OPER { Assem.assem="\tadd `d0, " ++ (show stackSize) ++ "\n"
+                            , Assem.operDst=[rsp $ x64 frame]
+                            , Assem.operSrc=[]
+                            , Assem.jump=Nothing }
+               , Assem.OPER { Assem.assem="\tpop `d0\n"
+                            , Assem.operDst=[rbp $ x64 frame]
+                            , Assem.operSrc=[]
+                            , Assem.jump=Nothing }
+               , Assem.OPER { Assem.assem="\tret\n"
+                            , Assem.operDst=[rsp $ x64 frame]
+                            , Assem.operSrc=[]
+                            , Assem.jump=Nothing } ]
   in
-    ProcEntryExit { prolog = ";; PROCEDURE " ++ procName ++ "\n"
-                  , procBody = bodyAsm
-                  , epilog = "RET\n;; END " ++ procName ++ "\n" }
+    [label] ++ prologue ++ bodyAsm' ++ epilogue
