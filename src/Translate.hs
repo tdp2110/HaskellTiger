@@ -19,8 +19,11 @@ class Translate t where
   type Level t :: *
   type Access t :: *
   outermost :: t -> Level t
-  newLevel :: t -> (Level t, Temp.Label, [Frame.EscapesOrNot]) -> Temp.Generator
-    -> (Temp.Generator, Level t)
+  newLevel :: t
+              -> Maybe (Symbol.Symbol, Absyn.Pos)
+              -> (Level t, Temp.Label, [Frame.EscapesOrNot])
+              -> Temp.Generator
+              -> (Temp.Generator, Level t)
   formals :: t -> Level t -> [Access t]
   allocLocal :: t -> Level t -> Temp.Generator -> Frame.EscapesOrNot
     -> (Temp.Generator, Level t, Access t)
@@ -51,17 +54,25 @@ instance Translate X64Translate where
   formals _ lev = x64TranslateFormals lev
   allocLocal _ = x64AllocLocal
 
-x64NewLevel :: X64Frame.X64 -> (X64Level, Temp.Label, [Frame.EscapesOrNot]) -> Temp.Generator
-  -> (Temp.Generator, X64Level)
+x64NewLevel :: X64Frame.X64
+               -> Maybe (Symbol.Symbol, Absyn.Pos)
+               -> (X64Level, Temp.Label, [Frame.EscapesOrNot])
+               -> Temp.Generator
+               -> (Temp.Generator, X64Level)
 x64TranslateFormals :: X64Level -> [X64Access]
 x64AllocLocal :: X64Level -> Temp.Generator -> Frame.EscapesOrNot ->
   (Temp.Generator, X64Level, X64Access)
 
-x64NewLevel x64Inst (parent, label, escapes) gen =
+x64NewLevel x64Inst maybeDebug (parent, label, escapes) gen =
   let
     escapes' = [Frame.Escapes] ++ escapes -- initial escape for static link
     (frameLabel, gen') = Temp.newlabel gen
-    (gen'', frame') = X64Frame.newFrame x64Inst frameLabel gen' escapes'
+    (gen'', frame') = X64Frame.newFrame
+                        x64Inst
+                        frameLabel
+                        maybeDebug
+                        gen'
+                        escapes'
     (identity, gen''') = Temp.newtemp gen''
   in
     (gen''', X64Level{ x64Parent=parent

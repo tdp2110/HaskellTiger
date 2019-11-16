@@ -62,6 +62,7 @@ baseVEnv x64 gen =
         escapes = fmap (\_ -> Frame.NoEscape) formalTys
         (gen'', lev) = Translate.x64NewLevel
                          x64
+                         Nothing
                          (Translate.X64Outermost, lab, escapes)
                          gen'
         entry = (sym, FunEntry { level=lev

@@ -2,8 +2,10 @@
 
 module X64Frame where
 
+import qualified Absyn
 import qualified Assem
 import qualified Frame
+import qualified Symbol
 import qualified Temp
 import qualified Tree
 
@@ -54,7 +56,8 @@ data X64 = X64 { rax :: Int
 data X64Frame = X64Frame { name :: Temp.Label
                          , formals :: [X64Access]
                          , locals :: [X64Access]
-                         , x64 :: X64 }
+                         , x64 :: X64
+                         , frameDebug :: Maybe (Symbol.Symbol, Absyn.Pos) }
   deriving (Show)
 
 data Frag = PROC { body :: Tree.Stm
@@ -150,12 +153,13 @@ initX64 gen =
                                    ] }
     , gen16 )
 
-freshFrame :: Temp.Label -> X64 -> X64Frame
-freshFrame frameName x64Inst =
+freshFrame :: Temp.Label -> X64 -> Maybe (Symbol.Symbol, Absyn.Pos) -> X64Frame
+freshFrame frameName x64Inst maybeDebug =
   X64Frame{ name=frameName
           , formals=[]
           , locals=[]
-          , x64=x64Inst }
+          , x64=x64Inst
+          , frameDebug=maybeDebug }
 
 instance Frame.Frame X64Frame where
   type (Access X64Frame) = X64Access
@@ -168,10 +172,15 @@ instance Frame.Frame X64Frame where
   rv frame = rax $ x64 frame
   fp frame = rbp $ x64 frame
 
-newFrame :: X64 -> Temp.Label -> Temp.Generator -> [Frame.EscapesOrNot] -> (Temp.Generator, X64Frame)
-newFrame x64Inst frameName gen escapes =
+newFrame :: X64
+            -> Temp.Label
+            -> Maybe (Symbol.Symbol, Absyn.Pos)
+            -> Temp.Generator
+            -> [Frame.EscapesOrNot]
+            -> (Temp.Generator, X64Frame)
+newFrame x64Inst frameName maybeDebug gen escapes =
   let
-    initialFrame = freshFrame frameName x64Inst
+    initialFrame = freshFrame frameName x64Inst maybeDebug
     (gen', frame, _) = foldl' step (gen, initialFrame, 0) escapes
   in
     (gen', frame)
@@ -256,9 +265,8 @@ procEntryExit3 :: X64Frame -> [Assem.Inst] -> [Assem.Inst]
 procEntryExit3 frame bodyAsm =
   let
     (label:bodyAsm') = bodyAsm
-    procName = Temp.name $ name frame
     stackSize = 1024 :: Int
-    prologue = [ Assem.OPER { Assem.assem="\tpush `d0\t\t; " ++ procName ++ "\n"
+    prologue = [ Assem.OPER { Assem.assem="\tpush `d0" ++ (fmtDebug frame)  ++ "\n"
                             , Assem.operDst=[rsp $ x64 frame]
                             , Assem.operSrc=[rbp $ x64 frame]
                             , Assem.jump=Nothing }
@@ -283,3 +291,7 @@ procEntryExit3 frame bodyAsm =
                             , Assem.jump=Nothing } ]
   in
     [label] ++ prologue ++ bodyAsm' ++ epilogue
+  where
+    fmtDebug :: X64Frame -> String
+    fmtDebug (X64Frame { frameDebug=Just dbg }) = "\t\t ; " ++ show dbg
+    fmtDebug _ = ""

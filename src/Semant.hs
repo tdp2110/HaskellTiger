@@ -36,12 +36,16 @@ transProg expr =
   let
     gen = Temp.newGen
     (x64', gen') = X64Frame.initX64 gen
-    (gen'', mainLevel) = newLevelFn x64' (outermost, Temp.Label $ Symbol.Symbol "__tiger_main", []) gen'
+    (gen'', mainLevel) = newLevelFn
+                           x64'
+                           Nothing
+                           (outermost, Temp.Label $ Symbol.Symbol "__tiger_main", [])
+                           gen'
     (baseVEnv, gen''') = Env.baseVEnv x64' gen''
-    startState = SemantState{ level=mainLevel
-                            , breakTarget=Nothing
-                            , counter'=0
-                            , generator=gen'''}
+    startState = SemantState { level=mainLevel
+                             , breakTarget=Nothing
+                             , counter'=0
+                             , generator=gen''' }
     env = SemantEnv { venv'=baseVEnv
                     , tenv2=Env.baseTEnv
                     , x64=x64' }
@@ -68,9 +72,12 @@ formalAccesses :: Level -> [Access]
 formalAccesses = Translate.x64TranslateFormals
 outermost :: Level
 outermost = Translate.X64Outermost
-newLevelFn :: X64Frame.X64 -> (Level, Temp.Label, [Frame.EscapesOrNot]) -> Temp.Generator
-  -> (Temp.Generator, Level)
-newLevelFn x64' = Translate.x64NewLevel x64'
+newLevelFn :: X64Frame.X64
+              -> Maybe (Symbol.Symbol, A.Pos)
+              -> (Level, Temp.Label, [Frame.EscapesOrNot])
+              -> Temp.Generator
+              -> (Temp.Generator, Level)
+newLevelFn x64' debugInfo = Translate.x64NewLevel x64' debugInfo
 allocLocalFn :: Level -> Temp.Generator -> Frame.EscapesOrNot
   -> (Temp.Generator, Level, Access)
 allocLocalFn = Translate.x64AllocLocal
@@ -163,13 +170,17 @@ nextLabel = do
     put st{generator=gen'}
     pure lab
 
-newLevel :: [Frame.EscapesOrNot] -> Translator Level
-newLevel escapes = do
-  st@(SemantState parentLev _ _ gen) <- get
+newLevel :: [Frame.EscapesOrNot] -> Maybe (Symbol.Symbol, A.Pos) -> Translator Level
+newLevel escapes debugInfo = do
+  st@(SemantState { level=parentLev, generator=gen}) <- get
   env <- askEnv
   let
     (nextLab, gen') = Temp.newlabel gen
-    (gen'', lev') = newLevelFn (x64 env) (parentLev, nextLab, escapes) gen'
+    (gen'', lev') = newLevelFn
+                      (x64 env)
+                      debugInfo
+                      (parentLev, nextLab, escapes)
+                      gen'
     in do
     put st{generator=gen''}
     pure lev'
@@ -886,7 +897,7 @@ extractHeaderM venv fundecs formalsTys resultTys =
       let
         escapes = calcEscapes fundec
       in do
-        nextLev <- newLevel escapes
+        nextLev <- newLevel escapes $ Just $ debugInfo fundec
         pure $ Map.insert
           (A.fundecName fundec)
           Env.FunEntry{ Env.level=nextLev
@@ -902,6 +913,8 @@ extractHeaderM venv fundecs formalsTys resultTys =
                                          else
                                            Frame.NoEscape)
       params
+    debugInfo :: A.FunDec -> (Symbol.Symbol, A.Pos)
+    debugInfo fundec = (A.fundecName fundec, A.funPos fundec)
 
 transCyclicDecls :: (SemantEnv, [Translate.Exp]) -> [A.TyDec] -> [Symbol.Symbol]
                  -> Translator (SemantEnv, [Translate.Exp])
