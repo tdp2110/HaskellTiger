@@ -543,25 +543,23 @@ initExp acc lev exp gen =
   assign (simpleVar acc lev) exp gen
 
 functionDec :: X64Level -> Exp -> Temp.Generator -> (Frag, Temp.Generator)
-functionDec lev@X64Level{x64Frame=frame} bodyExp gen =
+functionDec X64Level{x64Frame=frame} bodyExp gen =
   let
     (bodyExpr, gen') = unEx bodyExp gen
-    bodyStm = Nx $ Tree.MOVE ( Tree.TEMP $ Frame.rv frame
-                             , X64Frame.procEntryExit1 frame bodyExpr )
+    bodyStm = Tree.MOVE ( Tree.TEMP $ Frame.rv frame
+                        , X64Frame.procEntryExit1 frame bodyExpr )
   in
-    makeProc lev bodyStm gen'
+    (makeProc bodyStm, gen')
+  where
+    makeProc :: Tree.Stm -> Frag
+    makeProc bodyStm =
+      let
+        resBody = Tree.SEQ (Tree.LABEL $ X64Frame.name frame, bodyStm)
+      in
+        X64Frame.PROC { X64Frame.body=resBody
+                      , X64Frame.fragFrame=frame }
 functionDec X64Outermost _ _ = error "should not get here"
 
-makeProc :: X64Level -> Exp -> Temp.Generator -> (Frag, Temp.Generator)
-makeProc X64Level{x64Frame=frame} bodyExp gen =
-  let
-    (bodyStm, gen') = unNx bodyExp gen
-    resBody = Tree.SEQ (Tree.LABEL $ X64Frame.name frame, bodyStm)
-  in
-    ( X64Frame.PROC { X64Frame.body=resBody
-                    , X64Frame.fragFrame=frame }
-    , gen')
-makeProc X64Outermost _ _ = error "should not get here"
 
 staticLink :: X64Level -> X64Level -> Tree.Exp
 staticLink X64Outermost _ = error "outermost can't find static links"
