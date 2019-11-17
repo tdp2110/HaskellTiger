@@ -126,10 +126,10 @@ unEx (Cx genstm) gen =
     (t, gen'') = Temp.newlabel gen'
     (f, gen''') = Temp.newlabel gen''
     expRes = Tree.ESEQ(
-      Tree.makeSeq [ Tree.MOVE(Tree.TEMP r, Tree.CONST 1)
+      Tree.makeSeq [ Tree.MOVE (Tree.TEMP r, Tree.CONST 1)
                    , genstm t f
                    , Tree.LABEL f
-                   , Tree.MOVE(Tree.TEMP r, zero)
+                   , Tree.MOVE (Tree.TEMP r, zero)
                    , Tree.LABEL t],
       Tree.TEMP r)
   in

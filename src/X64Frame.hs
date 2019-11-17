@@ -235,7 +235,40 @@ allocLocal gen frame escapesOrNot =
 -- and on exit, it should move them back. Of course, these moves (for nonspilled registers) will be
 -- eliminated by register coalesching, so they cost nothing
 procEntryExit1 :: X64Frame -> Tree.Exp -> Temp.Generator -> (Tree.Exp, Temp.Generator)
-procEntryExit1 _ bodyExp gen = (bodyExp, gen)
+procEntryExit1 frame bodyExp gen =
+  let
+    (t, gen') = Temp.newtemp gen
+    (saves, restores, gen'') = getSaveRestores gen'
+    bodyTemp = Tree.TEMP t
+  in
+    ( Tree.ESEQ ( saves
+                , Tree.ESEQ ( Tree.MOVE (bodyTemp, bodyExp)
+                            , Tree.ESEQ (restores, bodyTemp)))
+    , gen'')
+  where
+    getSaveRestores :: Temp.Generator -> (Tree.Stm, Tree.Stm, Temp.Generator)
+    getSaveRestores g =
+      let
+        calleeSavesRegs = calleeSaves $ x64 frame
+        (calleeSavesTemps, g') = foldl'
+                                   step
+                                   ([], g)
+                                   calleeSavesRegs
+        step :: ([Int], Temp.Generator) -> Int -> ([Int], Temp.Generator)
+        step (acc, gIn) _ =
+          let
+            (t, gOut) = Temp.newtemp gIn
+          in
+            (acc ++ [t], gOut)
+        saves = fmap
+                  (\(t, r) -> Tree.MOVE (Tree.TEMP t, Tree.TEMP r))
+                  (zip calleeSavesTemps calleeSavesRegs)
+        restores = fmap
+                     (\(Tree.MOVE (dst, src)) -> Tree.MOVE (src, dst))
+                     saves
+
+      in
+        (Tree.makeSeq saves, Tree.makeSeq restores, g')
 
 -- | This function appends a "sink" instruction to the function body to tell the register allocator
 -- that certain regisers are live at procedure exit. In the case of the Jouette machine, this is simply
