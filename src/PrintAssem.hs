@@ -85,7 +85,7 @@ compileToAsm text =
           in
             (insts ++ insts', g')
     emit (X64Frame.STRING (lab, str)) g =
-      (";; STRING: " ++ (show lab) ++ ":\n" ++ str ++ "\n", g)
+      ((Temp.name lab) ++ ":\n\t.asciz\t\"" ++ str ++ "\"\n", g)
     step2 :: (String, Temp.Generator) -> X64Frame.Frag -> (String, Temp.Generator)
     step2 (s, g) f =
       let

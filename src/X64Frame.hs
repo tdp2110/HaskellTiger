@@ -265,7 +265,8 @@ procEntryExit3 :: X64Frame -> [Assem.Inst] -> [Assem.Inst]
 procEntryExit3 frame bodyAsm =
   let
     (label:bodyAsm') = bodyAsm
-    stackSize = 1024 :: Int
+    stackSize = 1024 :: Int -- TODO! set up with real value! need to know number of spilled locals
+                            -- and max number of outgoing params
     prologue = [ Assem.OPER { Assem.assem="\tpush `d0" ++ (fmtDebug frame)  ++ "\n"
                             , Assem.operDst=[rsp $ x64 frame]
                             , Assem.operSrc=[rbp $ x64 frame]
