@@ -49,7 +49,7 @@ data Exp = VarExp Var
          | BreakExp Pos
          | LetExp { decs :: [Dec]
                   , body :: Exp
-                  , pos ::Pos }
+                  , pos :: Pos }
          | ArrayExp { typ :: Symbol
                     , size :: Exp
                     , init :: Exp

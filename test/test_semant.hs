@@ -25,7 +25,7 @@ intLiteral :: Test
 intLiteral = TestCase (
   let
     text = "1337"
-    (Right (Semant.ExpTy{Semant.exp=(Translate.Ex _), Semant.ty=ty}, _, _, _)) = parseToSema text
+    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _, _, _)) = parseToSema text
  in do
     assertEqual "int literal" Types.INT ty
   )
@@ -439,7 +439,7 @@ ifExp3 = TestCase (
     text = "let\n" ++
            "  var x := 0\n" ++
            "in if x = 1 then 2 else 3\n end"
-    (Right (Semant.ExpTy{Semant.exp=(Translate.Ex _), Semant.ty=ty}, _, _, _)) = parseToSema text
+    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _, _, _)) = parseToSema text
   in do
     assertEqual "well-formed if then else types match"
       Types.INT ty
