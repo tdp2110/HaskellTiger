@@ -1,6 +1,7 @@
 import Test.QuickCheck
 
 import qualified Canon as C
+import qualified Frame
 import Symbol
 import qualified Temp
 import qualified Tree as T
@@ -56,7 +57,7 @@ arbExp sz =
         funcExp <- expGen
         argSize <- choose (0, 2) :: Gen Int
         args <- vectorOf argSize expGen
-        pure $ T.CALL (funcExp, args)
+        pure $ T.CALL (funcExp, args, fmap (\_ -> Frame.NoEscape) args)
       _ -> do
         s <- stmGen
         e <- expGen
@@ -151,7 +152,7 @@ prop_canonHasNoSeq stm =
     expHasNoSeq :: T.Exp -> Bool
     expHasNoSeq (T.BINOP (_, e1, e2)) = expHasNoSeq e1 && expHasNoSeq e2
     expHasNoSeq (T.MEM e) = expHasNoSeq e
-    expHasNoSeq (T.CALL (e, es)) = expHasNoSeq e && (all expHasNoSeq es)
+    expHasNoSeq (T.CALL (e, es, _)) = expHasNoSeq e && (all expHasNoSeq es)
     expHasNoSeq (T.ESEQ (s, e)) = stmHasNoSeq s && expHasNoSeq e
     expHasNoSeq _ = True
 
@@ -183,7 +184,7 @@ prop_parentOfCallIsOk stm =
     callParentOkStm _ = True
 
     callOk :: T.Exp -> Bool
-    callOk (T.CALL (f, args)) =
+    callOk (T.CALL (f, args, _)) =
       callParentOkExp f && all callParentOkExp args
     callOk _ = error "shouldn't get here"
 
