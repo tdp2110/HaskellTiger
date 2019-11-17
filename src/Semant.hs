@@ -34,19 +34,19 @@ data ExpTy = ExpTy{exp :: Translate.Exp, ty :: Types.Ty } deriving (Show)
 transThunked :: A.Exp -> Either SemantError (ExpTy, FragList, Temp.Generator, X64Frame.X64)
 transThunked expr =
   let
-    tigerMain = "__tiger_main"
+    tigerMain = Symbol.Symbol "__tiger_main"
     nilPos = A.Pos { A.absChrOffset = -1
                    , A.lineno = -1
                    , A.colno = -1 }
     exprThunk = A.FunctionDec [
-                  A.FunDec { A.fundecName=Symbol.Symbol tigerMain
+                  A.FunDec { A.fundecName=tigerMain
                            , A.params=[]
                            , A.result=Nothing
                            , A.funBody=expr
                            , A.funPos=nilPos }
                   ]
     expr' = A.LetExp { A.decs=[exprThunk]
-                     , A.body=A.CallExp { A.func=Symbol.Symbol tigerMain
+                     , A.body=A.CallExp { A.func=tigerMain
                                         , A.args=[]
                                         , A.pos=nilPos }
                      , A.pos=nilPos }
