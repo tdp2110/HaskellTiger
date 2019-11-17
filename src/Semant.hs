@@ -31,8 +31,8 @@ instance Show SemantError where
 
 data ExpTy = ExpTy{exp :: Translate.Exp, ty :: Types.Ty } deriving (Show)
 
-transProg :: A.Exp -> Either SemantError (ExpTy, FragList, Temp.Generator, X64Frame.X64)
-transProg expr =
+transThunked :: A.Exp -> Either SemantError (ExpTy, FragList, Temp.Generator, X64Frame.X64)
+transThunked expr =
   let
     tigerMain = "__tiger_main"
     nilPos = A.Pos { A.absChrOffset = -1
@@ -50,6 +50,12 @@ transProg expr =
                                         , A.args=[]
                                         , A.pos=nilPos }
                      , A.pos=nilPos }
+  in
+    transProg expr'
+
+transProg :: A.Exp -> Either SemantError (ExpTy, FragList, Temp.Generator, X64Frame.X64)
+transProg expr =
+  let
     gen = Temp.newGen
     (x64', gen') = X64Frame.initX64 gen
     (gen'', mainLevel) = newLevelFn
@@ -65,7 +71,7 @@ transProg expr =
     env = SemantEnv { venv'=baseVEnv
                     , tenv2=Env.baseTEnv
                     , x64=x64' }
-    res = runTransT startState env $ transExp $ escapeExp expr'
+    res = runTransT startState env $ transExp $ escapeExp expr
   in
     case res of
       Left err -> Left err

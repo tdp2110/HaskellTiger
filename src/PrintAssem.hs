@@ -25,7 +25,7 @@ compileToAsm :: String -> String
 compileToAsm text =
   let
     (Right ast) = Parser.parse text
-    (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=_}, frags, gen, x64)) = Semant.transProg ast
+    (Right (_, frags, gen, x64)) = Semant.transThunked ast
     emit :: X64Frame.Frag -> Temp.Generator -> (String, Temp.Generator)
     emit (X64Frame.PROC { X64Frame.body=bodyStm
                         , X64Frame.fragFrame=frame }) gen' =

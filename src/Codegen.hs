@@ -293,7 +293,7 @@ munchExp (Tree.MEM expr) =
          )
 munchExp (Tree.NAME lab@(Temp.Label (S.Symbol s))) =
   result (\r -> do
-                  pure [ A.OPER { A.assem="\tlea `d0, [" ++ s ++ "]"
+                  pure [ A.OPER { A.assem="\tlea `d0, [" ++ s ++ "]\n"
                                 , A.operDst=[r]
                                 , A.operSrc=[]
                                 , A.jump=Just [lab] } ]
