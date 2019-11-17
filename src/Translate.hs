@@ -546,10 +546,11 @@ functionDec :: X64Level -> Exp -> Temp.Generator -> (Frag, Temp.Generator)
 functionDec X64Level{x64Frame=frame} bodyExp gen =
   let
     (bodyExpr, gen') = unEx bodyExp gen
+    (bodyExpr', gen'') = X64Frame.procEntryExit1 frame bodyExpr gen'
     bodyStm = Tree.MOVE ( Tree.TEMP $ Frame.rv frame
-                        , X64Frame.procEntryExit1 frame bodyExpr )
+                        , bodyExpr' )
   in
-    (makeProc bodyStm, gen')
+    (makeProc bodyStm, gen'')
   where
     makeProc :: Tree.Stm -> Frag
     makeProc bodyStm =

@@ -234,8 +234,8 @@ allocLocal gen frame escapesOrNot =
 -- on entry, it should move all these registers to their new temporary locations,
 -- and on exit, it should move them back. Of course, these moves (for nonspilled registers) will be
 -- eliminated by register coalesching, so they cost nothing
-procEntryExit1 :: X64Frame -> Tree.Exp -> Tree.Exp
-procEntryExit1 _ bodyExp = bodyExp
+procEntryExit1 :: X64Frame -> Tree.Exp -> Temp.Generator -> (Tree.Exp, Temp.Generator)
+procEntryExit1 _ bodyExp gen = (bodyExp, gen)
 
 -- | This function appends a "sink" instruction to the function body to tell the register allocator
 -- that certain regisers are live at procedure exit. In the case of the Jouette machine, this is simply
