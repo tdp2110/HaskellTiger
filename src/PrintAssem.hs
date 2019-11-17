@@ -28,7 +28,7 @@ compileToAsm text =
     Right ast ->
       case Semant.transThunked ast of
         Left err -> show err
-        (Right (_, frags, gen, x64)) ->
+        Right (_, frags, gen, x64) ->
           let
             emit :: X64Frame.Frag -> Temp.Generator -> (String, Temp.Generator)
             emit (X64Frame.PROC { X64Frame.body=bodyStm
