@@ -66,7 +66,7 @@ x64AllocLocal :: X64Level -> Temp.Generator -> Frame.EscapesOrNot ->
 x64NewLevel x64Inst maybeDebug (parent, label, escapes) gen =
   let
     escapes' = [Frame.Escapes] ++ escapes -- initial escape for static link
-    (frameLabel, gen') = Temp.newlabel gen
+    (frameLabel, gen') = getLabel
     (gen'', frame') = X64Frame.newFrame
                         x64Inst
                         frameLabel
@@ -75,11 +75,17 @@ x64NewLevel x64Inst maybeDebug (parent, label, escapes) gen =
                         escapes'
     (identity, gen''') = Temp.newtemp gen''
   in
-    (gen''', X64Level{ x64Parent=parent
-                     , x64Name=label
-                     , x64Formals=escapes'
-                     , x64Frame=frame'
-                     , identifier=identity })
+    (gen''', X64Level { x64Parent=parent
+                      , x64Name=label
+                      , x64Formals=escapes'
+                      , x64Frame=frame'
+                      , identifier=identity })
+  where
+    getLabel :: (Temp.Label, Temp.Generator)
+    getLabel =
+      case maybeDebug of
+        Just (sym@(Symbol.Symbol "__tiger_main"), _) -> (Temp.Label sym, gen)
+        _ -> Temp.newlabel gen
 
 x64TranslateFormals lev =
   let
