@@ -57,7 +57,8 @@ data X64Frame = X64Frame { name :: Temp.Label
                          , formals :: [X64Access]
                          , locals :: [X64Access]
                          , x64 :: X64
-                         , frameDebug :: Maybe (Symbol.Symbol, Absyn.Pos) }
+                         , frameDebug :: Maybe (Symbol.Symbol, Absyn.Pos)
+                         , viewShift :: [Tree.Stm] }
   deriving (Show)
 
 data Frag = PROC { body :: Tree.Stm
@@ -159,7 +160,8 @@ freshFrame frameName x64Inst maybeDebug =
           , formals=[]
           , locals=[]
           , x64=x64Inst
-          , frameDebug=maybeDebug }
+          , frameDebug=maybeDebug
+          , viewShift=[] }
 
 instance Frame.Frame X64Frame where
   type (Access X64Frame) = X64Access
@@ -181,27 +183,34 @@ newFrame :: X64
 newFrame x64Inst frameName maybeDebug gen escapes =
   let
     initialFrame = freshFrame frameName x64Inst maybeDebug
-    (gen', frame, _) = foldl' step (gen, initialFrame, 0) escapes
+    (gen', frame, _, _) = foldl' step (gen, initialFrame, 0, paramRegs x64Inst) escapes
   in
     (gen', frame)
   where
-    step :: (Temp.Generator, X64Frame, Int) -> Frame.EscapesOrNot -> (Temp.Generator, X64Frame, Int)
-    step (gen', frame, numEscapesSeen) escapesOrNot = allocFormal gen' frame escapesOrNot numEscapesSeen
-    allocFormal :: Temp.Generator -> X64Frame -> Frame.EscapesOrNot -> Int
-      -> (Temp.Generator, X64Frame, Int)
-    allocFormal gen' frame escapesOrNot numEscapesSeen =
-        let
-          doesEscape = Frame.escapes escapesOrNot
-          numEscapesSeen' = if doesEscape then numEscapesSeen + 1 else numEscapesSeen
-        in
-          if not doesEscape &&
-             numFormalsInReg frame < length (paramRegs x64Inst) then
-            let
-              (regNum, gen'') = Temp.newtemp gen'
-            in
-              (gen'', frame{formals=(formals frame) ++ [InReg regNum]}, numEscapesSeen')
-          else
-              (gen', frame{formals=(formals frame) ++ [InFrame numEscapesSeen]}, numEscapesSeen')
+    step :: (Temp.Generator, X64Frame, Int, [Int])
+            -> Frame.EscapesOrNot
+            -> (Temp.Generator, X64Frame, Int, [Int])
+    step (gen', frame, numEscapesSeen, paramRegsRemaining) escapesOrNot =
+      case escapesOrNot of
+        Frame.NoEscape ->
+          case paramRegsRemaining of
+            (paramReg:paramRegsRemaining') ->
+              let
+                (t, gen'') = Temp.newtemp gen
+                move = Tree.MOVE (Tree.TEMP t, Tree.TEMP paramReg)
+              in
+                ( gen''
+                , frame{ formals=(formals frame) ++ [InReg t]
+                       , viewShift=(viewShift frame) ++ [move] }
+                , numEscapesSeen
+                , paramRegsRemaining' )
+            [] ->
+              step (gen', frame, numEscapesSeen, paramRegsRemaining) Frame.Escapes
+        Frame.Escapes ->
+          ( gen'
+          , frame{formals=(formals frame) ++ [InFrame numEscapesSeen]}
+          , numEscapesSeen + 1
+          , paramRegsRemaining )
 
 allocLocal :: Temp.Generator -> X64Frame -> Frame.EscapesOrNot
   -> (Temp.Generator, X64Frame, X64Access)
@@ -241,9 +250,10 @@ procEntryExit1 frame bodyExp gen =
     (saves, restores, gen'') = getSaveRestores gen'
     bodyTemp = Tree.TEMP t
   in
-    ( Tree.ESEQ ( saves
-                , Tree.ESEQ ( Tree.MOVE (bodyTemp, bodyExp)
-                            , Tree.ESEQ (restores, bodyTemp)))
+    ( Tree.ESEQ ( Tree.makeSeq $ viewShift frame
+                , Tree.ESEQ ( saves
+                            , Tree.ESEQ ( Tree.MOVE (bodyTemp, bodyExp)
+                                        , Tree.ESEQ (restores, bodyTemp))))
     , gen'')
   where
     getSaveRestores :: Temp.Generator -> (Tree.Stm, Tree.Stm, Temp.Generator)
