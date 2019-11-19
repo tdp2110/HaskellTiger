@@ -34,7 +34,7 @@ data ExpTy = ExpTy{exp :: Translate.Exp, ty :: Types.Ty } deriving (Show)
 transThunked :: A.Exp -> Either SemantError (ExpTy, FragList, Temp.Generator, X64Frame.X64)
 transThunked expr =
   let
-    tigerMain = Symbol.Symbol "__tiger_main"
+    tigerMain = Symbol.Symbol "_main"
     nilPos = A.Pos { A.absChrOffset = -1
                    , A.lineno = -1
                    , A.colno = -1 }

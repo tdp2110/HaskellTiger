@@ -84,7 +84,7 @@ x64NewLevel x64Inst maybeDebug (parent, label, escapes) gen =
     getLabel :: (Temp.Label, Temp.Generator)
     getLabel =
       case maybeDebug of
-        Just (sym@(Symbol.Symbol "__tiger_main"), _) -> (Temp.Label sym, gen)
+        Just (sym@(Symbol.Symbol "_main"), _) -> (Temp.Label sym, gen)
         _ -> Temp.newlabel gen
 
 x64TranslateFormals lev =

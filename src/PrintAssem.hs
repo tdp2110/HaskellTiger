@@ -30,6 +30,9 @@ compileToAsm text =
         Left err -> show err
         Right (_, frags, gen, x64) ->
           let
+            header = "\t.section    __TEXT,__text,regular,pure_instructions\n" ++
+                     "\t.intel_syntax noprefix\n"
+
             emit :: X64Frame.Frag -> Temp.Generator -> (String, Temp.Generator)
             emit (X64Frame.PROC { X64Frame.body=bodyStm
                                 , X64Frame.fragFrame=frame }) gen' =
@@ -97,7 +100,7 @@ compileToAsm text =
               in
                 (s ++ s', g')
           in
-            fst $ foldl' step2 ([], gen) frags
+            header ++ (fst $ foldl' step2 ([], gen) frags)
 
 main :: IO ()
 main = do
