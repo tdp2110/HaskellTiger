@@ -178,7 +178,7 @@ stringCmp s1 s2 op gen =
     (str1, gen') = unEx s1 gen
     (str2, gen'') = unEx s2 gen'
     cmpExp = X64Frame.externalCall
-             (Temp.Label $ Symbol.Symbol "__tiger_StrCmp")
+             (Temp.Label $ Symbol.Symbol "__tiger_strCmp")
              [str1, str2]
     treeOp = transRelOp op
     resExp = Cx $ \t f ->
@@ -199,8 +199,8 @@ record exps gen =
     wordSize = X64Frame.wordSize
     mallocStm = Tree.MOVE ( rExp
                           , X64Frame.externalCall
-                            (Temp.Label $ Symbol.Symbol "__tiger_Alloc")
-                            [Tree.CONST $ numExps * wordSize] )
+                              (Temp.Label $ Symbol.Symbol "__tiger_alloc")
+                              [Tree.CONST $ numExps * wordSize] )
     (initStm, gen'') = foldl'
                        step
                        (passStm, gen')
@@ -229,7 +229,7 @@ array sizeExp initExpr gen =
     rExp = Tree.TEMP r
     initStm = Tree.MOVE ( rExp
                         , X64Frame.externalCall
-                          (Temp.Label $ Symbol.Symbol "__tiger_InitArray")
+                          (Temp.Label $ Symbol.Symbol "__tiger_initArray")
                           [sizeExpr, initExpr'] )
     resExp = Ex $ Tree.ESEQ (initStm, rExp)
   in
@@ -448,7 +448,7 @@ field recordExpE fieldNumber gen =
                 , recordExp
                 , Tree.CONST $ fieldNumber * X64Frame.wordSize )
     sadPath = Ex $ X64Frame.externalCall
-              (Temp.Label $ Symbol.Symbol "__tiger_NullRecordDereference")
+              (Temp.Label $ Symbol.Symbol "__tiger_nullRecordDereference")
               []
     jumpExp = Cx $ \happyLab sadLab ->
       Tree.CJUMP (Tree.NE, recordExp, zero, happyLab, sadLab)
@@ -471,7 +471,7 @@ subscript arrExpE indexExpE gen =
                                           , indexExp )
                              , wordSize ) )
     sadPath = Ex $ X64Frame.externalCall
-              (Temp.Label $ Symbol.Symbol "__tiger_IndexError")
+              (Temp.Label $ Symbol.Symbol "__tiger_indexError")
               [sizeExp, indexExp]
     (gtZeroExp, gen3) = relOp indexExpE zeroExp Absyn.GeOp gen''
     (gtZero, gen4) = unEx gtZeroExp gen3
@@ -489,10 +489,17 @@ string :: String -> Temp.Generator -> (Exp, Frag, Temp.Generator)
 string str gen =
   let
     (label, gen') = Temp.newlabel gen
-    resExp = Ex $ Tree.NAME(label)
+    (r, gen'') = Temp.newtemp gen'
+    sExp = Tree.TEMP r
+    resExp = Ex $ Tree.ESEQ (
+                    Tree.MOVE ( sExp
+                              , X64Frame.externalCall
+                                  (Temp.Label $ Symbol.Symbol "__tiger_allocString")
+                                  [Tree.NAME(label), Tree.CONST $ length str])
+                  , sExp )
     frag = X64Frame.STRING (label, str)
   in
-    (resExp, frag, gen')
+    (resExp, frag, gen'')
 
 unExM :: Exp -> State Temp.Generator Tree.Exp
 unExM exp = do
