@@ -1,7 +1,4 @@
 *~
-a.out
-*.hi
-*.o
 dist
 dist-newstyle
 .ghc.environment.*

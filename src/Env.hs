@@ -38,6 +38,7 @@ baseVEnv x64 gen =
                  , ("getchar", [], STRING)
                  , ("ord", [STRING], INT)
                  , ("chr", [INT], STRING)
+                 , ("itoa", [INT], STRING)
                  , ("size", [STRING], INT)
                  , ("substring", [STRING, INT, INT], STRING)
                  , ("concat", [STRING, STRING], STRING)
