@@ -45,7 +45,9 @@ data X64 = X64 { rax :: Int
                , r14 :: Int
                , r15 :: Int
                , dividendRegister :: Int
+               , multiplicandRegister :: Int
                , divideDests :: [Int]
+               , multiplyDests :: [Int]
                , calleeSaves :: [Int]
                , callerSaves :: [Int]
                , callDests :: [Int]
@@ -130,7 +132,9 @@ initX64 gen =
           , r14=r14Id
           , r15=r15Id
           , dividendRegister=raxId
+          , multiplicandRegister=raxId
           , divideDests=[raxId, rdxId]
+          , multiplyDests=[raxId, rdxId]
           , calleeSaves=[rbxId, rbpId, r12Id, r13Id, r14Id, r15Id]
           , callerSaves=[raxId, rcxId, rdxId, rsiId, rdiId, r8Id, r9Id, r10Id, r11Id]
           , callDests=[raxId, rdxId]

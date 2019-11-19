@@ -205,7 +205,7 @@ munchExp (Tree.BINOP (op, e1, e2)) =
                                   , A.operDst=X64Frame.divideDests x64
                                   , A.operSrc=[src2]
                                   , A.jump=Nothing }
-                         , A.MOVE { A.assem="mov `d0, `s0\n"
+                         , A.MOVE { A.assem="\tmov `d0, `s0\n"
                                   , A.moveDst=r
                                   , A.moveSrc=X64Frame.dividendRegister x64
                                   } ])
@@ -213,25 +213,30 @@ munchExp (Tree.BINOP (op, e1, e2)) =
     result (\r -> do
                     src1 <- munchExp e1
                     src2 <- munchExp e2
+                    x64 <- getArch
                     pure [ A.MOVE { A.assem="\tmov `d0, `s0\n"
-                                  , A.moveDst=r
+                                  , A.moveDst=X64Frame.multiplicandRegister x64
                                   , A.moveSrc=src1 }
                          , A.OPER { A.assem="\t" ++ (convertOp op) ++ " `d0, `s0\n"
-                                  , A.operDst=[r]
+                                  , A.operDst=X64Frame.multiplyDests x64
                                   , A.operSrc=[src2]
-                                  , A.jump=Nothing } ])
+                                  , A.jump=Nothing }
+                         , A.MOVE { A.assem="\tmov `d0, `s0\n"
+                                  , A.moveDst=r
+                                  , A.moveSrc=X64Frame.multiplicandRegister x64
+                                  } ])
   where
     convertOp :: Tree.Binop -> String
     convertOp oper = case oper of
-                       Tree.PLUS -> "ADD"
-                       Tree.MINUS -> "SUB"
-                       Tree.MUL -> "IMUL"
-                       Tree.DIV -> "IDIV"
-                       Tree.AND -> "AND"
-                       Tree.OR -> "OR"
-                       Tree.LSHIFT -> "SHL"
-                       Tree.RSHIFT -> "SHR"
-                       Tree.XOR -> "XOR"
+                       Tree.PLUS -> "add"
+                       Tree.MINUS -> "sub"
+                       Tree.MUL -> "imul"
+                       Tree.DIV -> "idiv"
+                       Tree.AND -> "and"
+                       Tree.OR -> "or"
+                       Tree.LSHIFT -> "shl"
+                       Tree.RSHIFT -> "shr"
+                       Tree.XOR -> "xor"
                        _ -> error $ "unsupported operator: " ++ (show oper)
 munchExp (Tree.CALL (Tree.NAME lab, args, escapes)) =
   result (\r -> do
