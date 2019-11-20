@@ -28,7 +28,13 @@ void __tiger_print(TgString const *const str) {
 }
 
 uint8_t *__tiger_alloc(int64_t const numBytes) {
-  uint8_t *const res = static_cast<uint8_t *>(std::malloc(numBytes));
+  if (numBytes <= 0) {
+    std::cerr << "must pass a positive int64_t to " << __FUNCTION__ << ". Got "
+              << numBytes << "\n";
+    std::terminate();
+  }
+  uint8_t *const res =
+      static_cast<uint8_t *>(std::malloc(static_cast<uint64_t>(numBytes)));
   AssertNotNull(res, __FUNCTION__);
   return res;
 }
@@ -77,7 +83,8 @@ TgString *__tiger_substring(TgString const *const s, int64_t const lo,
               << ", " << hi << "\n";
     std::terminate();
   }
-  auto res = new (std::nothrow) TgString(s->impl.substr(lo, hi));
+  auto res = new (std::nothrow) TgString(
+      s->impl.substr(static_cast<uint64_t>(lo), static_cast<uint64_t>(hi)));
   AssertNotNull(res, __FUNCTION__);
   return res;
 }
@@ -92,12 +99,26 @@ TgString *__tiger_concat(TgString const *const s1, TgString const *const s2) {
 }
 int64_t __tiger_not(int64_t const i) { return i == 0 ? 1 : 0; }
 
-void __tiger_exit(int64_t const retcode) { std::exit(retcode); }
+void __tiger_exit(int64_t const retcode) {
+  if (retcode < std::numeric_limits<int>::min() ||
+      retcode > std::numeric_limits<int>::max()) {
+    std::cerr << "arg passed to " << __FUNCTION__
+              << " must be representable by int. Got " << retcode << "\n";
+    std::terminate();
+  }
+  std::exit(static_cast<int>(retcode));
+}
 
 TgString *__tiger_allocString(uint8_t const *const bytes,
                               int64_t const numBytes) {
-  auto res = new (std::nothrow)
-      TgString(std::string(reinterpret_cast<char const *>(*bytes), numBytes));
+  if (numBytes < 0) {
+    std::cerr << "must pass a positive int64_t to " << __FUNCTION__ << ". Got "
+              << numBytes << "\n";
+    std::terminate();
+  }
+
+  auto res = new (std::nothrow) TgString(std::string(
+      reinterpret_cast<char const *>(*bytes), static_cast<uint64_t>(numBytes)));
   AssertNotNull(res, __FUNCTION__);
   return res;
 }
