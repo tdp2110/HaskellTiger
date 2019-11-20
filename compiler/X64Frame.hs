@@ -78,8 +78,10 @@ frameExp :: X64Frame -> Tree.Exp
 frameExp frame = Tree.TEMP $ Frame.fp frame
 
 externalCall :: Temp.Label -> [Tree.Exp] -> Tree.Exp
-externalCall funname params =
-  Tree.CALL (Tree.NAME funname, params, fmap (\_ -> Frame.NoEscape) params)
+externalCall (Temp.Label (Symbol.Symbol funname)) params =
+  Tree.CALL ( Tree.NAME (Temp.Label (Symbol.Symbol $ "_" ++ funname)) -- hack for MacOS
+            , params
+            , fmap (\_ -> Frame.NoEscape) params)
 
 accessExp :: X64Frame -> X64Access -> Tree.Exp
 accessExp frame acc = exp acc $ frameExp frame
