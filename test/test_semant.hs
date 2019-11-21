@@ -1,7 +1,9 @@
 module Main where
 
+import qualified Frame
 import qualified Parser
 import qualified Semant
+import qualified Symbol
 import qualified Temp
 import qualified Translate
 import qualified Tree
@@ -16,6 +18,9 @@ import Data.Foldable
 import Data.List
 import Prelude hiding (exp)
 
+import Debug.Trace
+debug :: a -> String -> a
+debug = flip trace
 
 parseToSema :: String -> Either Semant.SemantError (Semant.ExpTy, Semant.FragList, Temp.Generator, X64Frame.X64)
 parseToSema text = let (Right ast) = Parser.parse text in
@@ -65,13 +70,26 @@ strLiteral = TestCase (
   let
     str1 = "hello world"
     literal = "\"" ++ str1 ++ "\""
-    (Right (Semant.ExpTy{ Semant.exp=(Translate.Ex (Tree.NAME lab1))
+    (Right (Semant.ExpTy{ Semant.exp=expr
                         , Semant.ty=ty}, frags, _, _)) = parseToSema literal
+
+    (Translate.Ex (Tree.ESEQ(
+       Tree.MOVE (
+         Tree.TEMP t1,
+         Tree.CALL (
+           Tree.NAME (Temp.Label (Symbol.Symbol "_tiger_allocString")),
+           [Tree.NAME lab1,
+           Tree.CONST strlen],
+           [Frame.NoEscape, Frame.NoEscape])),
+       Tree.TEMP t2))) = expr
+
     [ X64Frame.STRING (lab2, str2) ] = DList.toList frags
  in do
     assertEqual "labels match" lab1 lab2
     assertEqual "literals match" str1 str2
     assertEqual "str literal" Types.STRING ty
+    assertEqual "strlen arg is correct" strlen $ length str1
+    assertEqual "temp labels match up" t1 t2
   )
 
 strPlusIntIsErr :: Test
