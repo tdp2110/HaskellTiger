@@ -158,7 +158,7 @@ munchStm (Tree.JUMP (e, labels)) = do
 munchStm (Tree.CJUMP (op, e1, e2, t, f)) = do
   src1 <- munchExp e1
   src2 <- munchExp e2
-  emit A.OPER { A.assem="\tcmp `s1, `s2\n" ++ (opToJump op) ++ " `j0\nJMP `j1\n"
+  emit A.OPER { A.assem="\tcmp `s0, `s1\n" ++ (opToJump op) ++ " `j0\nJMP `j1\n"
               , A.operDst = []
               , A.operSrc = [src1, src2]
               , A.jump = Just [t, f] }
