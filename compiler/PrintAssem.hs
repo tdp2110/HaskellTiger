@@ -3,6 +3,7 @@ module Main where
 import qualified Assem
 import qualified Canon
 import qualified Codegen
+import qualified Graph
 import qualified Parser
 import qualified Semant
 import qualified Temp

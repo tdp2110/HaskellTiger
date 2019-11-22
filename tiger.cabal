@@ -106,7 +106,7 @@ executable printAssem
                        containers >= 0.6.0.1, transformers >= 0.5.6.0, dlist >= 0.8.0.0
   other-modules:       Tree, Symbol, Temp, Absyn, Env, FindEscape, Frame, Semant,
                        Translate, Types, X64Frame, Parser, Lexer, Assem, Codegen, Canon,
-                       Assem
+                       Assem, Graph
   default-language:    Haskell2010
   hs-source-dirs:      compiler
   ghc-options:         -Wall -fwarn-incomplete-patterns -g -O0 -fprof-auto
