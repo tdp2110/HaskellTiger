@@ -33,35 +33,43 @@ instrsToGraph insts =
                                pure (inst, node))
                    insts
 
+    insertFallthroughs :: [(A.Inst, G.Node)] -> G.GraphBuilder ()
+    insertFallthroughs nodes =
+      mapM_
+        (\((i1, n1), (_, n2)) ->
+           case i1 of
+             A.OPER { A.jump=Just _ } -> do pure ()
+             _ -> G.addEdge n1 n2
+         )
+        $ zip nodes $ tail nodes
+
+    insertExplicitJumps :: [(A.Inst, G.Node)] -> G.GraphBuilder ()
+    insertExplicitJumps nodes =
+      mapM_
+        (\(i, n) ->
+           case i of
+             A.OPER { A.jump = Just jumpTargetLabs } ->
+               let
+                 jumpTargetNodes = fmap
+                                     (\lab -> find
+                                                (\(inst, _) -> case inst of
+                                                     A.LABEL { A.lab=lab' } -> lab == lab'
+                                                     _ -> False)
+                                                nodes)
+                                     jumpTargetLabs
+                 jumpTargetNodes' = case sequence jumpTargetNodes of
+                                      Just targets -> fmap snd targets
+                                      _ -> error "invalid instruction list"
+               in do
+                 mapM_
+                   (G.addEdge n)
+                   jumpTargetNodes'
+             _ -> do pure ()
+         )
+         nodes
+
     buildCFG :: G.GraphBuilder ()
     buildCFG = do
-     nodes <- allocNodes
-     mapM_ -- compute fallthroughs
-       (\((i1, n1), (_, n2)) ->
-          case i1 of
-            A.OPER { A.jump=Just _ } -> do pure ()
-            _ -> G.addEdge n1 n2
-        )
-       $ zip nodes $ tail nodes
-     mapM_ -- compute explicit jumps
-       (\(i, n) ->
-          case i of
-            A.OPER { A.jump = Just jumpTargetLabs } ->
-              let
-                jumpTargetNodes = fmap
-                                    (\lab -> find
-                                               (\(inst, _) -> case inst of
-                                                    A.LABEL { A.lab=lab' } -> lab == lab'
-                                                    _ -> False)
-                                               nodes)
-                                    jumpTargetLabs
-                jumpTargetNodes' = case sequence jumpTargetNodes of
-                                     Just targets -> fmap snd targets
-                                     _ -> error "invalid instruction list"
-              in do
-                mapM_
-                  (G.addEdge n)
-                  jumpTargetNodes'
-            _ -> do pure ()
-        )
-        nodes
+      nodes <- allocNodes
+      _ <- insertFallthroughs nodes
+      insertExplicitJumps nodes
