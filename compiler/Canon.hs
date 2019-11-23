@@ -9,6 +9,7 @@ import qualified Data.Map as Map
 
 import Control.Monad.Trans.State (State, get, put, runState)
 
+
 (%) :: T.Stm -> T.Stm -> T.Stm
 (%) (T.EXP (T.CONST _)) x = x
 (%) x (T.EXP (T.CONST _)) = x
