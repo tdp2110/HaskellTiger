@@ -5,7 +5,7 @@ import qualified Graph as G
 
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Control.Monad.Trans.State (State, get, put, runState)
+import Control.Monad.Trans.State (runState)
 
 
 type TempId = Int
@@ -15,8 +15,6 @@ data FlowGraph = FlowGraph { control :: G.Graph
                            , use :: Map G.NodeId [TempId]
                            , ismove :: Map G.NodeId Bool }
 
-type GraphBuilder = State G.Graph
-
 instrsToGraph :: [A.Inst] -> (FlowGraph, [G.Node])
 instrsToGraph insts =
   let
@@ -24,41 +22,23 @@ instrsToGraph insts =
   in
     undefined
   where
-    buildGraph :: [A.Inst] -> GraphBuilder ()
+    buildGraph :: [A.Inst] -> G.GraphBuilder ()
     buildGraph = undefined
 
-    allocNode :: GraphBuilder G.Node
-    allocNode = do
-      g <- get
-      let
-        (node, g') = G.newNode g
-        in do
-        put g'
-        pure node
-
-    addEdge :: G.Node -> G.Node -> GraphBuilder ()
-    addEdge n1 n2 = do
-      g <- get
-      let
-        g' = G.mkEdge g (G.nodeId n1) (G.nodeId n2)
-        in do
-        put g'
-        pure ()
-
-    allocNodes :: [A.Inst] -> GraphBuilder [(A.Inst, G.Node)]
+    allocNodes :: [A.Inst] -> G.GraphBuilder [(A.Inst, G.Node)]
     allocNodes insts = mapM
                          (\inst -> do
-                                     node <- allocNode
+                                     node <- G.allocNode
                                      pure (inst, node))
                          insts
 
-    buildCFG :: [A.Inst] -> GraphBuilder ()
+    buildCFG :: [A.Inst] -> G.GraphBuilder ()
     buildCFG insts = do
      nodes <- allocNodes insts
      mapM_
        (\((i1, n1), (i2, n2)) ->
           case i1 of
             A.OPER { A.jump=Just targets } -> undefined
-            _ -> addEdge n1 n2
+            _ -> G.addEdge n1 n2
         )
        (zip nodes $ tail nodes)

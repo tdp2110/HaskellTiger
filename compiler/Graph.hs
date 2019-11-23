@@ -1,5 +1,6 @@
 module Graph where
 
+import Control.Monad.Trans.State (State, get, put, runState)
 import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -59,3 +60,32 @@ rmEdge g id1 id2 =
     nodes_g'' = Map.insert id2 n2' nodes_g'
   in
     g{nodes=nodes_g''}
+
+type GraphBuilder = State Graph
+
+allocNode :: GraphBuilder Node
+allocNode = do
+  g <- get
+  let
+    (node, g') = newNode g
+    in do
+    put g'
+    pure node
+
+addEdge :: Node -> Node -> GraphBuilder ()
+addEdge n1 n2 = do
+  g <- get
+  let
+    g' = mkEdge g (nodeId n1) (nodeId n2)
+    in do
+    put g'
+    pure ()
+
+delEdge :: Node -> Node -> GraphBuilder ()
+delEdge n1 n2 = do
+  g <- get
+  let
+    g' = rmEdge g (nodeId n1) (nodeId n2)
+    in do
+    put g'
+    pure ()
