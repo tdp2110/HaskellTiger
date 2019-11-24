@@ -73,7 +73,7 @@ instrsToGraph insts =
         (\((i1, n1), (_, n2)) ->
            case i1 of
              A.OPER { A.jump=Just _ } -> do pure ()
-             _ -> G.addEdge n1 n2
+             _                        -> G.addEdge n1 n2
          )
         $ zip nodes $ tail nodes
 
@@ -88,12 +88,12 @@ instrsToGraph insts =
                                      (\lab -> find
                                                 (\(inst, _) -> case inst of
                                                      A.LABEL { A.lab=lab' } -> lab == lab'
-                                                     _ -> False)
+                                                     _                      -> False)
                                                 nodes)
                                      jumpTargetLabs
                  jumpTargetNodes' = case sequence jumpTargetNodes of
                                       Just targets -> fmap snd targets
-                                      _ -> error "invalid instruction list"
+                                      _            -> error "invalid instruction list"
                in do
                  mapM_
                    (G.addEdge n)
