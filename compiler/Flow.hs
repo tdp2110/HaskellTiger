@@ -19,12 +19,46 @@ data FlowGraph = FlowGraph { control :: G.Graph
 instrsToGraph :: [A.Inst] -> (FlowGraph, [G.Node])
 instrsToGraph insts =
   let
-    ((), g) = runState buildGraph G.newGraph
+    ((nodes, defs, uses, isMoves), cfg) = runState buildGraph G.newGraph
   in
-    undefined
+    ( FlowGraph { control=cfg
+                , def=defs
+                , use=uses
+                , ismove=isMoves }
+    , fmap snd nodes )
   where
-    buildGraph :: G.GraphBuilder ()
-    buildGraph = undefined
+    buildGraph :: G.GraphBuilder ( [(A.Inst, G.Node)]
+                                 , Map G.NodeId [TempId]
+                                 , Map G.NodeId [TempId]
+                                 , Map G.NodeId Bool )
+    buildGraph = do
+      nodes <- buildCFG
+      let
+        defs = Map.fromList $
+                 fmap
+                 (\(inst, node) -> ( G.nodeId node
+                                   , case inst of
+                                       A.OPER { A.operDst=dsts } -> dsts
+                                       A.LABEL {} -> []
+                                       A.MOVE { A.moveDst=dst } -> [dst] ))
+                 nodes
+        uses = Map.fromList $
+                 fmap
+                 (\(inst, node) -> ( G.nodeId node
+                                   , case inst of
+                                       A.OPER { A.operSrc=srcs } -> srcs
+                                       A.LABEL {} -> []
+                                       A.MOVE { A.moveSrc=src } -> [src] ))
+                 nodes
+        isMoves = Map.fromList $
+                    fmap
+                    (\(inst, node) -> ( G.nodeId node
+                                      , case inst of
+                                          A.MOVE {} -> True
+                                          _         -> False ))
+                    nodes
+        in
+        pure (nodes, defs, uses, isMoves)
 
     allocNodes :: G.GraphBuilder [(A.Inst, G.Node)]
     allocNodes = mapM
@@ -68,8 +102,9 @@ instrsToGraph insts =
          )
          nodes
 
-    buildCFG :: G.GraphBuilder ()
+    buildCFG :: G.GraphBuilder [(A.Inst, G.Node)]
     buildCFG = do
       nodes <- allocNodes
       _ <- insertFallthroughs nodes
       insertExplicitJumps nodes
+      pure nodes
