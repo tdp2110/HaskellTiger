@@ -8,34 +8,35 @@ import qualified Data.Map as Map
 import Prelude hiding (succ, pred)
 
 
-type NodeId = Int
+class (Ord a) => NodeId a where
+  incrId :: a -> a
 
-data Node = Node { succ :: [NodeId]
-                 , pred :: [NodeId]
-                 , nodeId :: NodeId }
+data Node a = Node { succ :: [a]
+                   , pred :: [a]
+                   , nodeId :: a }
 
-freshNode :: NodeId -> Node
+freshNode :: a -> Node a
 freshNode nId = Node { succ=[]
                      , pred=[]
                      , nodeId=nId }
 
-data Graph = Graph { nodes :: Map Int Node
-                   , nextId :: NodeId }
+data Graph a = Graph { nodes :: Map a (Node a)
+                     , nextId :: a }
 
-newGraph :: Graph
-newGraph = Graph { nodes=Map.empty
-                 , nextId=0 }
+newGraph :: a -> Graph a
+newGraph firstId = Graph { nodes=Map.empty
+                         , nextId=firstId }
 
-newNode :: Graph -> (Node, Graph)
+newNode :: NodeId a => Graph a -> (Node a, Graph a)
 newNode g@(Graph{nextId=nId}) =
   let
     node = freshNode nId
   in
     ( node
     , g{ nodes=Map.insert nId node $ nodes g
-       , nextId=nId + 1 } )
+       , nextId=incrId nId } )
 
-mkEdge :: Graph -> NodeId -> NodeId -> Graph
+mkEdge :: NodeId a => Graph a -> a -> a -> Graph a
 mkEdge g id1 id2 =
   let
     nodes_g = nodes g
@@ -48,7 +49,7 @@ mkEdge g id1 id2 =
   in
     g{nodes=nodes_g''}
 
-rmEdge :: Graph -> NodeId -> NodeId -> Graph
+rmEdge :: NodeId a => Graph a -> a -> a -> Graph a
 rmEdge g id1 id2 =
   let
     nodes_g = nodes g
@@ -61,9 +62,9 @@ rmEdge g id1 id2 =
   in
     g{nodes=nodes_g''}
 
-type GraphBuilder = State Graph
+type GraphBuilder a = State (Graph a)
 
-allocNode :: GraphBuilder Node
+allocNode :: NodeId a => GraphBuilder a (Node a)
 allocNode = do
   g <- get
   let
@@ -72,7 +73,7 @@ allocNode = do
     put g'
     pure node
 
-addEdge :: Node -> Node -> GraphBuilder ()
+addEdge :: NodeId a => Node a -> Node a -> GraphBuilder a ()
 addEdge n1 n2 = do
   g <- get
   let
@@ -81,7 +82,7 @@ addEdge n1 n2 = do
     put g'
     pure ()
 
-delEdge :: Node -> Node -> GraphBuilder ()
+delEdge :: NodeId a => Node a -> Node a -> GraphBuilder a ()
 delEdge n1 n2 = do
   g <- get
   let

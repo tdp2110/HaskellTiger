@@ -11,15 +11,30 @@ import Control.Monad.Trans.State (runState)
 
 type TempId = Int
 
-data FlowGraph = FlowGraph { control :: G.Graph
-                           , def :: Map G.NodeId [TempId]
-                           , use :: Map G.NodeId [TempId]
-                           , ismove :: Map G.NodeId Bool }
+newtype NodeId = NodeId Int
 
-instrsToGraph :: [A.Inst] -> (FlowGraph, [G.Node])
+instance Eq NodeId where
+  (NodeId n1) == (NodeId n2) = n1 == n2
+
+instance Ord NodeId where
+  (NodeId n1) `compare` (NodeId n2) = n1 `compare` n2
+
+instance G.NodeId NodeId where
+  incrId (NodeId nodeId) = NodeId $ nodeId + 1
+
+type Graph = G.Graph NodeId
+type GraphBuilder = G.GraphBuilder NodeId
+type Node = G.Node NodeId
+
+data FlowGraph = FlowGraph { control :: Graph
+                           , def :: Map NodeId [TempId]
+                           , use :: Map NodeId [TempId]
+                           , ismove :: Map NodeId Bool }
+
+instrsToGraph :: [A.Inst] -> (FlowGraph, [Node])
 instrsToGraph insts =
   let
-    ((nodes, defs, uses, isMoves), cfg) = runState buildGraph G.newGraph
+    ((nodes, defs, uses, isMoves), cfg) = runState buildGraph $ G.newGraph $ NodeId 0
   in
     ( FlowGraph { control=cfg
                 , def=defs
@@ -27,47 +42,47 @@ instrsToGraph insts =
                 , ismove=isMoves }
     , fmap snd nodes )
   where
-    buildGraph :: G.GraphBuilder ( [(A.Inst, G.Node)]
-                                 , Map G.NodeId [TempId]
-                                 , Map G.NodeId [TempId]
-                                 , Map G.NodeId Bool )
+    buildGraph :: GraphBuilder ( [(A.Inst, Node)]
+                                 , Map NodeId [TempId]
+                                 , Map NodeId [TempId]
+                                 , Map NodeId Bool )
     buildGraph = do
       nodes <- buildCFG
       let
         defs = Map.fromList $
                  fmap
-                 (\(inst, node) -> ( G.nodeId node
-                                   , case inst of
-                                       A.OPER { A.operDst=dsts } -> dsts
-                                       A.LABEL {} -> []
-                                       A.MOVE { A.moveDst=dst } -> [dst] ))
-                 nodes
+                   (\(inst, node) -> ( G.nodeId node
+                                     , case inst of
+                                         A.OPER { A.operDst=dsts } -> dsts
+                                         A.LABEL {} -> []
+                                         A.MOVE { A.moveDst=dst } -> [dst] ))
+                   nodes
         uses = Map.fromList $
                  fmap
-                 (\(inst, node) -> ( G.nodeId node
-                                   , case inst of
-                                       A.OPER { A.operSrc=srcs } -> srcs
-                                       A.LABEL {} -> []
-                                       A.MOVE { A.moveSrc=src } -> [src] ))
-                 nodes
+                   (\(inst, node) -> ( G.nodeId node
+                                     , case inst of
+                                         A.OPER { A.operSrc=srcs } -> srcs
+                                         A.LABEL {} -> []
+                                         A.MOVE { A.moveSrc=src } -> [src] ))
+                   nodes
         isMoves = Map.fromList $
                     fmap
-                    (\(inst, node) -> ( G.nodeId node
-                                      , case inst of
-                                          A.MOVE {} -> True
-                                          _         -> False ))
-                    nodes
+                      (\(inst, node) -> ( G.nodeId node
+                                        , case inst of
+                                            A.MOVE {} -> True
+                                            _         -> False ))
+                      nodes
         in
         pure (nodes, defs, uses, isMoves)
 
-    allocNodes :: G.GraphBuilder [(A.Inst, G.Node)]
+    allocNodes :: GraphBuilder [(A.Inst, Node)]
     allocNodes = mapM
                    (\inst -> do
                                node <- G.allocNode
                                pure (inst, node))
                    insts
 
-    insertFallthroughs :: [(A.Inst, G.Node)] -> G.GraphBuilder ()
+    insertFallthroughs :: [(A.Inst, Node)] -> GraphBuilder ()
     insertFallthroughs nodes =
       mapM_
         (\((i1, n1), (_, n2)) ->
@@ -77,7 +92,7 @@ instrsToGraph insts =
          )
         $ zip nodes $ tail nodes
 
-    insertExplicitJumps :: [(A.Inst, G.Node)] -> G.GraphBuilder ()
+    insertExplicitJumps :: [(A.Inst, Node)] -> GraphBuilder ()
     insertExplicitJumps nodes =
       mapM_
         (\(i, n) ->
@@ -102,7 +117,7 @@ instrsToGraph insts =
          )
          nodes
 
-    buildCFG :: G.GraphBuilder [(A.Inst, G.Node)]
+    buildCFG :: GraphBuilder [(A.Inst, Node)]
     buildCFG = do
       nodes <- allocNodes
       _ <- insertFallthroughs nodes
