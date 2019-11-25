@@ -3,10 +3,10 @@ module Flow where
 import qualified Assem as A
 import qualified Graph as G
 
+import Control.Monad.Trans.State (runState)
 import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Control.Monad.Trans.State (runState)
 
 
 type TempId = Int
