@@ -37,11 +37,11 @@ uint8_t *tiger_alloc(int64_t const numBytes) {
   return res;
 }
 
-void tiger__flush() { std::cout << std::flush; }
+void tiger_flush() { std::cout << std::flush; }
 
 TgString *tiger_getchar() {
   int const c = std::getchar();
-  TgString *res = new (std::nothrow) TgString(std::string(1, c));
+  TgString *const res = new (std::nothrow) TgString(std::string(1, c));
   AssertNotNull(res, __FUNCTION__);
   return res;
 }
@@ -57,7 +57,7 @@ int64_t tiger_ord(TgString const *const s) {
 }
 
 TgString *tiger_itoa(int64_t const i) {
-  auto res = new (std::nothrow) TgString(std::to_string(i));
+  auto *const res = new (std::nothrow) TgString(std::to_string(i));
   AssertNotNull(res, __FUNCTION__);
   return res;
 }
@@ -81,7 +81,7 @@ TgString *tiger_substring(TgString const *const s, int64_t const lo,
               << ", " << hi << "\n";
     std::terminate();
   }
-  auto res = new (std::nothrow) TgString(
+  auto *const res = new (std::nothrow) TgString(
       s->impl.substr(static_cast<uint64_t>(lo), static_cast<uint64_t>(hi)));
   AssertNotNull(res, __FUNCTION__);
   return res;
@@ -91,10 +91,12 @@ TgString *tiger_concat(TgString const *const s1, TgString const *const s2) {
   AssertNotNull(s1, __FUNCTION__);
   AssertNotNull(s2, __FUNCTION__);
 
-  auto res = new (std::nothrow) TgString(std::string(s1->impl + s2->impl));
+  auto *const res =
+      new (std::nothrow) TgString(std::string(s1->impl + s2->impl));
   AssertNotNull(res, __FUNCTION__);
   return res;
 }
+
 int64_t tiger_not(int64_t const i) { return i == 0 ? 1 : 0; }
 
 void tiger_exit(int64_t const retcode) {
@@ -115,7 +117,7 @@ TgString *tiger_allocString(uint8_t const *const bytes,
     std::terminate();
   }
 
-  auto res = new (std::nothrow) TgString(std::string(
+  auto *const res = new (std::nothrow) TgString(std::string(
       reinterpret_cast<char const *>(*bytes), static_cast<uint64_t>(numBytes)));
   AssertNotNull(res, __FUNCTION__);
   return res;
