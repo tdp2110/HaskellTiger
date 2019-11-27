@@ -4,7 +4,7 @@ import qualified Canon as C
 import qualified Frame
 import Symbol
 import qualified Temp
-import qualified Tree as T
+import qualified TreeIR as T
 
 
 instance Arbitrary Temp.Label where

@@ -4,7 +4,7 @@ import qualified Assem as A
 import qualified Frame
 import qualified Symbol as S
 import qualified Temp
-import qualified Tree as Tree
+import qualified TreeIR as TreeIR
 import qualified X64Frame
 
 import Control.Monad.Trans.Writer (WriterT, tell, runWriterT)
@@ -16,7 +16,7 @@ import Data.Functor.Identity
 import Data.List
 
 
-codegen :: X64Frame.X64 -> Temp.Generator -> Tree.Stm -> ([A.Inst], Temp.Generator)
+codegen :: X64Frame.X64 -> Temp.Generator -> TreeIR.Stm -> ([A.Inst], Temp.Generator)
 codegen x64 gen stm =
   let
     ((_, gen'), instsDList) =
@@ -61,101 +61,101 @@ result codeGenerator = do
 noop :: CodeGenerator ()
 noop = do pure ()
 
-munchStm :: Tree.Stm -> CodeGenerator ()
-munchStm (Tree.SEQ (a, b)) = do
+munchStm :: TreeIR.Stm -> CodeGenerator ()
+munchStm (TreeIR.SEQ (a, b)) = do
   _ <- munchStm a
   munchStm b
-munchStm (Tree.EXP (Tree.CONST _)) =
+munchStm (TreeIR.EXP (TreeIR.CONST _)) =
   noop
-munchStm (Tree.EXP e) = do
+munchStm (TreeIR.EXP e) = do
    _ <- munchExp e
    noop
-munchStm (Tree.LABEL l@(Temp.Label (S.Symbol s))) =
+munchStm (TreeIR.LABEL l@(Temp.Label (S.Symbol s))) =
    emit A.LABEL { A.assem=s ++ ":\n"
                 , A.lab = l }
-munchStm (Tree.MOVE (Tree.TEMP dst, Tree.TEMP src)) =
+munchStm (TreeIR.MOVE (TreeIR.TEMP dst, TreeIR.TEMP src)) =
    emit A.MOVE { A.assem="\tmov `d0, `s0\n"
                , A.moveDst = dst
                , A.moveSrc = src }
-munchStm (Tree.MOVE (Tree.TEMP d, Tree.MEM (Tree.BINOP (Tree.PLUS, Tree.TEMP s, Tree.CONST c)))) =
+munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s, TreeIR.CONST c)))) =
   emit A.MOVE { A.assem="\tmov `d0, [`s0" ++ (plusMinusInt c) ++ "]\n"
               , A.moveDst = d
               , A.moveSrc = s }
-munchStm (Tree.MOVE (Tree.TEMP d, Tree.MEM (Tree.BINOP (Tree.PLUS, Tree.CONST c, Tree.TEMP s)))) =
-  munchStm (Tree.MOVE (Tree.TEMP d, Tree.MEM (Tree.BINOP (Tree.PLUS, Tree.TEMP s, Tree.CONST c))))
-munchStm (Tree.MOVE (Tree.TEMP d, Tree.MEM (Tree.BINOP (Tree.PLUS, Tree.TEMP s0, Tree.TEMP s1)))) =
+munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.CONST c, TreeIR.TEMP s)))) =
+  munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s, TreeIR.CONST c))))
+munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s0, TreeIR.TEMP s1)))) =
   emit A.OPER { A.assem="\tmov `d0, [`s0 + `s1]\n"
               , A.operDst = [d]
               , A.operSrc = [s0, s1]
               , A.jump = Nothing }
-munchStm (Tree.MOVE (Tree.TEMP d, Tree.MEM (Tree.BINOP (Tree.MINUS, Tree.TEMP s, Tree.CONST c)))) =
-  munchStm $ Tree.MOVE (Tree.TEMP d, Tree.MEM (Tree.BINOP (Tree.PLUS, Tree.TEMP s, Tree.CONST $ -c)))
-munchStm (Tree.MOVE (Tree.MEM (Tree.TEMP d), e)) = do
+munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.MINUS, TreeIR.TEMP s, TreeIR.CONST c)))) =
+  munchStm $ TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s, TreeIR.CONST $ -c)))
+munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.TEMP d), e)) = do
   eReg <- munchExp e
   emit A.OPER { A.assem="\tmov qword ptr [`d0], `s0\n"
               , A.operDst = [d]
               , A.operSrc = [eReg]
               , A.jump = Nothing }
-munchStm (Tree.MOVE (Tree.MEM (Tree.BINOP (Tree.PLUS, Tree.TEMP d0, Tree.TEMP d1)), e)) = do
+munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP d0, TreeIR.TEMP d1)), e)) = do
   eReg <- munchExp e
   emit A.OPER { A.assem="\tmov qword ptr [`d0+`d1], `s0\n"
               , A.operDst = [d0, d1]
               , A.operSrc = [eReg]
               , A.jump = Nothing }
-munchStm (Tree.MOVE (Tree.MEM (Tree.BINOP (Tree.PLUS, Tree.CONST c1, Tree.TEMP d)), Tree.CONST c2)) =
+munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.CONST c1, TreeIR.TEMP d)), TreeIR.CONST c2)) =
   emit A.OPER { A.assem="\tmov qword ptr [`d0" ++ (plusMinusInt c1) ++ "], " ++ (show c2) ++ "\n"
               , A.operDst = [d]
               , A.operSrc = []
               , A.jump = Nothing }
-munchStm (Tree.MOVE (Tree.MEM (Tree.BINOP (Tree.PLUS, Tree.CONST c, Tree.TEMP d)), e)) = do
+munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.CONST c, TreeIR.TEMP d)), e)) = do
   eReg <- munchExp e
   emit A.OPER { A.assem="\tmov qword ptr [`d0" ++ (plusMinusInt c) ++ "], `s0\n"
               , A.operDst = [d]
               , A.operSrc = [eReg]
               , A.jump = Nothing }
-munchStm (Tree.MOVE (Tree.MEM (Tree.BINOP (Tree.PLUS, Tree.TEMP d, Tree.CONST c1)), Tree.CONST c2)) =
+munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP d, TreeIR.CONST c1)), TreeIR.CONST c2)) =
   emit A.OPER { A.assem="\tmov qword ptr [`d0" ++ (plusMinusInt c1) ++ "], " ++ (show c2) ++ "\n"
               , A.operDst = [d]
               , A.operSrc = []
               , A.jump = Nothing }
-munchStm (Tree.MOVE (Tree.MEM (Tree.BINOP (Tree.PLUS, Tree.TEMP d, Tree.CONST c)), e)) = do
+munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP d, TreeIR.CONST c)), e)) = do
   eReg <- munchExp e
   emit A.OPER { A.assem="\tmov qword ptr [`d0" ++ (plusMinusInt c) ++ "], `s0\n"
               , A.operDst = [d]
               , A.operSrc = [eReg]
               , A.jump = Nothing }
-munchStm (Tree.MOVE (Tree.MEM (Tree.BINOP (Tree.MINUS, Tree.TEMP d, Tree.CONST c)), e)) = do
+munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.MINUS, TreeIR.TEMP d, TreeIR.CONST c)), e)) = do
   eReg <- munchExp e
   emit A.OPER { A.assem="\tmov qword ptr [`d0" ++ (plusMinusInt $ -c) ++ "], `s0\n"
               , A.operDst = [d]
               , A.operSrc = [eReg]
               , A.jump = Nothing }
-munchStm (Tree.MOVE (Tree.MEM e1, e2)) = do
+munchStm (TreeIR.MOVE (TreeIR.MEM e1, e2)) = do
   src <- munchExp e2
   dst <- munchExp e1
   emit A.OPER { A.assem="\tmov [`d0], `s0\n"
               , A.operDst = [dst]
               , A.operSrc = [src]
               , A.jump = Nothing }
-munchStm (Tree.MOVE (Tree.TEMP t, e2)) = do
+munchStm (TreeIR.MOVE (TreeIR.TEMP t, e2)) = do
   src <- munchExp e2
   emit A.OPER { A.assem="\tmov `d0, `s0\n"
               , A.operDst = [t]
               , A.operSrc = [src]
               , A.jump = Nothing }
-munchStm m@(Tree.MOVE _) = error $ "codegen can't handle move: " ++ show m
-munchStm (Tree.JUMP (Tree.NAME lab, _)) =
+munchStm m@(TreeIR.MOVE _) = error $ "codegen can't handle move: " ++ show m
+munchStm (TreeIR.JUMP (TreeIR.NAME lab, _)) =
   emit A.OPER { A.assem="\tJMP `j0\n"
               , A.operDst = []
               , A.operSrc = []
               , A.jump = Just [lab] }
-munchStm (Tree.JUMP (e, labels)) = do
+munchStm (TreeIR.JUMP (e, labels)) = do
   src <- munchExp e
   emit A.OPER { A.assem="\tjmp `s0\n"
               , A.operSrc = [src]
               , A.operDst = []
               , A.jump = Just labels }
-munchStm (Tree.CJUMP (op, e1, e2, t, f)) = do
+munchStm (TreeIR.CJUMP (op, e1, e2, t, f)) = do
   src1 <- munchExp e1
   src2 <- munchExp e2
   emit A.OPER { A.assem="\tcmp `s0, `s1\n" ++ (opToJump op) ++ " `j0\nJMP `j1\n"
@@ -163,21 +163,21 @@ munchStm (Tree.CJUMP (op, e1, e2, t, f)) = do
               , A.operSrc = [src1, src2]
               , A.jump = Just [t, f] }
   where
-    opToJump :: Tree.Relop -> String
+    opToJump :: TreeIR.Relop -> String
     opToJump oper = case oper of
-                      Tree.EQ -> "JE"
-                      Tree.NE -> "JNE"
-                      Tree.LT -> "JL"
-                      Tree.LE -> "JLE"
-                      Tree.ULT -> "JL"
-                      Tree.ULE -> "JLE"
-                      Tree.GT -> "JG"
-                      Tree.GE -> "JGE"
-                      Tree.UGT -> "JG"
-                      Tree.UGE -> "JGE"
+                      TreeIR.EQ -> "JE"
+                      TreeIR.NE -> "JNE"
+                      TreeIR.LT -> "JL"
+                      TreeIR.LE -> "JLE"
+                      TreeIR.ULT -> "JL"
+                      TreeIR.ULE -> "JLE"
+                      TreeIR.GT -> "JG"
+                      TreeIR.GE -> "JGE"
+                      TreeIR.UGT -> "JG"
+                      TreeIR.UGE -> "JGE"
 
-munchExp :: Tree.Exp -> CodeGenerator Int
-munchExp (Tree.CONST c) =
+munchExp :: TreeIR.Exp -> CodeGenerator Int
+munchExp (TreeIR.CONST c) =
   result (\r -> let
                   inst = A.OPER { A.assem="\tmov `d0, " ++ (show c) ++ "\n"
                                 , A.operDst = [r]
@@ -187,13 +187,13 @@ munchExp (Tree.CONST c) =
                   do
                     pure [inst]
         )
-munchExp (Tree.TEMP t) = do
+munchExp (TreeIR.TEMP t) = do
   pure t
-munchExp (Tree.ESEQ (s, e)) = do
+munchExp (TreeIR.ESEQ (s, e)) = do
   _ <- munchStm s
   munchExp e
-munchExp (Tree.BINOP (op, e1, e2)) =
-  if op == Tree.DIV then
+munchExp (TreeIR.BINOP (op, e1, e2)) =
+  if op == TreeIR.DIV then
     result (\r -> do
                     src1 <- munchExp e1
                     src2 <- munchExp e2
@@ -226,19 +226,19 @@ munchExp (Tree.BINOP (op, e1, e2)) =
                                   , A.moveSrc=X64Frame.multiplicandRegister x64
                                   } ])
   where
-    convertOp :: Tree.Binop -> String
+    convertOp :: TreeIR.Binop -> String
     convertOp oper = case oper of
-                       Tree.PLUS -> "add"
-                       Tree.MINUS -> "sub"
-                       Tree.MUL -> "imul"
-                       Tree.DIV -> "idiv"
-                       Tree.AND -> "and"
-                       Tree.OR -> "or"
-                       Tree.LSHIFT -> "shl"
-                       Tree.RSHIFT -> "shr"
-                       Tree.XOR -> "xor"
+                       TreeIR.PLUS -> "add"
+                       TreeIR.MINUS -> "sub"
+                       TreeIR.MUL -> "imul"
+                       TreeIR.DIV -> "idiv"
+                       TreeIR.AND -> "and"
+                       TreeIR.OR -> "or"
+                       TreeIR.LSHIFT -> "shl"
+                       TreeIR.RSHIFT -> "shr"
+                       TreeIR.XOR -> "xor"
                        _ -> error $ "unsupported operator: " ++ (show oper)
-munchExp (Tree.CALL (Tree.NAME lab, args, escapes)) =
+munchExp (TreeIR.CALL (TreeIR.NAME lab, args, escapes)) =
   result (\r -> do
                   operSrc <- mapM munchExp args
                   x64 <- getArch
@@ -253,7 +253,7 @@ munchExp (Tree.CALL (Tree.NAME lab, args, escapes)) =
                     operSrc
                     escapes
          )
-munchExp (Tree.CALL (expr, args, escapes)) =
+munchExp (TreeIR.CALL (expr, args, escapes)) =
   result (\r -> do
                   argRegs <- mapM munchExp args
                   exprReg <- munchExp expr
@@ -269,7 +269,7 @@ munchExp (Tree.CALL (expr, args, escapes)) =
                     argRegs
                     escapes
          )
-munchExp (Tree.MEM (Tree.BINOP (Tree.PLUS, e, Tree.CONST c))) =
+munchExp (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, e, TreeIR.CONST c))) =
   result (\r -> do
                   src <- munchExp e
                   pure [ A.OPER { A.assem="\tmov `d0, [`s0" ++ (plusMinusInt c) ++ "]\n"
@@ -277,18 +277,18 @@ munchExp (Tree.MEM (Tree.BINOP (Tree.PLUS, e, Tree.CONST c))) =
                                 , A.operSrc=[src]
                                 , A.jump=Nothing } ]
          )
-munchExp (Tree.MEM (Tree.BINOP (Tree.PLUS, Tree.CONST c, e))) =
-  munchExp (Tree.MEM (Tree.BINOP (Tree.PLUS, e, Tree.CONST c)))
-munchExp (Tree.MEM (Tree.BINOP (Tree.MINUS, e, Tree.CONST c))) =
-  munchExp (Tree.MEM (Tree.BINOP (Tree.PLUS, e, Tree.CONST $ -c)))
-munchExp (Tree.MEM (Tree.CONST c)) =
+munchExp (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.CONST c, e))) =
+  munchExp (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, e, TreeIR.CONST c)))
+munchExp (TreeIR.MEM (TreeIR.BINOP (TreeIR.MINUS, e, TreeIR.CONST c))) =
+  munchExp (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, e, TreeIR.CONST $ -c)))
+munchExp (TreeIR.MEM (TreeIR.CONST c)) =
   result (\r -> do
                   pure [ A.OPER { A.assem="\tmov `d0, [" ++ (show c) ++ "]\n"
                                 , A.operDst=[r]
                                 , A.operSrc=[]
                                 , A.jump=Nothing } ]
          )
-munchExp (Tree.MEM expr) =
+munchExp (TreeIR.MEM expr) =
   result (\r -> do
                   exprReg <- munchExp expr
                   pure [ A.OPER { A.assem="\tmov `d0, [`s0]\n"
@@ -296,7 +296,7 @@ munchExp (Tree.MEM expr) =
                                 , A.operSrc=[exprReg]
                                 , A.jump=Nothing } ]
          )
-munchExp (Tree.NAME lab@(Temp.Label (S.Symbol s))) =
+munchExp (TreeIR.NAME lab@(Temp.Label (S.Symbol s))) =
   result (\r -> do
                   pure [ A.OPER { A.assem="\tlea `d0, [rip + " ++ s ++ "]\n"
                                 , A.operDst=[r]

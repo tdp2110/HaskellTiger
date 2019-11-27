@@ -7,7 +7,7 @@ import qualified Liveness
 import qualified Parser
 import qualified Semant
 import qualified Temp
-import qualified Tree
+import qualified TreeIR
 import qualified X64Frame
 
 import Control.Monad (join)
@@ -86,7 +86,7 @@ compileToAsm text =
               in
                 (join (fmap formatAsm insts'), gen5)
               where
-                step1 :: ([Assem.Inst], Temp.Generator) -> Tree.Stm -> ([Assem.Inst], Temp.Generator)
+                step1 :: ([Assem.Inst], Temp.Generator) -> TreeIR.Stm -> ([Assem.Inst], Temp.Generator)
                 step1 (insts, g) stm =
                   let
                     (insts', g') = Codegen.codegen x64 g stm

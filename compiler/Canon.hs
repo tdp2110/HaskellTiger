@@ -1,7 +1,7 @@
 module Canon where
 
 import qualified Temp
-import qualified Tree as T
+import qualified TreeIR as T
 
 import Data.Foldable (foldr')
 import Data.Map (Map)
@@ -126,7 +126,7 @@ linearizeM s = do
   linear s' []
 
 {-
-From an arbitrary Tree statement, produce a list of cleaned satisfying the following properties:
+From an arbitrary TreeIR statement, produce a list of cleaned satisfying the following properties:
   1.  No SEQ's or ESEQ's
   2.  The parent of every CALL is an EXP(..) or a MOVE(TEMP t,..)
 -}

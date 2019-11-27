@@ -334,10 +334,10 @@ transExp (A.CallExp funcSym argExps pos) = do
             [] -> do
               SemantState{level=thisLevel} <- get
               let
-                argExpTrees = fmap exp paramExpTys
+                argExpTreeIRs = fmap exp paramExpTys
                 in
                 translate
-                  (Translate.call funLevel thisLevel label argExpTrees)
+                  (Translate.call funLevel thisLevel label argExpTreeIRs)
                   resultTy
             ((formalTy, paramTy, ix):_) ->
               throwT pos $
@@ -614,12 +614,12 @@ transExp (A.LetExp decs bodyExp letPos) = do
         runTransT st' bodyEnv (transExp bodyExp)
       of
         Left err -> throwErr err
-        Right ((ExpTy{exp=bodyTree, ty=typ}, st''), frags2) -> do
+        Right ((ExpTy{exp=bodyTreeIR, ty=typ}, st''), frags2) -> do
           put st''
           pushFrags frags1
           pushFrags frags2
           e@ExpTy{exp=expr, ty=t} <- translate
-                                     (Translate.letExp initializers bodyTree)
+                                     (Translate.letExp initializers bodyTreeIR)
                                      typ
           case t of
             Types.UNIT -> do
@@ -753,13 +753,13 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
       Just recTy@(Types.RECORD _) ->
         let
           (access, st') = allocLocal escape st env
-          (initTree, gen') = Translate.initExp access lev initExpr gen
+          (initTreeIR, gen') = Translate.initExp access lev initExpr gen
         in do
           put st'{generator=gen'}
           pure ( env{ venv'=Map.insert
                             name (Env.VarEntry access recTy)
                             (venv' env) }
-                 , [initTree] )
+                 , [initTreeIR] )
       _ -> throwT posn $ "nil expression declarations must be " ++
            "constrained by a RECORD type"
     else
@@ -767,14 +767,14 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
       result =
         let
           (access, st') = allocLocal escape st env
-          (initTree, gen') = Translate.initExp access lev initExpr gen
+          (initTreeIR, gen') = Translate.initExp access lev initExpr gen
         in do
           put st'{generator=gen'}
           pure ( env { venv'=Map.insert
                                name
                                (Env.VarEntry access actualInitTy)
                                (venv' env) }
-                 , [initTree] )
+                 , [initTreeIR] )
     in
       case maybeTypeAnnotation of
         Just typeAnnotation ->

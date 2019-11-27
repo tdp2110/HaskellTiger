@@ -6,7 +6,7 @@ import qualified Semant
 import qualified Symbol
 import qualified Temp
 import qualified Translate
-import qualified Tree
+import qualified TreeIR
 import qualified Types
 import qualified X64Frame
 
@@ -42,9 +42,9 @@ intArith1 = TestCase (
     (Right (Semant.ExpTy{Semant.exp=(Translate.Ex exp), Semant.ty=ty}, _, _, _)) = parseToSema text
  in do
     assertEqual "int arith 1" Types.INT ty
-    assertEqual "arith" exp $ Tree.BINOP ( Tree.PLUS
-                                         , Tree.CONST 42
-                                         , Tree.CONST 1337 )
+    assertEqual "arith" exp $ TreeIR.BINOP ( TreeIR.PLUS
+                                         , TreeIR.CONST 42
+                                         , TreeIR.CONST 1337 )
   )
 
 intArith2 :: Test
@@ -73,15 +73,15 @@ strLiteral = TestCase (
     (Right (Semant.ExpTy{ Semant.exp=expr
                         , Semant.ty=ty}, frags, _, _)) = parseToSema literal
 
-    (Translate.Ex (Tree.ESEQ(
-       Tree.MOVE (
-         Tree.TEMP t1,
-         Tree.CALL (
-           Tree.NAME (Temp.Label (Symbol.Symbol "_tiger_allocString")),
-           [Tree.NAME lab1,
-           Tree.CONST strlen],
+    (Translate.Ex (TreeIR.ESEQ(
+       TreeIR.MOVE (
+         TreeIR.TEMP t1,
+         TreeIR.CALL (
+           TreeIR.NAME (Temp.Label (Symbol.Symbol "_tiger_allocString")),
+           [TreeIR.NAME lab1,
+           TreeIR.CONST strlen],
            [Frame.NoEscape, Frame.NoEscape])),
-       Tree.TEMP t2))) = expr
+       TreeIR.TEMP t2))) = expr
 
     [ X64Frame.STRING (lab2, str2) ] = DList.toList frags
  in do

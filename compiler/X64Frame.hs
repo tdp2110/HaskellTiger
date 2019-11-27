@@ -7,7 +7,7 @@ import qualified Assem
 import qualified Frame
 import qualified Symbol
 import qualified Temp
-import qualified Tree
+import qualified TreeIR
 
 import Data.List
 import Data.Map (Map)
@@ -60,34 +60,34 @@ data X64Frame = X64Frame { name :: Temp.Label
                          , locals :: [X64Access]
                          , x64 :: X64
                          , frameDebug :: Maybe (Symbol.Symbol, Absyn.Pos)
-                         , viewShift :: [Tree.Stm] }
+                         , viewShift :: [TreeIR.Stm] }
   deriving (Show)
 
-data Frag = PROC { body :: Tree.Stm
+data Frag = PROC { body :: TreeIR.Stm
                  , fragFrame :: X64Frame }
           | STRING (Temp.Label, String)
 
 wordSize :: Int
 wordSize = 8
 
-exp :: X64Access -> Tree.Exp -> Tree.Exp
-exp (InFrame k) framePtr = Tree.MEM $ Tree.BINOP (Tree.PLUS, framePtr, Tree.CONST k)
-exp (InReg regNum) _ = Tree.TEMP regNum
+exp :: X64Access -> TreeIR.Exp -> TreeIR.Exp
+exp (InFrame k) framePtr = TreeIR.MEM $ TreeIR.BINOP (TreeIR.PLUS, framePtr, TreeIR.CONST k)
+exp (InReg regNum) _ = TreeIR.TEMP regNum
 
-frameExp :: X64Frame -> Tree.Exp
-frameExp frame = Tree.TEMP $ Frame.fp frame
+frameExp :: X64Frame -> TreeIR.Exp
+frameExp frame = TreeIR.TEMP $ Frame.fp frame
 
-externalCall :: Temp.Label -> [Tree.Exp] -> Tree.Exp
+externalCall :: Temp.Label -> [TreeIR.Exp] -> TreeIR.Exp
 externalCall (Temp.Label (Symbol.Symbol funname)) params =
-  Tree.CALL ( Tree.NAME (Temp.Label (Symbol.Symbol $ "_" ++ funname)) -- hack for MacOS
+  TreeIR.CALL ( TreeIR.NAME (Temp.Label (Symbol.Symbol $ "_" ++ funname)) -- hack for MacOS
             , params
             , fmap (\_ -> Frame.NoEscape) params)
 
-accessExp :: X64Frame -> X64Access -> Tree.Exp
+accessExp :: X64Frame -> X64Access -> TreeIR.Exp
 accessExp frame acc = exp acc $ frameExp frame
 
-staticLink :: Tree.Exp -> Tree.Exp
-staticLink framePtr = Tree.MEM framePtr
+staticLink :: TreeIR.Exp -> TreeIR.Exp
+staticLink framePtr = TreeIR.MEM framePtr
 
 numFormalsInReg :: X64Frame -> Int
 numFormalsInReg frame =
@@ -203,7 +203,7 @@ newFrame x64Inst frameName maybeDebug gen escapes =
             (paramReg:paramRegsRemaining') ->
               let
                 (t, gen'') = Temp.newtemp gen
-                move = Tree.MOVE (Tree.TEMP t, Tree.TEMP paramReg)
+                move = TreeIR.MOVE (TreeIR.TEMP t, TreeIR.TEMP paramReg)
               in
                 ( gen''
                 , frame{ formals=(formals frame) ++ [InReg t]
@@ -241,7 +241,7 @@ allocLocal gen frame escapesOrNot =
 -- | (From Appel, p 261) For each incoming register parameter, move it to the place
 -- from which it is seen within the function (aka the "view shift"). This could be a frame location (for
 -- escaping parameters) or a fresh temporary. One good way to handle this is for newFrame
--- to create a sequence of Tree.MOVE statements as it creates all the formal parameter
+-- to create a sequence of TreeIR.MOVE statements as it creates all the formal parameter
 -- "accesses". newFrame can put this into the frame data structure, and procEntryExit1
 -- can just concatenate it onto the procedue body.
 --   Also concatenated to the body are statements for saving and restoring of callee-save registers.
@@ -249,20 +249,20 @@ allocLocal gen frame escapesOrNot =
 -- on entry, it should move all these registers to their new temporary locations,
 -- and on exit, it should move them back. Of course, these moves (for nonspilled registers) will be
 -- eliminated by register coalesching, so they cost nothing
-procEntryExit1 :: X64Frame -> Tree.Exp -> Temp.Generator -> (Tree.Exp, Temp.Generator)
+procEntryExit1 :: X64Frame -> TreeIR.Exp -> Temp.Generator -> (TreeIR.Exp, Temp.Generator)
 procEntryExit1 frame bodyExp gen =
   let
     (t, gen') = Temp.newtemp gen
     (saves, restores, gen'') = getSaveRestores gen'
-    bodyTemp = Tree.TEMP t
+    bodyTemp = TreeIR.TEMP t
   in
-    ( Tree.ESEQ ( Tree.makeSeq $ viewShift frame
-                , Tree.ESEQ ( saves
-                            , Tree.ESEQ ( Tree.MOVE (bodyTemp, bodyExp)
-                                        , Tree.ESEQ (restores, bodyTemp))))
+    ( TreeIR.ESEQ ( TreeIR.makeSeq $ viewShift frame
+                , TreeIR.ESEQ ( saves
+                            , TreeIR.ESEQ ( TreeIR.MOVE (bodyTemp, bodyExp)
+                                        , TreeIR.ESEQ (restores, bodyTemp))))
     , gen'')
   where
-    getSaveRestores :: Temp.Generator -> (Tree.Stm, Tree.Stm, Temp.Generator)
+    getSaveRestores :: Temp.Generator -> (TreeIR.Stm, TreeIR.Stm, Temp.Generator)
     getSaveRestores g =
       let
         calleeSavesRegs = calleeSaves $ x64 frame
@@ -277,14 +277,14 @@ procEntryExit1 frame bodyExp gen =
           in
             (acc ++ [t], gOut)
         saves = fmap
-                  (\(t, r) -> Tree.MOVE (Tree.TEMP t, Tree.TEMP r))
+                  (\(t, r) -> TreeIR.MOVE (TreeIR.TEMP t, TreeIR.TEMP r))
                   (zip calleeSavesTemps calleeSavesRegs)
         restores = fmap
-                     (\(Tree.MOVE (dst, src)) -> Tree.MOVE (src, dst))
+                     (\(TreeIR.MOVE (dst, src)) -> TreeIR.MOVE (src, dst))
                      saves
 
       in
-        (Tree.makeSeq saves, Tree.makeSeq restores, g')
+        (TreeIR.makeSeq saves, TreeIR.makeSeq restores, g')
 
 -- | This function appends a "sink" instruction to the function body to tell the register allocator
 -- that certain regisers are live at procedure exit. In the case of the Jouette machine, this is simply

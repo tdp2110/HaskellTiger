@@ -1,6 +1,6 @@
 module Graph where
 
-import Control.Monad.Trans.State (State, get, put, runState)
+import Control.Monad.Trans.State (State, get, put)
 import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map

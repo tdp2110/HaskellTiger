@@ -1,4 +1,4 @@
-module Tree where
+module TreeIR where
 
 import qualified Frame
 import qualified Symbol
@@ -29,9 +29,9 @@ data Stm =
   | LABEL Temp.Label
   deriving (Eq)
 
-makeSeq :: [Tree.Stm] -> Tree.Stm
-makeSeq [] = Tree.EXP $ Tree.CONST 0
-makeSeq (stmt:stmts) = Tree.SEQ(stmt, makeSeq stmts)
+makeSeq :: [TreeIR.Stm] -> TreeIR.Stm
+makeSeq [] = TreeIR.EXP $ TreeIR.CONST 0
+makeSeq (stmt:stmts) = TreeIR.SEQ(stmt, makeSeq stmts)
 
 instance Show Stm where
   show stm = toList $ execWriter $ putStm stm 0
