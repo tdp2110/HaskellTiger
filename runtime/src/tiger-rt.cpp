@@ -6,15 +6,13 @@
 #include <string>
 #include <utility>
 
-namespace {
 template <typename T>
-void AssertNotNull(T const *const p, char const *const funcname) {
+static void AssertNotNull(T const *const p, char const *const funcname) {
   if (p == nullptr) {
     std::cerr << "TIGER RT ERROR: nullptr passed to " << funcname << "\n";
     std::terminate();
   }
 }
-} // namespace
 
 extern "C" {
 struct TgString {
