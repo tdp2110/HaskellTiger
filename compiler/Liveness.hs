@@ -4,6 +4,8 @@ import qualified Assem as A
 import qualified Graph as G
 import qualified Flow as Flow
 
+import Control.Monad.Trans.Writer (WriterT, runWriterT, tell)
+import Data.Functor.Identity
 import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -35,6 +37,9 @@ data IGraph = IGraph { graph :: Graph
 
 interferenceGraph :: Flow.Graph -> (IGraph, Flow.Node -> [TempId])
 interferenceGraph = undefined
+
+type IGraphBuilder = WriterT [(Node, Node)]
+                        (WriterT [(TempId, Node)] (G.GraphBuilder Node))
 
 -- | computes live-out sets per FlowGraph node
 buildLiveMap :: Flow.FlowGraph -> Map Flow.NodeId (Set TempId)

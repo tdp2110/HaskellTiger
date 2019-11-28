@@ -12,6 +12,7 @@ import qualified Data.Map as Map
 type TempId = Int
 
 newtype NodeId = NodeId Int
+  deriving (Show)
 
 instance Eq NodeId where
   (NodeId n1) == (NodeId n2) = n1 == n2
@@ -30,6 +31,18 @@ data FlowGraph = FlowGraph { control :: Graph
                            , def :: Map NodeId [TempId]
                            , use :: Map NodeId [TempId]
                            , ismove :: Map NodeId Bool }
+
+instance Show FlowGraph where
+  show (FlowGraph { control=cont
+                  , def=defs
+                  , use=uses
+                  , ismove=ismoves }) =
+    "FlowGraph: control=" ++ (showGraph cont) ++ "\n"
+       ++ "def=" ++ (show defs) ++ "\n"
+       ++ "use=" ++ (show uses) ++ "\n"
+       ++ "ismove=" ++ (show ismoves)
+    where
+      showGraph g = ""
 
 instrsToGraph :: [A.Inst] -> (FlowGraph, [Node])
 instrsToGraph insts =
