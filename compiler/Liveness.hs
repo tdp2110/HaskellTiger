@@ -5,6 +5,7 @@ import qualified Graph as G
 import qualified Flow as Flow
 
 import Control.Monad.Trans.Writer (WriterT, runWriterT, tell)
+import Control.Monad.Trans.State (StateT, runStateT, get, put)
 import Data.Functor.Identity
 import Data.List
 import Data.Map (Map)
@@ -36,10 +37,19 @@ data IGraph = IGraph { graph :: Graph
                      , moves :: [(Node, Node)] }
 
 interferenceGraph :: Flow.Graph -> (IGraph, Flow.Node -> [TempId])
-interferenceGraph = undefined
+interferenceGraph flowGraph =
+  let
+    _ = (runStateT . runWriterT . runWriterT) buildGraph $ G.newGraph $ NodeId 0
+  in
+    undefined
+  where
+    buildGraph :: IGraphBuilder ()
+    buildGraph = undefined
 
 type IGraphBuilder = WriterT [(Node, Node)]
-                        (WriterT [(TempId, Node)] (G.GraphBuilder Node))
+                        (WriterT [(TempId, Node)] GraphBuilder)
+
+
 
 -- | computes live-out sets per FlowGraph node
 buildLiveMap :: Flow.FlowGraph -> Map Flow.NodeId (Set TempId)
