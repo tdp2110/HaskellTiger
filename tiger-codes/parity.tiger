@@ -1,0 +1,14 @@
+let
+    function isOdd(n: int) : int =
+        if n = 1 then
+            1
+        else
+            isEven(n - 1)
+    function isEven(n: int) : int =
+        if n = 0 then
+            1
+        else
+            isOdd(n - 1)
+in
+    print(itoa(isEven(42)))
+end
