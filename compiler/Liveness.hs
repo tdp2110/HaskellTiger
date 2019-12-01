@@ -6,7 +6,6 @@ import qualified Flow as Flow
 
 import Control.Monad.Trans.Writer (WriterT, runWriterT, tell)
 import Control.Monad.Trans.State (StateT, runStateT, get, put)
-import Data.Functor.Identity
 import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -31,25 +30,52 @@ type Graph = G.Graph NodeId
 type GraphBuilder = G.GraphBuilder NodeId
 type Node = G.Node NodeId
 
+-- | graph: the interference graph;
+--   tnode: a mapping from temporaries of the Assem program to graph nodes;
+--   gtemp: inverse mapping, from graph nodes back to temporaries
+--   moves: a list of move instructions. This is a hint to the register allocator;
+--          if the "move instruction" (m, n) is on this list, it would be nice to
+--          assign m and n the same register if possible.
 data IGraph = IGraph { graph :: Graph
                      , tnode :: TempId -> Node
                      , gtemp :: Node -> TempId
                      , moves :: [(Node, Node)] }
 
-interferenceGraph :: Flow.Graph -> (IGraph, Flow.Node -> [TempId])
+interferenceGraph :: Flow.FlowGraph -> (IGraph, Flow.Node -> [TempId])
 interferenceGraph flowGraph =
   let
-    _ = (runStateT . runWriterT . runWriterT) buildGraph $ G.newGraph $ NodeId 0
+    liveMap = buildLiveMap flowGraph
+    _ = (runStateT . runWriterT . runWriterT) (buildGraph liveMap) $ G.newGraph $ NodeId 0
   in
     undefined
   where
-    buildGraph :: IGraphBuilder ()
-    buildGraph = undefined
+    buildGraph :: Map Flow.NodeId (Set TempId) -> IGraphBuilder ()
+    buildGraph liveMap = do
+      allocNodes liveMap
+      mapM_ (processNode liveMap) $ Map.toList liveMap
 
-type IGraphBuilder = WriterT [(Node, Node)]
+    allocNodes :: Map Flow.NodeId (Set TempId) -> IGraphBuilder ()
+    allocNodes liveMap = undefined
+
+
+    processNode :: Map Flow.NodeId (Set TempId) -> (Flow.NodeId, Set TempId) -> IGraphBuilder()
+    processNode liveMap (flowNode, liveSet) =
+      let
+        defs = (Flow.def flowGraph) Map.! flowNode
+        uses = (Flow.use flowGraph) Map.! flowNode
+        ismove = (Flow.ismove flowGraph) Map.! flowNode
+      in do
+        mapM_ (addInterferenceEdge liveMap liveSet) defs
+
+    addInterferenceEdge :: Map Flow.NodeId (Set TempId)
+                           -> Set TempId
+                           -> TempId
+                           -> IGraphBuilder ()
+    addInterferenceEdge liveMap liveSet tempId = undefined
+
+type Moves = [(Node, Node)]
+type IGraphBuilder = WriterT Moves
                         (WriterT [(TempId, Node)] GraphBuilder)
-
-
 
 -- | computes live-out sets per FlowGraph node
 buildLiveMap :: Flow.FlowGraph -> Map Flow.NodeId (Set TempId)
