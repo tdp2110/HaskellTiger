@@ -10,7 +10,7 @@ import qualified Symbol
 import FindEscape (escapeExp)
 import qualified Temp
 
-import Control.Monad.Trans.Class
+import Control.Monad.Trans.Class (lift)
 import Control.Monad (join, foldM)
 import Control.Monad.Trans.Except (ExceptT, throwE, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, ask, asks, runReaderT)

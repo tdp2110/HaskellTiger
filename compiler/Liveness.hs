@@ -4,6 +4,7 @@ import qualified Assem as A
 import qualified Graph as G
 import qualified Flow as Flow
 
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Writer (WriterT, runWriterT, tell)
 import Control.Monad.Trans.State (StateT, runStateT, get, put)
 import Data.List
@@ -44,19 +45,39 @@ data IGraph = IGraph { graph :: Graph
 interferenceGraph :: Flow.FlowGraph -> (IGraph, Flow.Node -> [TempId])
 interferenceGraph flowGraph =
   let
+    nodeIds = accumTemps
     liveMap = buildLiveMap flowGraph
-    _ = (runStateT . runWriterT . runWriterT) (buildGraph liveMap) $ G.newGraph $ NodeId 0
+    _ = (runStateT . runWriterT . runWriterT) (buildGraph nodeIds liveMap) $ G.newGraph $ NodeId 0
   in
     undefined
   where
-    buildGraph :: Map Flow.NodeId (Set TempId) -> IGraphBuilder ()
-    buildGraph liveMap = do
-      allocNodes liveMap
+    buildGraph :: Set TempId -> Map Flow.NodeId (Set TempId) -> IGraphBuilder ()
+    buildGraph tempIds liveMap = do
+      tempsAndNodes <- allocNodes tempIds
       mapM_ (processNode liveMap) $ Map.toList liveMap
 
-    allocNodes :: Map Flow.NodeId (Set TempId) -> IGraphBuilder ()
-    allocNodes liveMap = undefined
+    allocNodes :: Set TempId -> IGraphBuilder [(TempId, Node)]
+    allocNodes tempIds =
+      mapM
+        (\tempId -> do
+                 node <- (lift . lift) G.allocNode
+                 pure (tempId, node)
+        )
+        $ Set.toList tempIds
 
+    accumTemps :: Set TempId
+    accumTemps =
+      let
+        accumTemps :: Map Flow.NodeId [TempId] -> Set TempId
+        accumTemps tempMap =
+          foldl'
+            (\acc tempIds -> Set.union acc $ Set.fromList tempIds)
+            Set.empty
+            $ Map.elems tempMap
+        defs = accumTemps $ Flow.def flowGraph
+        uses = accumTemps $ Flow.def flowGraph
+      in
+        Set.union defs uses
 
     processNode :: Map Flow.NodeId (Set TempId) -> (Flow.NodeId, Set TempId) -> IGraphBuilder()
     processNode liveMap (flowNode, liveSet) =
