@@ -45,16 +45,18 @@ data IGraph = IGraph { graph :: Graph
 interferenceGraph :: Flow.FlowGraph -> (IGraph, Flow.Node -> [TempId])
 interferenceGraph flowGraph =
   let
-    nodeIds = accumTemps
     liveMap = buildLiveMap flowGraph
-    _ = (runStateT . runWriterT . runWriterT) (buildGraph nodeIds liveMap) $ G.newGraph $ NodeId 0
+    _ = (runStateT . runWriterT . runWriterT) (buildGraph liveMap) $ G.newGraph $ NodeId 0
   in
     undefined
   where
-    buildGraph :: Set TempId -> Map Flow.NodeId (Set TempId) -> IGraphBuilder ()
-    buildGraph tempIds liveMap = do
-      tempsAndNodes <- allocNodes tempIds
-      mapM_ (processNode liveMap) $ Map.toList liveMap
+    buildGraph :: Map Flow.NodeId (Set TempId) -> IGraphBuilder ()
+    buildGraph liveMap = do
+      tempsAndNodes <- allocNodes nodeIds
+      let
+        tempToNode = Map.fromList tempsAndNodes
+        in
+        mapM_ (processNode tempToNode) $ Map.toList liveMap
 
     allocNodes :: Set TempId -> IGraphBuilder [(TempId, Node)]
     allocNodes tempIds =
@@ -65,8 +67,8 @@ interferenceGraph flowGraph =
         )
         $ Set.toList tempIds
 
-    accumTemps :: Set TempId
-    accumTemps =
+    nodeIds :: Set TempId
+    nodeIds =
       let
         accumTemps :: Map Flow.NodeId [TempId] -> Set TempId
         accumTemps tempMap =
@@ -79,20 +81,27 @@ interferenceGraph flowGraph =
       in
         Set.union defs uses
 
-    processNode :: Map Flow.NodeId (Set TempId) -> (Flow.NodeId, Set TempId) -> IGraphBuilder()
-    processNode liveMap (flowNode, liveSet) =
+    processNode ::    Map TempId Node
+                   -> (Flow.NodeId, Set TempId)
+                   -> IGraphBuilder()
+    processNode tempToNode (flowNode, liveSet) =
       let
         defs = (Flow.def flowGraph) Map.! flowNode
-        uses = (Flow.use flowGraph) Map.! flowNode
-        ismove = (Flow.ismove flowGraph) Map.! flowNode
+        --uses = (Flow.use flowGraph) Map.! flowNode
+        --ismove = (Flow.ismove flowGraph) Map.! flowNode
       in do
-        mapM_ (addInterferenceEdge liveMap liveSet) defs
+        mapM_ (addInterferenceEdges liveSet tempToNode) defs
 
-    addInterferenceEdge :: Map Flow.NodeId (Set TempId)
-                           -> Set TempId
-                           -> TempId
-                           -> IGraphBuilder ()
-    addInterferenceEdge liveMap liveSet tempId = undefined
+    addInterferenceEdges ::    Set TempId
+                            -> Map TempId Node
+                            -> TempId
+                            -> IGraphBuilder ()
+    addInterferenceEdges liveSet tempToNode defdId =
+      mapM_
+        (\liveId -> let defdNode = tempToNode Map.! defdId
+                        liveNode = tempToNode Map.! liveId
+                    in (lift . lift) $ G.addEdge defdNode liveNode)
+        $ Set.toList liveSet
 
 type Moves = [(Node, Node)]
 type IGraphBuilder = WriterT Moves
