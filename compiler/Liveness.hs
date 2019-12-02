@@ -5,7 +5,7 @@ import qualified Flow as Flow
 
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Writer (WriterT, runWriterT, tell)
-import Control.Monad.Trans.State (StateT, runStateT, get, put)
+import Control.Monad.Trans.State (runStateT)
 import Data.Functor.Identity
 import Data.List
 import Data.Map (Map)
@@ -38,11 +38,11 @@ type Node = G.Node NodeId
 --          if the "move instruction" (m, n) is on this list, it would be nice to
 --          assign m and n the same register if possible.
 data IGraph = IGraph { graph :: Graph
-                     , tnode :: TempId -> Node
-                     , gtemp :: NodeId -> TempId
+                     , tnode :: Map TempId Node
+                     , gtemp :: Map NodeId TempId
                      , moves :: [(Node, Node)] }
 
-interferenceGraph :: Flow.FlowGraph -> (IGraph, Flow.Node -> [TempId])
+interferenceGraph :: Flow.FlowGraph -> (IGraph, Map Flow.NodeId (Set TempId))
 interferenceGraph flowGraph =
   let
     liveMap = buildLiveMap flowGraph
@@ -54,10 +54,10 @@ interferenceGraph flowGraph =
     gnodeMap = Map.fromList $ fmap (\(t, node) -> (G.nodeId node, t)) tempIdToNode
   in
     ( IGraph { graph=graph'
-             , tnode=(tnodeMap Map.!)
-             , gtemp=(gnodeMap Map.!)
+             , tnode=tnodeMap
+             , gtemp=gnodeMap
              , moves=moves' }
-    , undefined)
+    , liveMap)
   where
     buildGraph :: Map Flow.NodeId (Set TempId) -> IGraphBuilder ()
     buildGraph liveMap = do
