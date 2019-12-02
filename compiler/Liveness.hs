@@ -1,6 +1,5 @@
 module Liveness where
 
-import qualified Assem as A
 import qualified Graph as G
 import qualified Flow as Flow
 
@@ -88,19 +87,27 @@ interferenceGraph flowGraph =
       let
         defs = (Flow.def flowGraph) Map.! flowNode
         --uses = (Flow.use flowGraph) Map.! flowNode
-        --ismove = (Flow.ismove flowGraph) Map.! flowNode
+        isMove = (Flow.ismove flowGraph) Map.! flowNode
       in do
-        mapM_ (addInterferenceEdges liveSet tempToNode) defs
+        mapM_ (addInterferenceEdges liveSet tempToNode isMove) defs
 
     addInterferenceEdges ::    Set TempId
                             -> Map TempId Node
+                            -> Maybe (TempId, TempId) -- is the defined id a move?
                             -> TempId
                             -> IGraphBuilder ()
-    addInterferenceEdges liveSet tempToNode defdId =
+    addInterferenceEdges liveSet tempToNode isMove defdId =
       mapM_
         (\liveId -> let defdNode = tempToNode Map.! defdId
                         liveNode = tempToNode Map.! liveId
-                    in (lift . lift) $ G.addEdge defdNode liveNode)
+                        addEdgeAction = (lift . lift) $ G.addEdge defdNode liveNode
+                    in case isMove of
+                         Just (_, src) -> if liveId /= src then
+                                              addEdgeAction
+                                            else
+                                              pure ()
+                         Nothing -> addEdgeAction
+                         )
         $ Set.toList liveSet
 
 type Moves = [(Node, Node)]

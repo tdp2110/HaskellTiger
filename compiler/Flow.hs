@@ -30,7 +30,7 @@ type Node = G.Node NodeId
 data FlowGraph = FlowGraph { control :: Graph
                            , def :: Map NodeId [TempId]
                            , use :: Map NodeId [TempId]
-                           , ismove :: Map NodeId Bool }
+                           , ismove :: Map NodeId (Maybe (TempId, TempId)) }
 
 instance Show FlowGraph where
   show (FlowGraph { control=cont
@@ -58,7 +58,7 @@ instrsToGraph insts =
     buildGraph :: GraphBuilder ( [(A.Inst, Node)]
                                  , Map NodeId [TempId]
                                  , Map NodeId [TempId]
-                                 , Map NodeId Bool )
+                                 , Map NodeId (Maybe (TempId, TempId)) )
     buildGraph = do
       nodes <- buildCFG
       let
@@ -82,8 +82,9 @@ instrsToGraph insts =
                     fmap
                       (\(inst, node) -> ( G.nodeId node
                                         , case inst of
-                                            A.MOVE {} -> True
-                                            _         -> False ))
+                                            A.MOVE { A.moveDst=dst
+                                                   , A.moveSrc=src } -> Just (dst, src)
+                                            _                        -> Nothing ))
                       nodes
         in
         pure (nodes, defs, uses, isMoves)
