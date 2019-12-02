@@ -90,6 +90,13 @@ interferenceGraph flowGraph =
         isMove = (Flow.ismove flowGraph) Map.! flowNode
       in do
         mapM_ (addInterferenceEdges liveSet tempToNode isMove) defs
+        case isMove of
+          Just (dst, src) -> let dstNode = tempToNode Map.! dst
+                                 srcNode = tempToNode Map.! src
+                             in do
+                                tell [(dstNode, srcNode)]
+                                pure ()
+          _               -> pure ()
 
     addInterferenceEdges ::    Set TempId
                             -> Map TempId Node
