@@ -3,7 +3,6 @@ module Main where
 import qualified Assem
 import qualified Canon
 import qualified Codegen
-import qualified Liveness
 import qualified Parser
 import qualified Semant
 import qualified Temp
