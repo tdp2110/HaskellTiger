@@ -1,5 +1,6 @@
 module Graph where
 
+import Control.Monad.Trans.Writer (runWriter, tell)
 import Control.Monad.Trans.State (State, get, put)
 import Data.List
 import Data.Map (Map)
@@ -24,6 +25,30 @@ freshNode nId = Node { succ=[]
 data Graph a = Graph { nodes :: Map a (Node a)
                      , nextId :: a }
   deriving (Show)
+
+-- | produce a repr of a graph in the "dot" language
+toDot :: Show a => Graph a -> String
+toDot g =
+  let
+    ((), graphBody) = runWriter $ dotBuilder $ nodes g
+  in
+    "digraph {\n" ++ graphBody ++ "}"
+  where
+  dotBuilder m = mapM_ processNode $ Map.toList m
+
+  processNode (nId, Node { succ=succs
+                         , pred=preds }) = do
+    tell $ fmtNode nId
+    fmtSuccs nId succs
+    fmtPreds nId preds
+
+  dotId n = "node_" ++ (show n)
+
+  fmtNode n = (dotId n) ++ " [label=\"" ++ (show n) ++ "\"];\n"
+  fmtSuccs n succs = mapM_ (fmtEdge "succ" n) succs
+  fmtPreds n succs = mapM_ (fmtEdge "pred" n) succs
+  fmtEdge lab n1 n2 = do
+    tell $ (dotId n1) ++ " -> " ++ (dotId n2) ++ "[label=" ++ lab ++ "];\n"
 
 newGraph :: a -> Graph a
 newGraph firstId = Graph { nodes=Map.empty
