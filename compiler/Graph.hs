@@ -45,7 +45,7 @@ mkEdge g id1 id2 =
     n1 = nodes_g Map.! id1
     n2 = nodes_g Map.! id2
     n1' = n1{succ=[id2] ++ succ n1}
-    n2' = n2{pred=[id2] ++ pred n2}
+    n2' = n2{pred=[id1] ++ pred n2}
     nodes_g' = Map.insert id1 n1' nodes_g
     nodes_g'' = Map.insert id2 n2' nodes_g'
   in
