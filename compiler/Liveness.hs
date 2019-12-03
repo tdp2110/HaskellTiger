@@ -44,7 +44,9 @@ data IGraph = IGraph { graph :: Graph
                      , tnode :: Map TempId Node
                      , gtemp :: Map NodeId TempId
                      , moves :: [(Node, Node)] }
+  deriving (Show)
 
+-- | Compute the interference graph and the live (out) map.
 interferenceGraph :: Flow.FlowGraph -> (IGraph, Map Flow.NodeId (Set TempId))
 interferenceGraph flowGraph =
   let

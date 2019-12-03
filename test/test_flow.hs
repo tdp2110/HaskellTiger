@@ -3,6 +3,7 @@ import Test.Hspec
 import qualified Assem as A
 import qualified Flow as F
 import qualified Graph as G
+import qualified Liveness as L
 import qualified Symbol as S
 import qualified Temp
 
@@ -44,14 +45,15 @@ main = hspec $ do
                 , A.LABEL { A.assem="return c"
                           , A.lab=l1 }
                 ]
-        (g, nodes) = F.instrsToGraph insts
-        defs = F.def g
-        uses = F.use g
+        (flowGraph, nodes) = F.instrsToGraph insts
+        defs = F.def flowGraph
+        uses = F.use flowGraph
+        (igraph, liveMap) = L.interferenceGraph flowGraph
       in do
         length nodes `shouldBe` length insts
         length nodes `shouldBe` 7
 
-        putStrLn $ G.toDot $ F.control g
+        putStrLn $ G.toDot $ F.control flowGraph
 
         defs Map.! (F.NodeId 0) `shouldBe` [a]
         defs Map.! (F.NodeId 1) `shouldBe` []
@@ -68,3 +70,8 @@ main = hspec $ do
         uses Map.! (F.NodeId 4) `shouldBe` [b]
         uses Map.! (F.NodeId 5) `shouldBe` [a]
         uses Map.! (F.NodeId 6) `shouldBe` []
+
+        putStrLn $ show liveMap
+        putStrLn $ G.toDot $ L.graph igraph
+
+        (Map.size liveMap) `shouldBe` length nodes
