@@ -2,8 +2,12 @@ import Test.Hspec
 
 import qualified Assem as A
 import qualified Flow as F
+import qualified Graph as G
 import qualified Symbol as S
 import qualified Temp
+
+import qualified Data.Map as Map
+
 
 main :: IO ()
 main = hspec $ do
@@ -41,6 +45,26 @@ main = hspec $ do
                           , A.lab=l1 }
                 ]
         (g, nodes) = F.instrsToGraph insts
+        defs = F.def g
+        uses = F.use g
       in do
         length nodes `shouldBe` length insts
-        show g `shouldBe` "asdf"
+        length nodes `shouldBe` 7
+
+        putStrLn $ G.toDot $ F.control g
+
+        defs Map.! (F.NodeId 0) `shouldBe` [a]
+        defs Map.! (F.NodeId 1) `shouldBe` []
+        defs Map.! (F.NodeId 2) `shouldBe` [b]
+        defs Map.! (F.NodeId 3) `shouldBe` [c]
+        defs Map.! (F.NodeId 4) `shouldBe` [a]
+        defs Map.! (F.NodeId 5) `shouldBe` []
+        defs Map.! (F.NodeId 6) `shouldBe` []
+
+        uses Map.! (F.NodeId 0) `shouldBe` []
+        uses Map.! (F.NodeId 1) `shouldBe` []
+        uses Map.! (F.NodeId 2) `shouldBe` [a]
+        uses Map.! (F.NodeId 3) `shouldBe` [c,b]
+        uses Map.! (F.NodeId 4) `shouldBe` [b]
+        uses Map.! (F.NodeId 5) `shouldBe` [a]
+        uses Map.! (F.NodeId 6) `shouldBe` []

@@ -43,12 +43,12 @@ toDot g =
     fmtPreds nId preds
 
   dotId n = "node_" ++ (show n)
-
-  fmtNode n = (dotId n) ++ " [label=\"" ++ (show n) ++ "\"];\n"
+  indent = "    "
+  fmtNode n = indent ++ (dotId n) ++ " [label=\"" ++ (show n) ++ "\"];\n"
   fmtSuccs n succs = mapM_ (fmtEdge "succ" n) succs
   fmtPreds n succs = mapM_ (fmtEdge "pred" n) succs
   fmtEdge lab n1 n2 = do
-    tell $ (dotId n1) ++ " -> " ++ (dotId n2) ++ "[label=" ++ lab ++ "];\n"
+    tell $ indent ++ (dotId n1) ++ " -> " ++ (dotId n2) ++ "[label=" ++ lab ++ "];\n"
 
 newGraph :: a -> Graph a
 newGraph firstId = Graph { nodes=Map.empty
