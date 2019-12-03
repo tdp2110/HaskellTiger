@@ -1,6 +1,6 @@
 module Graph where
 
-import Control.Monad.Trans.Writer (runWriter, tell)
+import Control.Monad.Trans.Writer (execWriter, tell)
 import Control.Monad.Trans.State (State, get, put)
 import Data.List
 import Data.Map (Map)
@@ -30,7 +30,7 @@ data Graph a = Graph { nodes :: Map a (Node a)
 toDot :: Show a => Graph a -> String
 toDot g =
   let
-    ((), graphBody) = runWriter $ dotBuilder $ nodes g
+    graphBody = execWriter $ dotBuilder $ nodes g
   in
     "digraph {\n" ++ graphBody ++ "}"
   where
@@ -95,6 +95,18 @@ rmEdge g id1 id2 =
     nodes_g'' = Map.insert id2 n2' nodes_g'
   in
     g{nodes=nodes_g''}
+
+edges :: NodeId a => Graph a -> [(a,a)]
+edges g =
+  execWriter accumEdges
+  where
+  accumEdges = mapM_
+                 (\(nId, n) -> mapM_
+                                 (\sId -> tell [(nId, sId)])
+                                 $ succ n
+                 )
+                 $ Map.toList $ nodes g
+
 
 type GraphBuilder a = State (Graph a)
 

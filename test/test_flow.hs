@@ -13,7 +13,7 @@ import qualified Data.Set as Set
 
 main :: IO ()
 main = hspec $ do
-  describe "CFG" $
+  describe "CFG and IGraph" $
     it "works" $
       let
         a = 1
@@ -50,6 +50,9 @@ main = hspec $ do
         defs = F.def flowGraph
         uses = F.use flowGraph
         (igraph, liveMap) = L.interferenceGraph flowGraph
+        tnode = L.tnode igraph
+        gtemp = L.gtemp igraph
+        igraphGraph = L.graph igraph
       in do
         length nodes `shouldBe` length insts
         length nodes `shouldBe` 7
@@ -74,7 +77,7 @@ main = hspec $ do
         uses Map.! (F.NodeId 6) `shouldBe` []
 
         putStrLn "InterferenceGraph:"
-        putStrLn $ G.toDot $ L.graph igraph
+        putStrLn $ G.toDot igraphGraph
 
         (Map.size liveMap) `shouldBe` length nodes
 
@@ -85,3 +88,18 @@ main = hspec $ do
         liveMap Map.! (F.NodeId 4) `shouldBe` Set.fromList [1, 3]
         liveMap Map.! (F.NodeId 5) `shouldBe` Set.fromList [1, 3]
         liveMap Map.! (F.NodeId 6) `shouldBe` Set.fromList []
+
+        (G.nodeId $ tnode Map.! a) `shouldBe` L.NodeId 0
+        (G.nodeId $ tnode Map.! b) `shouldBe` L.NodeId 1
+        (G.nodeId $ tnode Map.! c) `shouldBe` L.NodeId 2
+
+        gtemp Map.! L.NodeId 0 `shouldBe` a
+        gtemp Map.! L.NodeId 1 `shouldBe` b
+        gtemp Map.! L.NodeId 2 `shouldBe` c
+
+        G.hasEdge igraphGraph (L.NodeId 0) (L.NodeId 2) `shouldBe` True
+        G.hasEdge igraphGraph (L.NodeId 2) (L.NodeId 0) `shouldBe` True
+        G.hasEdge igraphGraph (L.NodeId 1) (L.NodeId 2) `shouldBe` True
+        G.hasEdge igraphGraph (L.NodeId 2) (L.NodeId 1) `shouldBe` True
+
+        (length $ G.edges igraphGraph) `shouldBe` 4

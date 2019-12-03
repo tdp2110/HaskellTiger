@@ -69,7 +69,8 @@ interferenceGraph flowGraph =
       tempsAndNodes <- allocNodes nodeIds
       let
         tempToNode = Map.fromList tempsAndNodes
-        in
+        in do
+        (lift . tell) tempsAndNodes
         mapM_ (processNode tempToNode) $ Map.toList liveMap
 
     allocNodes :: Set TempId -> IGraphBuilder [(TempId, Node)]
@@ -123,8 +124,8 @@ interferenceGraph flowGraph =
         (\liveId -> let defdNode = tempToNode Map.! defdId
                         liveNode = tempToNode Map.! liveId
                         addEdgeAction = do
-                          (lift . lift) $ G.addEdge defdNode liveNode
-                          (lift . lift) $ G.addEdge liveNode defdNode
+                          lift . lift $ G.addEdge defdNode liveNode
+                          lift . lift $ G.addEdge liveNode defdNode
                     in case isMove of
                          Just (_, src) -> if liveId /= src then
                                               addEdgeAction
