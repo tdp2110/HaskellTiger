@@ -8,12 +8,13 @@ import qualified Data.Map as Map
 import Prelude hiding (succ, pred)
 
 
-class (Ord a) => NodeId a where
+class (Ord a, Show a) => NodeId a where
   incrId :: a -> a
 
 data Node a = Node { succ :: [a]
                    , pred :: [a]
                    , nodeId :: a }
+  deriving (Show)
 
 freshNode :: a -> Node a
 freshNode nId = Node { succ=[]
@@ -22,6 +23,7 @@ freshNode nId = Node { succ=[]
 
 data Graph a = Graph { nodes :: Map a (Node a)
                      , nextId :: a }
+  deriving (Show)
 
 newGraph :: a -> Graph a
 newGraph firstId = Graph { nodes=Map.empty

@@ -17,6 +17,7 @@ import qualified Data.Set as Set
 type TempId = Flow.TempId
 
 newtype NodeId = NodeId Int
+  deriving (Show)
 
 instance Eq NodeId where
   (NodeId n1) == (NodeId n2) = n1 == n2

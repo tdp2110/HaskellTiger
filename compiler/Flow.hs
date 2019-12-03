@@ -31,18 +31,7 @@ data FlowGraph = FlowGraph { control :: Graph
                            , def :: Map NodeId [TempId]
                            , use :: Map NodeId [TempId]
                            , ismove :: Map NodeId (Maybe (TempId, TempId)) }
-
-instance Show FlowGraph where
-  show (FlowGraph { control=cont
-                  , def=defs
-                  , use=uses
-                  , ismove=ismoves }) =
-    "FlowGraph: control=" ++ (showGraph cont) ++ "\n"
-       ++ "def=" ++ (show defs) ++ "\n"
-       ++ "use=" ++ (show uses) ++ "\n"
-       ++ "ismove=" ++ (show ismoves)
-    where
-      showGraph g = ""
+  deriving (Show)
 
 instrsToGraph :: [A.Inst] -> (FlowGraph, [Node])
 instrsToGraph insts =
