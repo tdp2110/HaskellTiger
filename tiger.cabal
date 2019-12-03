@@ -32,7 +32,7 @@ test-suite test_semant
                        transformers >= 0.5.6.0, dlist >= 0.8.0.0
   other-modules:       Semant, Types, Symbol, Env, Absyn, Translate, Parser, Lexer,
                        FindEscape, X64Frame, Frame, Temp, TreeIR, Assem
-  ghc-options:         -Wall -fwarn-incomplete-patterns -g -O0 -fprof-auto
+  ghc-options:         -Wall -fwarn-incomplete-patterns
   default-language:    Haskell2010
   hs-source-dirs:      compiler, test
 
@@ -44,7 +44,7 @@ test-suite test_canon
                        transformers >= 0.5.6.0, dlist >= 0.8.0.0, QuickCheck
   other-modules:       Semant, Types, Symbol, Env, Absyn, Translate, Parser, Lexer,
                        FindEscape, X64Frame, Frame, Temp, TreeIR, Canon, Assem
-  ghc-options:         -Wall -fwarn-incomplete-patterns -g -O0 -fprof-auto -fno-warn-orphans
+  ghc-options:         -Wall -fwarn-incomplete-patterns -fno-warn-orphans
   default-language:    Haskell2010
   hs-source-dirs:      compiler, test
 
@@ -56,7 +56,7 @@ test-suite test_escapes
                        transformers >= 0.5.6.0, dlist >= 0.8.0.0
   other-modules:       Types, Symbol, Env, Absyn, Translate, Parser, Lexer, FindEscape,
                        X64Frame, Frame, Temp, TreeIR, Assem
-  ghc-options:         -Wall -fwarn-incomplete-patterns -g -O0 -fprof-auto
+  ghc-options:         -Wall -fwarn-incomplete-patterns
   default-language:    Haskell2010
   hs-source-dirs:      compiler, test
 
@@ -68,7 +68,7 @@ test-suite test_frame
                        transformers >= 0.5.6.0, dlist >= 0.8.0.0
   other-modules:       Temp, X64Frame, Frame, Temp, Assem,
                        Absyn, Symbol, TreeIR
-  ghc-options:         -Wall -fwarn-incomplete-patterns -g -O0 -fprof-auto
+  ghc-options:         -Wall -fwarn-incomplete-patterns
   default-language:    Haskell2010
   hs-source-dirs:      compiler, test
 
@@ -80,7 +80,7 @@ test-suite test_flow
                        transformers >= 0.5.6.0, dlist >= 0.8.0.0
   other-modules:       Temp, X64Frame, Frame, Temp, Assem,
                        Absyn, Symbol, TreeIR, Assem, Graph, Flow, Liveness
-  ghc-options:         -Wall -fwarn-incomplete-patterns -g -O0 -fprof-auto
+  ghc-options:         -Wall -fwarn-incomplete-patterns
   default-language:    Haskell2010
   hs-source-dirs:      compiler, test
 
@@ -91,7 +91,7 @@ executable lexer
   other-modules:       Lexer
   default-language:    Haskell2010
   hs-source-dirs:      compiler
-  ghc-options:         -Wall -fwarn-incomplete-patterns -g -O0 -fprof-auto
+  ghc-options:         -Wall -fwarn-incomplete-patterns
 
 executable printAst
   main-is:             ParserDriver.hs
@@ -100,7 +100,7 @@ executable printAst
   other-modules:       Absyn, Lexer, Parser, Symbol
   default-language:    Haskell2010
   hs-source-dirs:      compiler
-  ghc-options:         -Wall -fwarn-incomplete-patterns -g -O0 -fprof-auto
+  ghc-options:         -Wall -fwarn-incomplete-patterns
 
 executable printTreeIR
   main-is:             PrintTreeIR.hs
@@ -110,7 +110,7 @@ executable printTreeIR
                        Translate, Types, X64Frame, Parser, Lexer, Assem
   default-language:    Haskell2010
   hs-source-dirs:      compiler
-  ghc-options:         -Wall -fwarn-incomplete-patterns -g -O0 -fprof-auto
+  ghc-options:         -Wall -fwarn-incomplete-patterns
 
 executable printAssem
   main-is:             PrintAssem.hs
@@ -121,4 +121,4 @@ executable printAssem
                        Assem, Graph, Flow, Liveness
   default-language:    Haskell2010
   hs-source-dirs:      compiler
-  ghc-options:         -Wall -fwarn-incomplete-patterns -g -O0 -fprof-auto
+  ghc-options:         -Wall -fwarn-incomplete-patterns

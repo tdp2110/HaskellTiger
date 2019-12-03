@@ -54,6 +54,7 @@ main = hspec $ do
         length nodes `shouldBe` length insts
         length nodes `shouldBe` 7
 
+        putStrLn "ControlFlowGraph:"
         putStrLn $ G.toDot $ F.control flowGraph
 
         defs Map.! (F.NodeId 0) `shouldBe` [a]
@@ -72,7 +73,7 @@ main = hspec $ do
         uses Map.! (F.NodeId 5) `shouldBe` [a]
         uses Map.! (F.NodeId 6) `shouldBe` []
 
-        putStrLn $ show liveMap
+        putStrLn "InterferenceGraph:"
         putStrLn $ G.toDot $ L.graph igraph
 
         (Map.size liveMap) `shouldBe` length nodes
