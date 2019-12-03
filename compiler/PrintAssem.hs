@@ -10,7 +10,6 @@ import qualified Temp
 import qualified TreeIR
 import qualified X64Frame
 
-import Control.Monad (join)
 import Control.Monad.Trans.State (runState)
 import Data.List
 import qualified Data.Map as Map
@@ -84,7 +83,7 @@ compileToAsm text =
                                                                 [moveSrc]
                                                                 Nothing
               in
-                (join (fmap formatAsm insts'), gen5)
+                (intercalate "\n" (fmap formatAsm insts'), gen5)
               where
                 step1 :: ([Assem.Inst], Temp.Generator) -> TreeIR.Stm -> ([Assem.Inst], Temp.Generator)
                 step1 (insts, g) stm =

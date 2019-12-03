@@ -316,26 +316,26 @@ procEntryExit3 frame bodyAsm =
     (label:bodyAsm') = bodyAsm
     stackSize = 1024 :: Int -- TODO! set up with real value! need to know number of spilled locals
                             -- and max number of outgoing params
-    prologue = [ Assem.OPER { Assem.assem="\tpush `d0" ++ (fmtDebug frame)  ++ "\n"
+    prologue = [ Assem.OPER { Assem.assem="\tpush `d0" ++ (fmtDebug frame)
                             , Assem.operDst=[rsp $ x64 frame]
                             , Assem.operSrc=[rbp $ x64 frame]
                             , Assem.jump=Nothing }
-               , Assem.MOVE { Assem.assem="\tmov `d0, `s0\n"
+               , Assem.MOVE { Assem.assem="\tmov `d0, `s0"
                             , Assem.moveDst=rbp $ x64 frame
                             , Assem.moveSrc=rsp $ x64 frame }
-               , Assem.OPER { Assem.assem="\tsub `d0, " ++ (show stackSize) ++ "\n"
+               , Assem.OPER { Assem.assem="\tsub `d0, " ++ (show stackSize)
                             , Assem.operDst=[rsp $ x64 frame]
                             , Assem.operSrc=[]
                             , Assem.jump=Nothing } ]
-    epilogue = [ Assem.OPER { Assem.assem="\tadd `d0, " ++ (show stackSize) ++ "\n"
+    epilogue = [ Assem.OPER { Assem.assem="\tadd `d0, " ++ (show stackSize)
                             , Assem.operDst=[rsp $ x64 frame]
                             , Assem.operSrc=[]
                             , Assem.jump=Nothing }
-               , Assem.OPER { Assem.assem="\tpop `d0\n"
+               , Assem.OPER { Assem.assem="\tpop `d0"
                             , Assem.operDst=[rbp $ x64 frame]
                             , Assem.operSrc=[]
                             , Assem.jump=Nothing }
-               , Assem.OPER { Assem.assem="\tret\n"
+               , Assem.OPER { Assem.assem="\tret\t"
                             , Assem.operDst=[rsp $ x64 frame]
                             , Assem.operSrc=[]
                             , Assem.jump=Nothing } ]

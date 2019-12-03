@@ -71,20 +71,20 @@ munchStm (TreeIR.EXP e) = do
    _ <- munchExp e
    noop
 munchStm (TreeIR.LABEL l@(Temp.Label (S.Symbol s))) =
-   emit A.LABEL { A.assem=s ++ ":\n"
+   emit A.LABEL { A.assem=s ++ ":"
                 , A.lab = l }
 munchStm (TreeIR.MOVE (TreeIR.TEMP dst, TreeIR.TEMP src)) =
-   emit A.MOVE { A.assem="\tmov `d0, `s0\n"
+   emit A.MOVE { A.assem="\tmov `d0, `s0"
                , A.moveDst = dst
                , A.moveSrc = src }
 munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s, TreeIR.CONST c)))) =
-  emit A.MOVE { A.assem="\tmov `d0, [`s0" ++ (plusMinusInt c) ++ "]\n"
+  emit A.MOVE { A.assem="\tmov `d0, [`s0" ++ (plusMinusInt c) ++ "]"
               , A.moveDst = d
               , A.moveSrc = s }
 munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.CONST c, TreeIR.TEMP s)))) =
   munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s, TreeIR.CONST c))))
 munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s0, TreeIR.TEMP s1)))) =
-  emit A.OPER { A.assem="\tmov `d0, [`s0 + `s1]\n"
+  emit A.OPER { A.assem="\tmov `d0, [`s0 + `s1]"
               , A.operDst = [d]
               , A.operSrc = [s0, s1]
               , A.jump = Nothing }
@@ -92,73 +92,73 @@ munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.MINUS, Tr
   munchStm $ TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s, TreeIR.CONST $ -c)))
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.TEMP d), e)) = do
   eReg <- munchExp e
-  emit A.OPER { A.assem="\tmov qword ptr [`d0], `s0\n"
+  emit A.OPER { A.assem="\tmov qword ptr [`d0], `s0"
               , A.operDst = [d]
               , A.operSrc = [eReg]
               , A.jump = Nothing }
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP d0, TreeIR.TEMP d1)), e)) = do
   eReg <- munchExp e
-  emit A.OPER { A.assem="\tmov qword ptr [`d0+`d1], `s0\n"
+  emit A.OPER { A.assem="\tmov qword ptr [`d0+`d1], `s0"
               , A.operDst = [d0, d1]
               , A.operSrc = [eReg]
               , A.jump = Nothing }
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.CONST c1, TreeIR.TEMP d)), TreeIR.CONST c2)) =
-  emit A.OPER { A.assem="\tmov qword ptr [`d0" ++ (plusMinusInt c1) ++ "], " ++ (show c2) ++ "\n"
+  emit A.OPER { A.assem="\tmov qword ptr [`d0" ++ (plusMinusInt c1) ++ "], " ++ (show c2) ++ ""
               , A.operDst = [d]
               , A.operSrc = []
               , A.jump = Nothing }
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.CONST c, TreeIR.TEMP d)), e)) = do
   eReg <- munchExp e
-  emit A.OPER { A.assem="\tmov qword ptr [`d0" ++ (plusMinusInt c) ++ "], `s0\n"
+  emit A.OPER { A.assem="\tmov qword ptr [`d0" ++ (plusMinusInt c) ++ "], `s0"
               , A.operDst = [d]
               , A.operSrc = [eReg]
               , A.jump = Nothing }
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP d, TreeIR.CONST c1)), TreeIR.CONST c2)) =
-  emit A.OPER { A.assem="\tmov qword ptr [`d0" ++ (plusMinusInt c1) ++ "], " ++ (show c2) ++ "\n"
+  emit A.OPER { A.assem="\tmov qword ptr [`d0" ++ (plusMinusInt c1) ++ "], " ++ (show c2) ++ ""
               , A.operDst = [d]
               , A.operSrc = []
               , A.jump = Nothing }
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP d, TreeIR.CONST c)), e)) = do
   eReg <- munchExp e
-  emit A.OPER { A.assem="\tmov qword ptr [`d0" ++ (plusMinusInt c) ++ "], `s0\n"
+  emit A.OPER { A.assem="\tmov qword ptr [`d0" ++ (plusMinusInt c) ++ "], `s0"
               , A.operDst = [d]
               , A.operSrc = [eReg]
               , A.jump = Nothing }
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.MINUS, TreeIR.TEMP d, TreeIR.CONST c)), e)) = do
   eReg <- munchExp e
-  emit A.OPER { A.assem="\tmov qword ptr [`d0" ++ (plusMinusInt $ -c) ++ "], `s0\n"
+  emit A.OPER { A.assem="\tmov qword ptr [`d0" ++ (plusMinusInt $ -c) ++ "], `s0"
               , A.operDst = [d]
               , A.operSrc = [eReg]
               , A.jump = Nothing }
 munchStm (TreeIR.MOVE (TreeIR.MEM e1, e2)) = do
   src <- munchExp e2
   dst <- munchExp e1
-  emit A.OPER { A.assem="\tmov [`d0], `s0\n"
+  emit A.OPER { A.assem="\tmov [`d0], `s0"
               , A.operDst = [dst]
               , A.operSrc = [src]
               , A.jump = Nothing }
 munchStm (TreeIR.MOVE (TreeIR.TEMP t, e2)) = do
   src <- munchExp e2
-  emit A.OPER { A.assem="\tmov `d0, `s0\n"
+  emit A.OPER { A.assem="\tmov `d0, `s0"
               , A.operDst = [t]
               , A.operSrc = [src]
               , A.jump = Nothing }
 munchStm m@(TreeIR.MOVE _) = error $ "codegen can't handle move: " ++ show m
 munchStm (TreeIR.JUMP (TreeIR.NAME lab, _)) =
-  emit A.OPER { A.assem="\tJMP `j0\n"
+  emit A.OPER { A.assem="\tJMP `j0"
               , A.operDst = []
               , A.operSrc = []
               , A.jump = Just [lab] }
 munchStm (TreeIR.JUMP (e, labels)) = do
   src <- munchExp e
-  emit A.OPER { A.assem="\tjmp `s0\n"
+  emit A.OPER { A.assem="\tjmp `s0"
               , A.operSrc = [src]
               , A.operDst = []
               , A.jump = Just labels }
 munchStm (TreeIR.CJUMP (op, e1, e2, t, f)) = do
   src1 <- munchExp e1
   src2 <- munchExp e2
-  emit A.OPER { A.assem="\tcmp `s0, `s1\n" ++ (opToJump op) ++ " `j0\nJMP `j1\n"
+  emit A.OPER { A.assem="\tcmp `s0, `s1" ++ (opToJump op) ++ " `j0\nJMP `j1"
               , A.operDst = []
               , A.operSrc = [src1, src2]
               , A.jump = Just [t, f] }
@@ -179,7 +179,7 @@ munchStm (TreeIR.CJUMP (op, e1, e2, t, f)) = do
 munchExp :: TreeIR.Exp -> CodeGenerator Int
 munchExp (TreeIR.CONST c) =
   result (\r -> let
-                  inst = A.OPER { A.assem="\tmov `d0, " ++ (show c) ++ "\n"
+                  inst = A.OPER { A.assem="\tmov `d0, " ++ (show c) ++ ""
                                 , A.operDst = [r]
                                 , A.operSrc = []
                                 , A.jump = Nothing }
@@ -198,14 +198,14 @@ munchExp (TreeIR.BINOP (op, e1, e2)) =
                     src1 <- munchExp e1
                     src2 <- munchExp e2
                     x64 <- getArch
-                    pure [ A.MOVE { A.assem="\tmov `d0, `s0\n"
+                    pure [ A.MOVE { A.assem="\tmov `d0, `s0"
                                   , A.moveDst=X64Frame.dividendRegister x64
                                   , A.moveSrc=src1 }
-                         , A.OPER { A.assem="\tidiv `s0\n"
+                         , A.OPER { A.assem="\tidiv `s0"
                                   , A.operDst=X64Frame.divideDests x64
                                   , A.operSrc=[src2]
                                   , A.jump=Nothing }
-                         , A.MOVE { A.assem="\tmov `d0, `s0\n"
+                         , A.MOVE { A.assem="\tmov `d0, `s0"
                                   , A.moveDst=r
                                   , A.moveSrc=X64Frame.dividendRegister x64
                                   } ])
@@ -214,14 +214,14 @@ munchExp (TreeIR.BINOP (op, e1, e2)) =
                     src1 <- munchExp e1
                     src2 <- munchExp e2
                     x64 <- getArch
-                    pure [ A.MOVE { A.assem="\tmov `d0, `s0\n"
+                    pure [ A.MOVE { A.assem="\tmov `d0, `s0"
                                   , A.moveDst=X64Frame.multiplicandRegister x64
                                   , A.moveSrc=src1 }
-                         , A.OPER { A.assem="\t" ++ (convertOp op) ++ " `d0, `s0\n"
+                         , A.OPER { A.assem="\t" ++ (convertOp op) ++ " `d0, `s0"
                                   , A.operDst=X64Frame.multiplyDests x64
                                   , A.operSrc=[src2]
                                   , A.jump=Nothing }
-                         , A.MOVE { A.assem="\tmov `d0, `s0\n"
+                         , A.MOVE { A.assem="\tmov `d0, `s0"
                                   , A.moveDst=r
                                   , A.moveSrc=X64Frame.multiplicandRegister x64
                                   } ])
@@ -243,11 +243,11 @@ munchExp (TreeIR.CALL (TreeIR.NAME lab, args, escapes)) =
                   operSrc <- mapM munchExp args
                   x64 <- getArch
                   saveRestoreAndSetupArgs
-                    (A.OPER { A.assem="\tcall `j0\n"
+                    (A.OPER { A.assem="\tcall `j0"
                             , A.operDst=X64Frame.callDests x64
                             , A.operSrc=operSrc
                             , A.jump=Just [lab] })
-                    (A.MOVE { A.assem="\tmov `d0, `s0\n"
+                    (A.MOVE { A.assem="\tmov `d0, `s0"
                             , A.moveDst=r
                             , A.moveSrc=X64Frame.rax x64 })
                     operSrc
@@ -259,11 +259,11 @@ munchExp (TreeIR.CALL (expr, args, escapes)) =
                   exprReg <- munchExp expr
                   x64 <- getArch
                   saveRestoreAndSetupArgs
-                    (A.OPER { A.assem="\tcall `s0\n"
+                    (A.OPER { A.assem="\tcall `s0"
                            , A.operDst=X64Frame.callDests x64
                            , A.operSrc=[exprReg] ++ argRegs
                            , A.jump=Nothing })
-                    (A.MOVE { A.assem="\tmov `d0, `s0\n"
+                    (A.MOVE { A.assem="\tmov `d0, `s0"
                            , A.moveDst=r
                            , A.moveSrc=X64Frame.rax x64 })
                     argRegs
@@ -272,7 +272,7 @@ munchExp (TreeIR.CALL (expr, args, escapes)) =
 munchExp (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, e, TreeIR.CONST c))) =
   result (\r -> do
                   src <- munchExp e
-                  pure [ A.OPER { A.assem="\tmov `d0, [`s0" ++ (plusMinusInt c) ++ "]\n"
+                  pure [ A.OPER { A.assem="\tmov `d0, [`s0" ++ (plusMinusInt c) ++ "]"
                                 , A.operDst=[r]
                                 , A.operSrc=[src]
                                 , A.jump=Nothing } ]
@@ -283,7 +283,7 @@ munchExp (TreeIR.MEM (TreeIR.BINOP (TreeIR.MINUS, e, TreeIR.CONST c))) =
   munchExp (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, e, TreeIR.CONST $ -c)))
 munchExp (TreeIR.MEM (TreeIR.CONST c)) =
   result (\r -> do
-                  pure [ A.OPER { A.assem="\tmov `d0, [" ++ (show c) ++ "]\n"
+                  pure [ A.OPER { A.assem="\tmov `d0, [" ++ (show c) ++ "]"
                                 , A.operDst=[r]
                                 , A.operSrc=[]
                                 , A.jump=Nothing } ]
@@ -291,14 +291,14 @@ munchExp (TreeIR.MEM (TreeIR.CONST c)) =
 munchExp (TreeIR.MEM expr) =
   result (\r -> do
                   exprReg <- munchExp expr
-                  pure [ A.OPER { A.assem="\tmov `d0, [`s0]\n"
+                  pure [ A.OPER { A.assem="\tmov `d0, [`s0]"
                                 , A.operDst=[r]
                                 , A.operSrc=[exprReg]
                                 , A.jump=Nothing } ]
          )
 munchExp (TreeIR.NAME lab@(Temp.Label (S.Symbol s))) =
   result (\r -> do
-                  pure [ A.OPER { A.assem="\tlea `d0, [rip + " ++ s ++ "]\n"
+                  pure [ A.OPER { A.assem="\tlea `d0, [rip + " ++ s ++ "]"
                                 , A.operDst=[r]
                                 , A.operSrc=[]
                                 , A.jump=Just [lab] } ]
@@ -322,7 +322,7 @@ saveRestoreAndSetupArgs callStm moveStm callArgs escapes = do
                      ++ restores
   where
     save :: (Int, Int) -> A.Inst
-    save (reg, temp) = A.MOVE { A.assem="\tmov `d0, `s0\n"
+    save (reg, temp) = A.MOVE { A.assem="\tmov `d0, `s0"
                               , A.moveDst = temp
                               , A.moveSrc = reg }
 
@@ -346,7 +346,7 @@ saveRestoreAndSetupArgs callStm moveStm callArgs escapes = do
         Frame.Escapes ->
           let
             (stackOffset:nextStackOffsets') = nextStackOffsets
-            inst = A.OPER { A.assem="\tmov qword ptr [`d0 - " ++ (show stackOffset) ++ "], `s0\n"
+            inst = A.OPER { A.assem="\tmov qword ptr [`d0 - " ++ (show stackOffset) ++ "], `s0"
                           , A.operDst=[X64Frame.rsp x64]
                           , A.operSrc=[argReg]
                           , A.jump=Nothing }
@@ -359,6 +359,6 @@ saveRestoreAndSetupArgs callStm moveStm callArgs escapes = do
             (paramReg:paramRegs') ->
               ( paramRegs'
               , nextStackOffsets
-              , acc ++ [ A.MOVE { A.assem="\tmov `d0, `s0\n"
+              , acc ++ [ A.MOVE { A.assem="\tmov `d0, `s0"
                                 , A.moveDst=paramReg
                                 , A.moveSrc=argReg } ])
