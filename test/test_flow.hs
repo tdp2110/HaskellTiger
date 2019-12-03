@@ -8,6 +8,7 @@ import qualified Symbol as S
 import qualified Temp
 
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 
 
 main :: IO ()
@@ -75,3 +76,11 @@ main = hspec $ do
         putStrLn $ G.toDot $ L.graph igraph
 
         (Map.size liveMap) `shouldBe` length nodes
+
+        liveMap Map.! (F.NodeId 0) `shouldBe` Set.fromList [1, 3]
+        liveMap Map.! (F.NodeId 1) `shouldBe` Set.fromList [1, 3]
+        liveMap Map.! (F.NodeId 2) `shouldBe` Set.fromList [2, 3]
+        liveMap Map.! (F.NodeId 3) `shouldBe` Set.fromList [2, 3]
+        liveMap Map.! (F.NodeId 4) `shouldBe` Set.fromList [1, 3]
+        liveMap Map.! (F.NodeId 5) `shouldBe` Set.fromList [1, 3]
+        liveMap Map.! (F.NodeId 6) `shouldBe` Set.fromList []

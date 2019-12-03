@@ -36,19 +36,16 @@ toDot g =
   where
   dotBuilder m = mapM_ processNode $ Map.toList m
 
-  processNode (nId, Node { succ=succs
-                         , pred=preds }) = do
+  processNode (nId, Node { succ=succs }) = do
     tell $ fmtNode nId
     fmtSuccs nId succs
-    fmtPreds nId preds
 
   dotId n = "node_" ++ (show n)
   indent = "    "
   fmtNode n = indent ++ (dotId n) ++ " [label=\"" ++ (show n) ++ "\"];\n"
-  fmtSuccs n succs = mapM_ (fmtEdge "succ" n) succs
-  fmtPreds n succs = mapM_ (fmtEdge "pred" n) succs
-  fmtEdge lab n1 n2 = do
-    tell $ indent ++ (dotId n1) ++ " -> " ++ (dotId n2) ++ "[label=" ++ lab ++ "];\n"
+  fmtSuccs n succs = mapM_ (fmtEdge n) succs
+  fmtEdge n1 n2 = do
+    tell $ indent ++ (dotId n1) ++ " -> " ++ (dotId n2) ++ ";\n"
 
 newGraph :: a -> Graph a
 newGraph firstId = Graph { nodes=Map.empty
@@ -74,7 +71,17 @@ mkEdge g id1 id2 =
     nodes_g' = Map.insert id1 n1' nodes_g
     nodes_g'' = Map.insert id2 n2' nodes_g'
   in
-    g{nodes=nodes_g''}
+    if hasEdge g id1 id2 then
+      g
+    else
+      g{nodes=nodes_g''}
+
+hasEdge :: NodeId a => Graph a -> a -> a -> Bool
+hasEdge g id1 id2 =
+  let
+    n1 = (nodes g) Map.! id1
+  in
+    elem id2 $ succ n1
 
 rmEdge :: NodeId a => Graph a -> a -> a -> Graph a
 rmEdge g id1 id2 =
