@@ -16,6 +16,7 @@ escapes _ = False
 class Frame f where
   type Access f :: *
   type Arch f :: *
+  type Register f :: *
   newFrame :: (Arch f)
               -> Temp.Label
               -> Maybe (Symbol.Symbol, Absyn.Pos)

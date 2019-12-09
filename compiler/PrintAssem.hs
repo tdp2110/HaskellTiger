@@ -4,6 +4,7 @@ import qualified Assem
 import qualified Canon
 import qualified Codegen
 import qualified Parser
+import qualified RegAlloc
 import qualified Semant
 import qualified Temp
 import qualified TreeIR

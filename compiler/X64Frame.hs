@@ -169,9 +169,14 @@ freshFrame frameName x64Inst maybeDebug =
           , frameDebug=maybeDebug
           , viewShift=[] }
 
+data Register = RAX | RBX | RCX | RDX | RBP | RSI | RDI | RSP
+              | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15
+  deriving (Eq, Show)
+
 instance Frame.Frame X64Frame where
   type (Access X64Frame) = X64Access
   type (Arch X64Frame) = X64
+  type (Register X64Frame) = Register
   newFrame = newFrame
   name = name
   allocLocal = allocLocal
