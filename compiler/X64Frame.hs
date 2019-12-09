@@ -315,12 +315,11 @@ procEntryExit2 frame bodyAsm =
 -- of any CALL instruction in the procedure body. Once this is known, the assembly language
 -- for procedure entry, stack pointer adjustment, and procedure exit can be put together;
 -- these are the _prologue_ and _epilogue_.
-procEntryExit3 :: X64Frame -> [Assem.Inst] -> [Assem.Inst]
-procEntryExit3 frame bodyAsm =
+procEntryExit3 :: X64Frame -> [Assem.Inst] -> Int -> [Assem.Inst]
+procEntryExit3 frame bodyAsm maxCallArgs=
   let
     (label:bodyAsm') = bodyAsm
-    stackSize = 1024 :: Int -- TODO! set up with real value! need to know number of spilled locals
-                            -- and max number of outgoing params
+    stackSize = maxCallArgs
     prologue = [ Assem.OPER { Assem.assem="\tpush `d0" ++ (fmtDebug frame)
                             , Assem.operDst=[rsp $ x64 frame]
                             , Assem.operSrc=[rbp $ x64 frame]
@@ -340,7 +339,7 @@ procEntryExit3 frame bodyAsm =
                             , Assem.operDst=[rbp $ x64 frame]
                             , Assem.operSrc=[]
                             , Assem.jump=Nothing }
-               , Assem.OPER { Assem.assem="\tret\t"
+               , Assem.OPER { Assem.assem="\tret\n"
                             , Assem.operDst=[rsp $ x64 frame]
                             , Assem.operSrc=[]
                             , Assem.jump=Nothing } ]

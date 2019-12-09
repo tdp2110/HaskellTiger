@@ -213,3 +213,21 @@ relop ULT = do putStrW "ULT"
 relop ULE = do putStrW "ULE"
 relop UGT = do putStrW "UGT"
 relop UGE = do putStrW "UGE"
+
+maxCallArgsStm :: Stm -> Int
+maxCallArgsStm (MOVE (e1, e2)) = max (maxCallArgsExp e1) (maxCallArgsExp e2)
+maxCallArgsStm (EXP e) = maxCallArgsExp e
+maxCallArgsStm (JUMP (e, _)) = maxCallArgsExp e
+maxCallArgsStm (CJUMP (_, e1, e2, _, _)) = max (maxCallArgsExp e1) (maxCallArgsExp e2)
+maxCallArgsStm (SEQ (s1, s2)) = max (maxCallArgsStm s1) (maxCallArgsStm s2)
+maxCallArgsStm (LABEL _) = 0
+
+maxCallArgsExp :: Exp -> Int
+maxCallArgsExp (CONST _) = 0
+maxCallArgsExp (NAME _) = 0
+maxCallArgsExp (TEMP _) = 0
+maxCallArgsExp (BINOP (_, e1, e2)) = max (maxCallArgsExp e1) (maxCallArgsExp e2)
+maxCallArgsExp (MEM e) = maxCallArgsExp e
+maxCallArgsExp (CALL (funcExp, args, _)) =
+  maximum [maxCallArgsExp funcExp, maximum $ fmap maxCallArgsExp args, fromIntegral $ length args]
+maxCallArgsExp (ESEQ (s, e)) = max (maxCallArgsStm s) (maxCallArgsExp e)

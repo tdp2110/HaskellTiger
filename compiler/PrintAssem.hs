@@ -44,7 +44,8 @@ compileToAsm text =
                                   step1
                                   ([], gen4)
                                   stmts'
-                insts' = X64Frame.procEntryExit3 frame insts
+                maxCallArgs = TreeIR.maxCallArgsStm bodyStm
+                insts' = X64Frame.procEntryExit3 frame insts maxCallArgs
                 formatAsm :: Assem.Inst -> String
                 formatAsm asm =
                   let
