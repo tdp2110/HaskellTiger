@@ -2,12 +2,15 @@ module RegAlloc where
 
 import qualified Assem
 import qualified Flow
+import qualified Frame
 import qualified Graph
 import qualified Liveness
 import qualified Temp
 import qualified X64Frame
 
-import Control.Monad.Trans.State (State, runStateT)
+import Control.Monad (join)
+import Control.Monad.Trans.State (State, runStateT, runState, put, get)
+import Data.Foldable (foldl')
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
@@ -70,7 +73,71 @@ alloc = undefined
 
 rewriteProgram :: [Assem.Inst]
                -> X64Frame.X64Frame
-               -> Set Int
+               -> Set Int -- spills
                -> Temp.Generator
                -> ([Assem.Inst], X64Frame.X64Frame, Temp.Generator)
-rewriteProgram = undefined
+rewriteProgram insts frame spills gen =
+  let
+    spillsList = Set.toList spills
+    (accesses, (frame', gen')) =
+       runState (mapM allocLocal spillsList) (frame, gen)
+    (insts', gen'') = foldl' spillTemp (insts, gen') $ zip spillsList accesses
+  in
+    (insts', frame', gen')
+  where
+    allocLocal _ = do
+                     (frame', gen') <- get
+                     let (gen'', frame'', access) = X64Frame.allocLocal
+                                                      gen'
+                                                      frame'
+                                                      Frame.Escapes
+                       in do
+                        put (frame'', gen'')
+                        pure access
+
+    spillTemp :: ([Assem.Inst], Temp.Generator) -> (Int, X64Frame.X64Access)
+              -> ([Assem.Inst], Temp.Generator)
+    spillTemp (insts', gen') (tempId, X64Frame.InFrame k) =
+      let
+        storeInst :: Int -> Assem.Inst
+        storeInst = undefined
+        loadInst :: Int -> Assem.Inst
+        loadInst = undefined
+
+        readsTemp :: Assem.Inst -> Bool
+        readsTemp (Assem.OPER { Assem.operSrc=operSrc }) = elem tempId operSrc
+        readsTemp (Assem.MOVE { Assem.moveSrc=moveSrc }) = tempId == moveSrc
+        readsTemp _ = False
+
+        writesTemp :: Assem.Inst -> Bool
+        writesTemp (Assem.OPER { Assem.operDst=operDst }) = elem tempId operDst
+        writesTemp (Assem.MOVE { Assem.moveDst=moveDst }) = tempId == moveDst
+        writesTemp _ = False
+
+        newTemp = do
+          g <- get
+          let
+            (t, g') = Temp.newtemp g
+            in
+            do
+              put g'
+              pure t
+
+        rewriteInst :: Assem.Inst -> State Temp.Generator [Assem.Inst]
+        rewriteInst inst = do
+          maybeLoad <- if readsTemp inst then
+                         do freshTemp <- newTemp
+                            pure [loadInst freshTemp]
+                       else
+                         pure []
+          maybeStore <- if writesTemp inst then
+                         do freshTemp <- newTemp
+                            pure [storeInst freshTemp]
+                       else
+                         pure []
+
+          pure $ maybeLoad ++ [inst] ++ maybeStore
+
+        (instsToJoin, gen'') = runState (mapM rewriteInst insts') gen'
+      in
+        (join instsToJoin, gen'')

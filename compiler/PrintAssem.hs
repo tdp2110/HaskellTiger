@@ -45,7 +45,11 @@ compileToAsm text =
                                   ([], gen4)
                                   stmts'
                 maxCallArgs = TreeIR.maxCallArgsStm bodyStm
-                insts' = X64Frame.procEntryExit3 frame insts maxCallArgs
+                insts' = X64Frame.procEntryExit3
+                           frame
+                           insts
+                           (X64Frame.MaxCallArgs maxCallArgs)
+                           (X64Frame.NumSpilledLocals 0) -- TODO set this based on register allocation
                 formatAsm :: Assem.Inst -> String
                 formatAsm asm =
                   let

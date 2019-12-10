@@ -238,10 +238,10 @@ allocLocal gen frame escapesOrNot =
       access = InReg regLabel
     in
       (gen', frame{locals=(locals frame) ++ [access]}, access)
-  where
-    isInFrame :: X64Access -> Bool
-    isInFrame (InFrame _) = True
-    isInFrame _ = False
+
+isInFrame :: X64Access -> Bool
+isInFrame (InFrame _) = True
+isInFrame _ = False
 
 -- | (From Appel, p 261) For each incoming register parameter, move it to the place
 -- from which it is seen within the function (aka the "view shift"). This could be a frame location (for
@@ -310,16 +310,20 @@ procEntryExit2 frame bodyAsm =
                    , Assem.jump = Just [] }
             ]
 
+newtype MaxCallArgs = MaxCallArgs Int
+newtype NumSpilledLocals = NumSpilledLocals Int
+
 -- | Creates the procedure prologue and epilogue assembly language. Calculates the size of the
 -- outgoing parameter space in the frame. This is equal to the maximum number of outgoing parameters
 -- of any CALL instruction in the procedure body. Once this is known, the assembly language
 -- for procedure entry, stack pointer adjustment, and procedure exit can be put together;
 -- these are the _prologue_ and _epilogue_.
-procEntryExit3 :: X64Frame -> [Assem.Inst] -> Int -> [Assem.Inst]
-procEntryExit3 frame bodyAsm maxCallArgs=
+procEntryExit3 :: X64Frame -> [Assem.Inst] -> MaxCallArgs -> NumSpilledLocals
+               -> [Assem.Inst]
+procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgs) (NumSpilledLocals numSpilledLocals) =
   let
     (label:bodyAsm') = bodyAsm
-    stackSize = maxCallArgs + numEscapingLocals
+    stackSize = maxCallArgs + numEscapingLocals + numSpilledLocals
     prologue = [ Assem.OPER { Assem.assem="\tpush `d0" ++ (fmtDebug frame)
                             , Assem.operDst=[rsp $ x64 frame]
                             , Assem.operSrc=[rbp $ x64 frame]
@@ -350,8 +354,5 @@ procEntryExit3 frame bodyAsm maxCallArgs=
     fmtDebug (X64Frame { frameDebug=Just dbg }) = "\t\t ; " ++ show dbg
     fmtDebug _ = ""
 
+    numEscapingLocals :: Int
     numEscapingLocals = length $ filter isInFrame $ locals frame
-
-    isInFrame :: X64Access -> Bool
-    isInFrame (InFrame _) = True
-    isInFrame _ = False
