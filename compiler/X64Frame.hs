@@ -319,7 +319,7 @@ procEntryExit3 :: X64Frame -> [Assem.Inst] -> Int -> [Assem.Inst]
 procEntryExit3 frame bodyAsm maxCallArgs=
   let
     (label:bodyAsm') = bodyAsm
-    stackSize = maxCallArgs
+    stackSize = maxCallArgs + numEscapingLocals
     prologue = [ Assem.OPER { Assem.assem="\tpush `d0" ++ (fmtDebug frame)
                             , Assem.operDst=[rsp $ x64 frame]
                             , Assem.operSrc=[rbp $ x64 frame]
@@ -349,3 +349,9 @@ procEntryExit3 frame bodyAsm maxCallArgs=
     fmtDebug :: X64Frame -> String
     fmtDebug (X64Frame { frameDebug=Just dbg }) = "\t\t ; " ++ show dbg
     fmtDebug _ = ""
+
+    numEscapingLocals = length $ filter isInFrame $ locals frame
+
+    isInFrame :: X64Access -> Bool
+    isInFrame (InFrame _) = True
+    isInFrame _ = False

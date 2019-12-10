@@ -67,3 +67,10 @@ data AllocatorState = AllocatorState {
 type Allocation = Map TempId X64Frame.Register
 alloc :: [Assem.Inst] -> X64Frame.X64Frame -> ([Assem.Inst], Allocation)
 alloc = undefined
+
+rewriteProgram :: [Assem.Inst]
+               -> X64Frame.X64Frame
+               -> Set Int
+               -> Temp.Generator
+               -> ([Assem.Inst], X64Frame.X64Frame, Temp.Generator)
+rewriteProgram = undefined
