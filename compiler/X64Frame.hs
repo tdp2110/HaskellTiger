@@ -80,8 +80,8 @@ frameExp frame = TreeIR.TEMP $ Frame.fp frame
 externalCall :: Temp.Label -> [TreeIR.Exp] -> TreeIR.Exp
 externalCall (Temp.Label (Symbol.Symbol funname)) params =
   TreeIR.CALL ( TreeIR.NAME (Temp.Label (Symbol.Symbol $ "_" ++ funname)) -- hack for MacOS
-            , params
-            , fmap (\_ -> Frame.NoEscape) params)
+              , params
+              , fmap (\_ -> Frame.NoEscape) params)
 
 accessExp :: X64Frame -> X64Access -> TreeIR.Exp
 accessExp frame acc = exp acc $ frameExp frame

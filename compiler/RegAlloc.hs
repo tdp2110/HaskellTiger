@@ -1,11 +1,13 @@
 module RegAlloc where
 
 import qualified Assem
+import qualified Codegen
 import qualified Flow
 import qualified Frame
 import qualified Graph
 import qualified Liveness
 import qualified Temp
+import qualified TreeIR
 import qualified X64Frame
 
 import Control.Monad (join)
@@ -71,19 +73,21 @@ type Allocation = Map TempId X64Frame.Register
 alloc :: [Assem.Inst] -> X64Frame.X64Frame -> ([Assem.Inst], Allocation)
 alloc = undefined
 
+newtype NewTemps = NewTemps [TempId]
+
 rewriteProgram :: [Assem.Inst]
                -> X64Frame.X64Frame
                -> Set Int -- spills
                -> Temp.Generator
-               -> ([Assem.Inst], X64Frame.X64Frame, Temp.Generator)
+               -> ([Assem.Inst], NewTemps, X64Frame.X64Frame, Temp.Generator)
 rewriteProgram insts frame spills gen =
   let
     spillsList = Set.toList spills
     (accesses, (frame', gen')) =
        runState (mapM allocLocal spillsList) (frame, gen)
-    (insts', gen'') = foldl' spillTemp (insts, gen') $ zip spillsList accesses
+    (insts', newTemps, gen'') = foldl' spillTemp (insts, [], gen') $ zip spillsList accesses
   in
-    (insts', frame', gen')
+    (insts', NewTemps newTemps, frame', gen'')
   where
     allocLocal _ = do
                      (frame', gen') <- get
@@ -95,14 +99,30 @@ rewriteProgram insts frame spills gen =
                         put (frame'', gen'')
                         pure access
 
-    spillTemp :: ([Assem.Inst], Temp.Generator) -> (Int, X64Frame.X64Access)
-              -> ([Assem.Inst], Temp.Generator)
-    spillTemp (insts', gen') (tempId, X64Frame.InFrame k) =
+    spillTemp :: ([Assem.Inst], [TempId], Temp.Generator) -> (Int, X64Frame.X64Access)
+              -> ([Assem.Inst], [TempId], Temp.Generator)
+    spillTemp (insts', temps, gen') (tempId, frameAccess) =
       let
-        storeInst :: Int -> Assem.Inst
-        storeInst = undefined
-        loadInst :: Int -> Assem.Inst
-        loadInst = undefined
+        accessExp = X64Frame.exp frameAccess $ TreeIR.TEMP $ Frame.fp frame
+
+        storeCodeFn tempId = do
+          g <- get
+          let
+            storeStm = TreeIR.MOVE ( accessExp
+                                   , TreeIR.TEMP tempId )
+            (code, g') = Codegen.codegen (X64Frame.x64 frame) g storeStm
+            in do
+            put g'
+            pure code
+        loadCodeFn tempId = do
+          g <- get
+          let
+            loadStm = TreeIR.MOVE ( TreeIR.TEMP tempId
+                                  , accessExp )
+            (code, g') = Codegen.codegen (X64Frame.x64 frame) g loadStm
+            in do
+            put g'
+            pure code
 
         readsTemp :: Assem.Inst -> Bool
         readsTemp (Assem.OPER { Assem.operSrc=operSrc }) = elem tempId operSrc
@@ -123,21 +143,26 @@ rewriteProgram insts frame spills gen =
               put g'
               pure t
 
-        rewriteInst :: Assem.Inst -> State Temp.Generator [Assem.Inst]
+        rewriteInst :: Assem.Inst -> State Temp.Generator ([Assem.Inst], [TempId])
         rewriteInst inst = do
-          maybeLoad <- if readsTemp inst then
-                         do freshTemp <- newTemp
-                            pure [loadInst freshTemp]
-                       else
-                         pure []
-          maybeStore <- if writesTemp inst then
-                         do freshTemp <- newTemp
-                            pure [storeInst freshTemp]
-                       else
-                         pure []
+          (maybeLoad, maybeLoadTemp) <- if readsTemp inst then
+                                          do freshTemp <- newTemp
+                                             loadCode <- loadCodeFn freshTemp
+                                             pure (loadCode, [freshTemp])
+                                        else
+                                          pure ([], [])
+          (maybeStore, maybeStoreTemp) <- if writesTemp inst then
+                                            do freshTemp <- newTemp
+                                               storeCode <- storeCodeFn freshTemp
+                                               pure (storeCode, [freshTemp])
+                                          else
+                                            pure ([], [])
 
-          pure $ maybeLoad ++ [inst] ++ maybeStore
+          pure ( maybeLoad ++ [inst] ++ maybeStore
+               , maybeLoadTemp ++ maybeStoreTemp)
 
-        (instsToJoin, gen'') = runState (mapM rewriteInst insts') gen'
+        (toJoin, gen'') = runState (mapM rewriteInst insts') gen'
+        insts'' = join $ fmap fst toJoin
+        newTemps = join $ fmap snd toJoin
       in
-        (join instsToJoin, gen'')
+        (insts'', temps ++ newTemps, gen'')
