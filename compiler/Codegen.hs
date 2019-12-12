@@ -78,9 +78,10 @@ munchStm (TreeIR.MOVE (TreeIR.TEMP dst, TreeIR.TEMP src)) =
                , A.moveDst = dst
                , A.moveSrc = src }
 munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s, TreeIR.CONST c)))) =
-  emit A.MOVE { A.assem="\tmov `d0, [`s0" ++ (plusMinusInt c) ++ "]"
-              , A.moveDst = d
-              , A.moveSrc = s }
+  emit A.OPER { A.assem="\tmov `d0, [`s0" ++ (plusMinusInt c) ++ "]"
+              , A.operDst = [d]
+              , A.operSrc = [s]
+              , A.jump = Nothing }
 munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.CONST c, TreeIR.TEMP s)))) =
   munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s, TreeIR.CONST c))))
 munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s0, TreeIR.TEMP s1)))) =

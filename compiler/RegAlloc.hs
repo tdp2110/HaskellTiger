@@ -2,9 +2,7 @@ module RegAlloc where
 
 import qualified Assem
 import qualified Codegen
-import qualified Flow
 import qualified Frame
-import qualified Graph
 import qualified Liveness
 import qualified Temp
 import qualified TreeIR
@@ -105,19 +103,19 @@ rewriteProgram insts frame spills gen =
       let
         accessExp = X64Frame.exp frameAccess $ TreeIR.TEMP $ Frame.fp frame
 
-        storeCodeFn tempId = do
+        storeCodeFn tempId' = do
           g <- get
           let
             storeStm = TreeIR.MOVE ( accessExp
-                                   , TreeIR.TEMP tempId )
+                                   , TreeIR.TEMP tempId' )
             (code, g') = Codegen.codegen (X64Frame.x64 frame) g storeStm
             in do
             put g'
             pure code
-        loadCodeFn tempId = do
+        loadCodeFn tempId' = do
           g <- get
           let
-            loadStm = TreeIR.MOVE ( TreeIR.TEMP tempId
+            loadStm = TreeIR.MOVE ( TreeIR.TEMP tempId'
                                   , accessExp )
             (code, g') = Codegen.codegen (X64Frame.x64 frame) g loadStm
             in do
