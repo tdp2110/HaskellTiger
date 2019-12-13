@@ -9,11 +9,13 @@ import qualified TreeIR
 import qualified X64Frame
 
 import Control.Monad (join)
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State (State, StateT, runStateT, runState, put, get)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, ask)
 import Data.Foldable (foldl')
 import Data.Functor.Identity
 import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
@@ -87,6 +89,76 @@ type Allocator = StateT AllocatorState (
 type Allocation = Map TempId X64Frame.Register
 alloc :: [Assem.Inst] -> X64Frame.X64Frame -> ([Assem.Inst], Allocation)
 alloc = undefined
+
+adjacent :: Int -> Allocator (Set Int)
+adjacent n = do
+  AllocatorState { selectStack=selectStack'
+                 , coalescedNodes=coalescedNodes' } <- get
+  AllocatorReadOnlyData { adjList=adjList' } <- lift ask
+  pure $ (adjList' Map.! n) `Set.difference` (Set.fromList selectStack' `Set.union` coalescedNodes')
+
+nodeMoves :: Int -> Allocator (Set Int)
+nodeMoves n = do
+  AllocatorState { activeMoves=activeMoves'
+                 , worklistMoves=worklistMoves' } <- get
+  AllocatorReadOnlyData { moveList=moveList' } <- lift ask
+  pure $ (Set.fromList $ moveList' Map.! n) `Set.intersection` (activeMoves' `Set.union` worklistMoves')
+
+moveRelated :: Int -> Allocator Bool
+moveRelated n = do
+  moves <- nodeMoves n
+  pure $ not $ Set.null moves
+
+simplify :: Allocator ()
+simplify = do
+  st@AllocatorState { simplifyWorklist=simplifyWorklist'
+                    , selectStack=selectStack' } <- get
+  if Set.null simplifyWorklist' then
+     pure ()
+  else
+    let
+      n = Set.findMin simplifyWorklist'
+      simplifyWorklist'' = Set.delete n simplifyWorklist'
+      selectStack'' = (n:selectStack')
+      in do
+        adjacents <- adjacent n
+        mapM_ decrementDegree $ adjacents
+
+decrementDegree :: Int -> Allocator ()
+decrementDegree = undefined
+
+enableMoves :: [Int] -> Allocator ()
+enableMoves = undefined
+
+coalesce :: Allocator ()
+coalesce = undefined
+
+addWorkList :: Int -> Allocator ()
+addWorkList = undefined
+
+ok :: Int -> Int -> Allocator Bool
+ok = undefined
+
+conservative :: [Int] -> Allocator Bool
+conservative = undefined
+
+getAlias :: Int -> Allocator Int
+getAlias = undefined
+
+combine :: Int -> Int -> Allocator ()
+combine = undefined
+
+freeze :: Allocator ()
+freeze = undefined
+
+freezeMoves :: Int -> Allocator ()
+freezeMoves = undefined
+
+selectSpill :: Allocator ()
+selectSpill = undefined
+
+assignColors :: Allocator ()
+assignColors = undefined
 
 newtype NewTemps = NewTemps [TempId]
 
