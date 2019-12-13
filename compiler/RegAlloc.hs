@@ -9,10 +9,11 @@ import qualified TreeIR
 import qualified X64Frame
 
 import Control.Monad (join)
-import Control.Monad.Trans.State (State, runStateT, runState, put, get)
+import Control.Monad.Trans.State (State, StateT, runStateT, runState, put, get)
+import Control.Monad.Trans.Reader (ReaderT, runReaderT, ask)
 import Data.Foldable (foldl')
+import Data.Functor.Identity
 import Data.Map (Map)
-import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
@@ -66,6 +67,22 @@ data AllocatorState = AllocatorState {
   , worklistMoves :: Set Int -- moves enabled for possible coalescing.
   , activeMoves :: Set Int -- moves not yet ready for coalescing.
   }
+
+data AllocatorReadOnlyData = AllocatorReadOnlyData {
+    adjSet :: Set (Int, Int) -- set of interference edges in the graph
+  , adjList :: Map Int (Set Int) -- adjacency list of graph: for each non-precolored
+                                 -- temporary u, adjList[u] is the set of notes that
+                                 -- interfere with u.
+  , degree :: Map Int Int -- map containing the current degree of each node.
+  , moveList :: Map Int [Int] -- mapping from node to the list of moves it is associated with
+  , alias :: Map Int Int -- when a move (u, v) has been coalesced, and v is put
+                         -- in coalescedNodes, then alias(v) = u
+  , color :: Map Int Int -- the color chosen by the algorithm for a node; for precolored
+                       -- nodes this is initialized to the given color.
+  }
+
+type Allocator = StateT AllocatorState (
+                   ReaderT AllocatorReadOnlyData Identity)
 
 type Allocation = Map TempId X64Frame.Register
 alloc :: [Assem.Inst] -> X64Frame.X64Frame -> ([Assem.Inst], Allocation)
