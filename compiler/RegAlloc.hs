@@ -8,7 +8,7 @@ import qualified Temp
 import qualified TreeIR
 import qualified X64Frame
 
-import Control.Monad (join)
+import Control.Monad (join, when)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State (State, StateT, runStateT, runState, put, get)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, ask)
@@ -153,7 +153,23 @@ decrementDegree m = do
       pure ()
 
 enableMoves :: [Int] -> Allocator ()
-enableMoves = undefined
+enableMoves nodes =
+  mapM_ enableMoves2 nodes
+  where
+    enableMoves2 node = do
+      moves <- nodeMoves node
+      mapM_ enableMoves3 moves
+    enableMoves3 m = do
+      st@AllocatorState { activeMoves=activeMoves'
+                        , worklistMoves=worklistMoves' } <- get
+      when (Set.member m activeMoves') $ let
+        activeMoves'' = Set.delete m activeMoves'
+        worklistMoves'' = Set.insert m worklistMoves'
+        in do
+        put st { activeMoves=activeMoves''
+               , worklistMoves=worklistMoves'' }
+        pure()
+      pure ()
 
 coalesce :: Allocator ()
 coalesce = undefined
