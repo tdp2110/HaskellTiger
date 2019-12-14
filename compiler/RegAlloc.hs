@@ -193,7 +193,7 @@ addWorkList u = do
 ok :: Int -> Int -> Allocator Bool
 ok t r = do
   AllocatorState { precolored=precolored'
-                    , degree=degree' } <- get
+                 , degree=degree' } <- get
   AllocatorReadOnlyData { numColors=numColors'
                         , adjSet=adjSet' } <- lift ask
   pure $ (degree' Map.! t < numColors') ||
@@ -213,7 +213,13 @@ conservative nodes = do
       degree' Map.! n >= numColors'
 
 getAlias :: Int -> Allocator Int
-getAlias = undefined
+getAlias n = do
+  AllocatorState { coalescedNodes=coalescedNodes' } <- get
+  AllocatorReadOnlyData { alias=alias' } <- lift ask
+  if Set.member n coalescedNodes' then
+    getAlias $ alias' Map.! n
+  else
+    pure n
 
 combine :: Int -> Int -> Allocator ()
 combine = undefined
