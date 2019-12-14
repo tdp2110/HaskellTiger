@@ -201,7 +201,16 @@ ok t r = do
          Set.member (t, r) adjSet'
 
 conservative :: [Int] -> Allocator Bool
-conservative = undefined
+conservative nodes = do
+  AllocatorState { degree=degree' } <- get
+  AllocatorReadOnlyData { numColors=numColors' } <- lift ask
+  let
+    k = length $ filter (hasSignificantDegree degree' numColors') nodes
+    in do
+      pure $ k < numColors'
+  where
+    hasSignificantDegree degree' numColors' n =
+      degree' Map.! n >= numColors'
 
 getAlias :: Int -> Allocator Int
 getAlias = undefined
