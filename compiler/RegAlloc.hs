@@ -81,6 +81,7 @@ data AllocatorReadOnlyData = AllocatorReadOnlyData {
                          -- in coalescedNodes, then alias(v) = u
   , color :: Map Int Int -- the color chosen by the algorithm for a node; for precolored
                        -- nodes this is initialized to the given color.
+  , numColors :: Int
   }
 
 type Allocator = StateT AllocatorState (
@@ -168,14 +169,26 @@ enableMoves nodes =
         in do
         put st { activeMoves=activeMoves''
                , worklistMoves=worklistMoves'' }
-        pure()
-      pure ()
 
 coalesce :: Allocator ()
 coalesce = undefined
 
 addWorkList :: Int -> Allocator ()
-addWorkList = undefined
+addWorkList u = do
+  st@AllocatorState { precolored=precolored'
+                    , freezeWorklist=freezeWorklist'
+                    , simplifyWorklist=simplifyWorklist'
+                    , degree=degree' } <- get
+  AllocatorReadOnlyData { numColors=numColors' } <- lift ask
+  isMoveRelated <- moveRelated u
+  when ((Set.member u precolored') &&
+        not isMoveRelated &&
+        (degree' Map.! u < numColors')) $ let
+    freezeWorklist'' = Set.delete u freezeWorklist'
+    simplifyWorklist'' = Set.insert u simplifyWorklist'
+    in do
+    put st { freezeWorklist=freezeWorklist''
+           , simplifyWorklist=simplifyWorklist'' }
 
 ok :: Int -> Int -> Allocator Bool
 ok = undefined
