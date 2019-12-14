@@ -191,7 +191,14 @@ addWorkList u = do
            , simplifyWorklist=simplifyWorklist'' }
 
 ok :: Int -> Int -> Allocator Bool
-ok = undefined
+ok t r = do
+  AllocatorState { precolored=precolored'
+                    , degree=degree' } <- get
+  AllocatorReadOnlyData { numColors=numColors'
+                        , adjSet=adjSet' } <- lift ask
+  pure $ (degree' Map.! t < numColors') ||
+         Set.member t precolored' ||
+         Set.member (t, r) adjSet'
 
 conservative :: [Int] -> Allocator Bool
 conservative = undefined
