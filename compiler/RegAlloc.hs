@@ -68,6 +68,7 @@ data AllocatorState = AllocatorState {
   , frozenMoves :: Set Int -- moves that will no longer be considered for coalescing
   , worklistMoves :: Set Int -- moves enabled for possible coalescing.
   , activeMoves :: Set Int -- moves not yet ready for coalescing.
+  , degree :: Map Int Int -- map containing the current degree of each node.
   }
 
 data AllocatorReadOnlyData = AllocatorReadOnlyData {
@@ -75,7 +76,6 @@ data AllocatorReadOnlyData = AllocatorReadOnlyData {
   , adjList :: Map Int (Set Int) -- adjacency list of graph: for each non-precolored
                                  -- temporary u, adjList[u] is the set of notes that
                                  -- interfere with u.
-  , degree :: Map Int Int -- map containing the current degree of each node.
   , moveList :: Map Int [Int] -- mapping from node to the list of moves it is associated with
   , alias :: Map Int Int -- when a move (u, v) has been coalesced, and v is put
                          -- in coalescedNodes, then alias(v) = u
@@ -121,11 +121,36 @@ simplify = do
       simplifyWorklist'' = Set.delete n simplifyWorklist'
       selectStack'' = (n:selectStack')
       in do
+        put st{ simplifyWorklist=simplifyWorklist''
+              , selectStack=selectStack''}
         adjacents <- adjacent n
         mapM_ decrementDegree $ adjacents
 
 decrementDegree :: Int -> Allocator ()
-decrementDegree = undefined
+decrementDegree m = do
+  st@AllocatorState { degree=degree'
+                    , spillWorklist=spillWorklist'
+                    , freezeWorklist=freezeWorklist'
+                    , simplifyWorklist=simplifyWorklist' } <- get
+  isMoveRelated <- moveRelated m
+  let
+    d = degree' Map.! m
+    degree'' = Map.insert m (d - 1) degree'
+    spillWorklist'' = Set.delete m spillWorklist'
+    freezeWorklist'' = if isMoveRelated then
+                         Set.insert m freezeWorklist'
+                       else
+                         freezeWorklist'
+    simplifyWorklist'' = if isMoveRelated then
+                           simplifyWorklist'
+                         else
+                           Set.insert m simplifyWorklist'
+    in do
+      put st { degree=degree''
+             , spillWorklist=spillWorklist''
+             , freezeWorklist=freezeWorklist''
+             , simplifyWorklist=simplifyWorklist'' }
+      pure ()
 
 enableMoves :: [Int] -> Allocator ()
 enableMoves = undefined
