@@ -225,7 +225,18 @@ combine :: Int -> Int -> Allocator ()
 combine = undefined
 
 freeze :: Allocator ()
-freeze = undefined
+freeze = do
+  st@AllocatorState { freezeWorklist=freezeWorklist'
+                    , simplifyWorklist=simplifyWorklist' } <- get
+  case Set.lookupMin freezeWorklist' of
+    Just u -> let
+      freezeWorklist'' = Set.delete u freezeWorklist'
+      simplifyWorklist'' = Set.insert u simplifyWorklist'
+      in do
+        put st { freezeWorklist=freezeWorklist''
+               , simplifyWorklist=simplifyWorklist'' }
+        freezeMoves u
+    Nothing -> do pure ()
 
 freezeMoves :: Int -> Allocator ()
 freezeMoves = undefined
