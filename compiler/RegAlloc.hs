@@ -242,7 +242,23 @@ freezeMoves :: Int -> Allocator ()
 freezeMoves = undefined
 
 selectSpill :: Allocator ()
-selectSpill = undefined
+selectSpill = do
+  st@AllocatorState { spillWorklist=spillWorklist'
+                    , simplifyWorklist=simplifyWorklist' } <- get
+  case chooseASpill spillWorklist' of
+    Just m -> let
+      spillWorklist'' = Set.delete m spillWorklist'
+      simplifyWorklist'' = Set.insert m simplifyWorklist'
+      in do
+        put st { spillWorklist=spillWorklist''
+               , simplifyWorklist=simplifyWorklist'' }
+        freezeMoves m
+    Nothing -> do pure ()
+  where
+    -- TODO! Note: avoid choosing nodes that are the tiny live ranges
+    --       resulting from the fetches of previously spilled registers.
+    chooseASpill :: Set Int -> Maybe Int
+    chooseASpill = Set.lookupMin
 
 assignColors :: Allocator ()
 assignColors = undefined
