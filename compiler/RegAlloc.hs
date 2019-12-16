@@ -9,11 +9,13 @@ import qualified TreeIR
 import qualified X64Frame
 
 import Control.Monad (join, when)
+import Control.Monad.Loops (whileM_)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State (State, StateT, runStateT, runState, put, get)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, ask)
 import Data.Foldable (foldl')
 import Data.Functor.Identity
+import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
@@ -57,7 +59,8 @@ data AllocatorState = AllocatorState {
                               -- v is added to this set and u put back on some work-list
   , coloredNodes :: Set Int -- nodes sucessfully colored
   , selectStack :: [Int] -- stack containing temporaries removed from the graph
-
+  , color :: Map Int Int -- the color chosen by the algorithm for a node; for precolored
+                         -- nodes this is initialized to the given color.
   {-
   *Move Sets*
   There are five sets of move instructions, and every move is
@@ -79,8 +82,6 @@ data AllocatorReadOnlyData = AllocatorReadOnlyData {
   , moveList :: Map Int [Int] -- mapping from node to the list of moves it is associated with
   , alias :: Map Int Int -- when a move (u, v) has been coalesced, and v is put
                          -- in coalescedNodes, then alias(v) = u
-  , color :: Map Int Int -- the color chosen by the algorithm for a node; for precolored
-                       -- nodes this is initialized to the given color.
   , numColors :: Int
   }
 
@@ -261,7 +262,59 @@ selectSpill = do
     chooseASpill = Set.lookupMin
 
 assignColors :: Allocator ()
-assignColors = undefined
+assignColors = do
+ whileM_ stackNotEmpty processStackElt
+ AllocatorState { coalescedNodes=coalescedNodes' } <- get
+ mapM_
+   (\n -> do
+            st@AllocatorState { color=color' } <- get
+            a <- getAlias n
+            let
+              color'' = Map.insert a (color' Map.! n) color'
+              in do
+              put st { color=color'' })
+   coalescedNodes'
+ where
+   stackNotEmpty = do
+     AllocatorState { selectStack=selectStack' } <- get
+     pure $ null selectStack'
+
+   processStackElt = do
+     st@AllocatorState { selectStack=selectStack'
+                       , coloredNodes=coloredNodes'
+                       , spilledNodes=spilledNodes'
+                       , precolored=precolored'
+                       , color=color' } <- get
+     AllocatorReadOnlyData { adjList=adjList'
+                           , numColors=numColors' } <- lift ask
+     case selectStack' of
+       (n:selectStack'') -> do
+         adjacentAliases <- mapM getAlias $ Set.toList $ adjList' Map.! n
+         let
+           coloredAdjacentAliases = filter
+                               (\a -> Set.member a $ coloredNodes' `Set.union` precolored')
+                               adjacentAliases
+           colorsAdjacent = fmap
+                              (\a -> color' Map.! a)
+                              coloredAdjacentAliases
+           allColors = [0 .. numColors']
+           okColors = allColors \\ colorsAdjacent
+           in
+           case okColors of
+             [] -> let
+               spilledNodes'' = Set.insert n spilledNodes'
+               in do
+               put st { selectStack=selectStack''
+                      , spilledNodes=spilledNodes'' }
+             (c:_) -> let
+               coloredNodes'' = Set.insert n coloredNodes'
+               color'' = Map.insert n c color'
+               in do
+               put st { selectStack=selectStack''
+                      , coloredNodes=coloredNodes''
+                      , color=color'' }
+
+       [] -> error "shouldn't get here: stackNotEmpty shouldn't allow it"
 
 newtype NewTemps = NewTemps [TempId]
 
