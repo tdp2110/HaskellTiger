@@ -83,6 +83,7 @@ data AllocatorReadOnlyData = AllocatorReadOnlyData {
                                  -- interfere with u.
   , moveList :: Map Int [Int] -- mapping from node to the list of moves it is associated with
   , numColors :: Int
+  , moveMap :: Map Int (Int, Int)
   }
 
 type Allocator = StateT AllocatorState (
@@ -144,6 +145,11 @@ adjacent n = do
                  , coalescedNodes=coalescedNodes' } <- get
   AllocatorReadOnlyData { adjList=adjList' } <- lift ask
   pure $ (adjList' Map.! n) `Set.difference` (Set.fromList selectStack' `Set.union` coalescedNodes')
+
+getMove :: Int -> Allocator (Maybe (Int, Int))
+getMove m = do
+  AllocatorReadOnlyData { moveMap=moveMap' } <- lift ask
+  pure $ Map.lookup m moveMap'
 
 nodeMoves :: Int -> Allocator (Set Int)
 nodeMoves n = do
@@ -302,7 +308,40 @@ freeze = do
     Nothing -> do pure ()
 
 freezeMoves :: Int -> Allocator ()
-freezeMoves = undefined
+freezeMoves u = do
+  moves <- nodeMoves u
+  mapM_ freezeMove moves
+  where
+    freezeMove m = do
+      maybeMove <- getMove m
+      case maybeMove of
+        Just (x, y) -> do
+          alias_x <- getAlias x
+          alias_y <- getAlias y
+          alias_u <- getAlias u
+          st@AllocatorState { activeMoves=activeMoves'
+                            , frozenMoves=frozenMoves'
+                            , freezeWorklist=freezeWorklist'
+                            , simplifyWorklist=simplifyWorklist'
+                            , degree=degree' } <- get
+          AllocatorReadOnlyData { numColors=numColors' } <- lift ask
+          let
+            v = if alias_x == alias_u then alias_x
+                                      else alias_y
+            activeMoves'' = Set.delete m activeMoves'
+            frozenMoves'' = Set.insert m frozenMoves'
+            in do
+            nodeMoves_v <- nodeMoves v
+            when (null nodeMoves_v && ((degree' Map.! v) < numColors')) $
+              let
+                freezeWorklist'' = Set.delete v freezeWorklist'
+                simplifyWorklist'' = Set.insert v simplifyWorklist'
+                in do
+                put st { activeMoves=activeMoves''
+                       , frozenMoves=frozenMoves''
+                       , freezeWorklist=freezeWorklist''
+                       , simplifyWorklist=simplifyWorklist'' }
+        Nothing -> error "couldn't find a move when we expected one"
 
 selectSpill :: Allocator ()
 selectSpill = do
