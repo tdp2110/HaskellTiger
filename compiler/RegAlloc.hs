@@ -49,8 +49,7 @@ data AllocatorState = AllocatorState {
   The following lists and sets are always mutually disjoint and
   covers all nodes.
   -}
-    precolored :: Set Int -- machine registers, preassigned color
-  , initial :: Set Int -- temp registers, not precolored and not yet processed
+    initial :: Set Int -- temp registers, not precolored and not yet processed
   , simplifyWorklist :: Set Int -- list of low-degree non-move-related nodes
   , freezeWorklist :: Set Int -- low-degree move-related nodes
   , spillWorklist :: Set Int -- high-degree nodes
@@ -72,16 +71,17 @@ data AllocatorState = AllocatorState {
   , worklistMoves :: Set Int -- moves enabled for possible coalescing.
   , activeMoves :: Set Int -- moves not yet ready for coalescing.
   , degree :: Map Int Int -- map containing the current degree of each node.
+  , alias :: Map Int Int -- when a move (u, v) has been coalesced, and v is put
+                         -- in coalescedNodes, then alias(v) = u
   }
 
 data AllocatorReadOnlyData = AllocatorReadOnlyData {
     adjSet :: Set (Int, Int) -- set of interference edges in the graph
+  , precolored :: Set Int -- machine registers, preassigned color
   , adjList :: Map Int (Set Int) -- adjacency list of graph: for each non-precolored
                                  -- temporary u, adjList[u] is the set of notes that
                                  -- interfere with u.
   , moveList :: Map Int [Int] -- mapping from node to the list of moves it is associated with
-  , alias :: Map Int Int -- when a move (u, v) has been coalesced, and v is put
-                         -- in coalescedNodes, then alias(v) = u
   , numColors :: Int
   }
 
@@ -91,6 +91,52 @@ type Allocator = StateT AllocatorState (
 type Allocation = Map TempId X64Frame.Register
 alloc :: [Assem.Inst] -> X64Frame.X64Frame -> ([Assem.Inst], Allocation)
 alloc = undefined
+
+data ReadOnlyDataBuilder = ReadOnlyDataBuilder {
+                               degrees :: Map Int Int
+                             , allocatorData :: AllocatorReadOnlyData
+                             }
+
+addEdge :: Int -> Int -> State ReadOnlyDataBuilder ()
+addEdge u v = do
+  ReadOnlyDataBuilder {
+         degrees=degrees'
+       , allocatorData=AllocatorReadOnlyData {
+             adjSet=adjSet'
+           , precolored=precolored'
+           , adjList=adjList'
+       }
+  } <- get
+  when (not (Set.member (u,v) adjSet') && (u /= v)) $
+    let
+      adjSet'' = adjSet' `Set.union` Set.fromList [ (u,v), (v,u) ]
+      in do
+      when (not (Set.member u precolored')) $
+        let
+          adjList'' =
+            let adjList_u' = Set.insert v (adjList' Map.! u) in
+              Map.insert u adjList_u' adjList'
+          degrees'' =
+            Map.insert u ((degrees' Map.! u) + 1) degrees'
+          in do
+          state@ReadOnlyDataBuilder { allocatorData=allocatorData' } <- get
+          put state { degrees=degrees''
+                    , allocatorData=allocatorData' { adjList=adjList'' } }
+      when (not (Set.member v precolored')) $
+        let
+          adjList'' =
+            let adjList_v' = Set.insert u (adjList' Map.! v) in
+              Map.insert v adjList_v' adjList'
+          degrees'' =
+            Map.insert v ((degrees' Map.! v) + 1) degrees'
+          in do
+          state@ReadOnlyDataBuilder { allocatorData=allocatorData' } <- get
+          put state { degrees=degrees''
+                    , allocatorData=allocatorData' { adjList=adjList'' } }
+      state@ReadOnlyDataBuilder {
+        allocatorData=allocatorData'@AllocatorReadOnlyData {}
+        } <- get
+      put state { allocatorData=allocatorData' { adjSet=adjSet'' } }
 
 adjacent :: Int -> Allocator (Set Int)
 adjacent n = do
@@ -176,11 +222,11 @@ coalesce = undefined
 
 addWorkList :: Int -> Allocator ()
 addWorkList u = do
-  st@AllocatorState { precolored=precolored'
-                    , freezeWorklist=freezeWorklist'
+  st@AllocatorState { freezeWorklist=freezeWorklist'
                     , simplifyWorklist=simplifyWorklist'
                     , degree=degree' } <- get
-  AllocatorReadOnlyData { numColors=numColors' } <- lift ask
+  AllocatorReadOnlyData { numColors=numColors'
+                        , precolored=precolored' } <- lift ask
   isMoveRelated <- moveRelated u
   when ((Set.member u precolored') &&
         not isMoveRelated &&
@@ -193,9 +239,9 @@ addWorkList u = do
 
 ok :: Int -> Int -> Allocator Bool
 ok t r = do
-  AllocatorState { precolored=precolored'
-                 , degree=degree' } <- get
+  AllocatorState {  degree=degree' } <- get
   AllocatorReadOnlyData { numColors=numColors'
+                        , precolored=precolored'
                         , adjSet=adjSet' } <- lift ask
   pure $ (degree' Map.! t < numColors') ||
          Set.member t precolored' ||
@@ -215,15 +261,31 @@ conservative nodes = do
 
 getAlias :: Int -> Allocator Int
 getAlias n = do
-  AllocatorState { coalescedNodes=coalescedNodes' } <- get
-  AllocatorReadOnlyData { alias=alias' } <- lift ask
+  AllocatorState { coalescedNodes=coalescedNodes'
+                 , alias=alias' } <- get
   if Set.member n coalescedNodes' then
     getAlias $ alias' Map.! n
   else
     pure n
 
+{-
 combine :: Int -> Int -> Allocator ()
-combine = undefined
+combine u v = do
+  st@AllocatorState { freezeWorklist=freezeWorklist'
+                    , spillWorklist=spillWorklist'
+                    , coalescedNodes=coalescedNodes'
+                    , alias=alias' } <- get
+  if Set.member v freezeWorklist' then
+    put st { freezeWorklist=Set.delete v freezeWorklist' }
+  else
+    put st { spillWorklist=Set.delete v spillWorklist' }
+  let
+    coalescedNodes'' = Set.delete v coalescedNodes'
+    alias'' = Map.insert v u alias'
+    -- TODO wtf?? p. 248
+    -- nodeMoves[u] <- nodeMoves[u] \Union nodeMoves[v]
+    in do
+-}
 
 freeze :: Allocator ()
 freeze = do
@@ -283,9 +345,9 @@ assignColors = do
      st@AllocatorState { selectStack=selectStack'
                        , coloredNodes=coloredNodes'
                        , spilledNodes=spilledNodes'
-                       , precolored=precolored'
                        , color=color' } <- get
      AllocatorReadOnlyData { adjList=adjList'
+                           , precolored=precolored'
                            , numColors=numColors' } <- lift ask
      case selectStack' of
        (n:selectStack'') -> do
