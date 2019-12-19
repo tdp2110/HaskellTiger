@@ -224,7 +224,50 @@ enableMoves nodes =
                , worklistMoves=worklistMoves'' }
 
 coalesce :: Allocator ()
-coalesce = undefined
+coalesce = do
+  st@AllocatorState { worklistMoves=worklistMoves'
+                    , coalescedMoves=coalescedMoves'
+                    , constrainedMoves=constrainedMoves'
+                    , activeMoves=activeMoves' } <- get
+  AllocatorReadOnlyData { moveMap=moveMap'
+                        , precolored=precolored'
+                        , adjSet=adjSet' } <- lift ask
+  let
+    m = Set.findMin worklistMoves'
+    (x', y') = moveMap' Map.! m
+    in do
+    x <- getAlias x'
+    y <- getAlias y'
+    let
+      (u,v) = if Set.member y precolored' then (y,x)
+                                          else (x,y)
+      worklistMoves'' = Set.delete m worklistMoves'
+      coalescedMoves'' = Set.insert m coalescedMoves'
+      constrainedMoves'' = Set.insert m constrainedMoves'
+      activeMoves'' = Set.insert m activeMoves'
+      in do
+      adjacent_u <- adjacent u
+      adjacent_v <- adjacent v
+      isConservative <- conservative $ Set.toList $ adjacent_u `Set.union` adjacent_v
+      adjacents_ok <- mapM (\t -> ok u t) $ Set.toList adjacent_v
+      if u == v then do
+        put st { worklistMoves=worklistMoves''
+               , coalescedMoves=coalescedMoves'' }
+        addWorkList u
+      else if Set.member v precolored' || Set.member (u,v) adjSet' then do
+        put st { worklistMoves=worklistMoves''
+               , constrainedMoves=constrainedMoves'' }
+        addWorkList u
+        addWorkList v
+      else if Set.member u precolored' && (all (==True) adjacents_ok)
+                || not (Set.member u precolored') && isConservative then do
+        put st { worklistMoves=worklistMoves''
+               , coalescedMoves=coalescedMoves'' }
+        combine u v
+        addWorkList u
+      else do
+        put st { worklistMoves=worklistMoves''
+               , activeMoves=activeMoves'' }
 
 addWorkList :: Int -> Allocator ()
 addWorkList u = do
@@ -274,8 +317,9 @@ getAlias n = do
   else
     pure n
 
-{-
 combine :: Int -> Int -> Allocator ()
+combine = undefined
+{-
 combine u v = do
   st@AllocatorState { freezeWorklist=freezeWorklist'
                     , spillWorklist=spillWorklist'
