@@ -77,11 +77,11 @@ data AllocatorState = AllocatorState {
   , adjList :: Map Int (Set Int) -- adjacency list of graph: for each non-precolored
                                  -- temporary u, adjList[u] is the set of notes that
                                  -- interfere with u.
+  , moveList :: Map Int [Int] -- mapping from node to the list of moves it is associated with
   }
 
 data AllocatorReadOnlyData = AllocatorReadOnlyData {
     precolored :: Set Int -- machine registers, preassigned color
-  , moveList :: Map Int [Int] -- mapping from node to the list of moves it is associated with
   , numColors :: Int
   , moveMap :: Map Int (Int, Int)
   }
@@ -143,8 +143,8 @@ getMove m = do
 nodeMoves :: Int -> Allocator (Set Int)
 nodeMoves n = do
   AllocatorState { activeMoves=activeMoves'
-                 , worklistMoves=worklistMoves' } <- get
-  AllocatorReadOnlyData { moveList=moveList' } <- lift ask
+                 , worklistMoves=worklistMoves'
+                 , moveList=moveList' } <- get
   pure $ (Set.fromList $ moveList' Map.! n) `Set.intersection` (activeMoves' `Set.union` worklistMoves')
 
 moveRelated :: Int -> Allocator Bool
@@ -313,7 +313,8 @@ combine u v = do
                     , spillWorklist=spillWorklist'
                     , coalescedNodes=coalescedNodes'
                     , alias=alias'
-                    , degree=degree' } <- get
+                    , degree=degree'
+                    , moveList=moveList' } <- get
   AllocatorReadOnlyData { numColors=numColors'
                         , precolored=precolored' } <- lift ask
   adjacent_v <- adjacent v
@@ -322,14 +323,17 @@ combine u v = do
   else
     put s1 { spillWorklist=Set.delete v spillWorklist' }
   let
-    coalescedNodes'' = Set.delete v coalescedNodes'
+    coalescedNodes'' = Set.insert v coalescedNodes'
     alias'' = Map.insert v u alias'
-    -- TODO wtf?? p. 248
-    -- nodeMoves[u] <- nodeMoves[u] \Union nodeMoves[v]
+    mv_u = moveList' Map.! u
+    mv_v = moveList' Map.! v
+    mv_u' = union mv_u mv_v
+    moveList'' = Map.insert u mv_u' moveList'
     in do
     s2 <- get
     put s2 { coalescedNodes=coalescedNodes''
-           , alias=alias'' }
+           , alias=alias''
+           , moveList=moveList'' }
     forM_ adjacent_v (\t -> do
       addEdge precolored' t u
       decrementDegree t
