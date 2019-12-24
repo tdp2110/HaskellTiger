@@ -2,7 +2,6 @@ module Color where
 
 import qualified Assem
 import qualified Liveness
-import qualified Temp
 import qualified X64Frame
 
 import Control.Monad (when, forM_)
@@ -54,8 +53,8 @@ data AllocatorState = AllocatorState {
                               -- v is added to this set and u put back on some work-list
   , coloredNodes :: Set Int -- nodes sucessfully colored
   , selectStack :: [Int] -- stack containing temporaries removed from the graph
-  , color :: Map Int Int -- the color chosen by the algorithm for a node; for precolored
-                         -- nodes this is initialized to the given color.
+  , colors :: Map Int Int -- the color chosen by the algorithm for a node; for precolored
+                          -- nodes this is initialized to the given color.
   {-
   *Move Sets*
   There are five sets of move instructions, and every move is
@@ -418,12 +417,12 @@ assignColors = do
  AllocatorState { coalescedNodes=coalescedNodes' } <- get
  mapM_
    (\n -> do
-            st@AllocatorState { color=color' } <- get
+            st@AllocatorState { colors=colors' } <- get
             a <- getAlias n
             let
-              color'' = Map.insert a (color' Map.! n) color'
+              colors'' = Map.insert a (colors' Map.! n) colors'
               in do
-              put st { color=color'' })
+              put st { colors=colors'' })
    coalescedNodes'
  where
    stackNotEmpty = do
@@ -434,7 +433,7 @@ assignColors = do
      st@AllocatorState { selectStack=selectStack'
                        , coloredNodes=coloredNodes'
                        , spilledNodes=spilledNodes'
-                       , color=color'
+                       , colors=colors'
                        , adjList=adjList' } <- get
      AllocatorReadOnlyData { precolored=precolored'
                            , numColors=numColors' } <- lift ask
@@ -446,7 +445,7 @@ assignColors = do
                                (\a -> Set.member a $ coloredNodes' `Set.union` precolored')
                                adjacentAliases
            colorsAdjacent = fmap
-                              (\a -> color' Map.! a)
+                              (\a -> colors' Map.! a)
                               coloredAdjacentAliases
            allColors = [0 .. numColors']
            okColors = allColors \\ colorsAdjacent
@@ -459,10 +458,10 @@ assignColors = do
                       , spilledNodes=spilledNodes'' }
              (c:_) -> let
                coloredNodes'' = Set.insert n coloredNodes'
-               color'' = Map.insert n c color'
+               colors'' = Map.insert n c colors'
                in do
                put st { selectStack=selectStack''
                       , coloredNodes=coloredNodes''
-                      , color=color'' }
+                      , colors=colors'' }
 
        [] -> error "shouldn't get here: stackNotEmpty shouldn't allow it"
