@@ -52,7 +52,7 @@ data X64 = X64 { rax :: Int
                , callerSaves :: [Int]
                , callDests :: [Int]
                , paramRegs :: [Int]
-               , tempMap :: Map Int String }
+               , tempMap :: Map Int Register }
   deriving (Show)
 
 data X64Frame = X64Frame { name :: Temp.Label
@@ -141,22 +141,22 @@ initX64 gen =
           , callerSaves=[raxId, rcxId, rdxId, rsiId, rdiId, r8Id, r9Id, r10Id, r11Id]
           , callDests=[raxId, rdxId]
           , paramRegs=[rdiId, rsiId, rdxId, rcxId, r8Id, r9Id]
-          , tempMap = Map.fromList [ (raxId, "rax")
-                                   , (rbxId, "rbx")
-                                   , (rcxId, "rcx")
-                                   , (rdxId, "rdx")
-                                   , (rbpId, "rbp")
-                                   , (rsiId, "rsi")
-                                   , (rdiId, "rdi")
-                                   , (rspId, "rsp")
-                                   , (r8Id,  "r8")
-                                   , (r9Id,  "r9")
-                                   , (r10Id, "r10")
-                                   , (r11Id, "r11")
-                                   , (r12Id, "r12")
-                                   , (r13Id, "r13")
-                                   , (r14Id, "r14")
-                                   , (r15Id, "r15")
+          , tempMap = Map.fromList [ (raxId, RAX)
+                                   , (rbxId, RBX)
+                                   , (rcxId, RCX)
+                                   , (rdxId, RDX)
+                                   , (rbpId, RBP)
+                                   , (rsiId, RSI)
+                                   , (rdiId, RDI)
+                                   , (rspId, RSP)
+                                   , (r8Id,  R8)
+                                   , (r9Id,  R9)
+                                   , (r10Id, R10)
+                                   , (r11Id, R11)
+                                   , (r12Id, R12)
+                                   , (r13Id, R13)
+                                   , (r14Id, R14)
+                                   , (r15Id, R15)
                                    ] }
     , gen16 )
 
@@ -171,7 +171,25 @@ freshFrame frameName x64Inst maybeDebug =
 
 data Register = RAX | RBX | RCX | RDX | RBP | RSI | RDI | RSP
               | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15
-  deriving (Eq, Show)
+  deriving (Eq)
+
+instance Show Register where
+  show RAX = "rax"
+  show RBX = "rbx"
+  show RCX = "rcx"
+  show RDX = "rdx"
+  show RBP = "rbp"
+  show RSI = "rsi"
+  show RDI = "rdi"
+  show RSP = "rsp"
+  show R8 = "r8"
+  show R9 = "r9"
+  show R10 = "r10"
+  show R11 = "r11"
+  show R12 = "r12"
+  show R13 = "r13"
+  show R14 = "r14"
+  show R15 = "r15"
 
 instance Frame.Frame X64Frame where
   type (Access X64Frame) = X64Access

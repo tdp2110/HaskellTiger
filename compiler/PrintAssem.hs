@@ -18,7 +18,7 @@ import System.Environment (getArgs)
 printTemp :: X64Frame.X64 -> Int -> String
 printTemp x64 reg =
   case Map.lookup reg $ X64Frame.tempMap x64 of
-    Just s -> s
+    Just s -> show s
     Nothing -> "t" ++ show reg
 
 compileToAsm :: String -> String
