@@ -85,8 +85,13 @@ type Allocator = StateT AllocatorState (
                    ReaderT AllocatorReadOnlyData Identity)
 
 type Allocation = Map TempId X64Frame.Register
-alloc :: [Assem.Inst] -> X64Frame.X64Frame -> ([Assem.Inst], Allocation)
-alloc = undefined
+
+color :: Liveness.IGraph
+      -> Allocation -- initial allocation, provided by Frame.tempMap
+      -> (Int -> Float) -- spillCost
+      -> [X64Frame.Register] -- available registers
+      -> (Allocation, [Int]) -- assignments using available registers, list of spills
+color = undefined
 
 addEdge :: Set Int -> Int -> Int -> Allocator ()
 addEdge precolored' u v = do
