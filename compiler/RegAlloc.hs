@@ -38,7 +38,8 @@ rewriteProgram insts frame spills gen =
     spillsList = Set.toList spills
     (accesses, (frame', gen')) =
        runState (mapM allocLocal spillsList) (frame, gen)
-    (insts', newTemps, gen'') = foldl' spillTemp (insts, [], gen') $ zip spillsList accesses
+    (insts', newTemps, gen'') =
+      foldl' spillTemp (insts, [], gen') $ zip spillsList accesses
   in
     (insts', NewTemps newTemps, frame', gen'')
   where
@@ -49,8 +50,8 @@ rewriteProgram insts frame spills gen =
                                                       frame'
                                                       Frame.Escapes
                        in do
-                        put (frame'', gen'')
-                        pure access
+                       put (frame'', gen'')
+                       pure access
 
     spillTemp :: ([Assem.Inst], [TempId], Temp.Generator) -> (Int, X64Frame.X64Access)
               -> ([Assem.Inst], [TempId], Temp.Generator)

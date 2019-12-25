@@ -93,6 +93,15 @@ color :: Liveness.IGraph
       -> (Allocation, [Int]) -- assignments using available registers, list of spills
 color = undefined
 
+-- | sets up initial moveList, worklistMoves, coloredNodes, precolored
+build :: Liveness.IGraph
+      -> ( Map Int [Int] -- moveList
+         , Set Int -- worklistMoves
+         , Set Int -- coloredNodes
+         , Set Int -- precolored
+         )
+build = undefined
+
 addEdge :: Set Int -> Int -> Int -> Allocator ()
 addEdge precolored' u v = do
   s1@AllocatorState {
