@@ -17,6 +17,15 @@ import qualified Data.Set as Set
 
 type TempId = Color.TempId
 
+alloc :: [Assem.Inst]
+      -> X64Frame.X64Frame
+      -> Temp.Generator
+      -> ( [Assem.Inst]
+         , Color.Allocation
+         , X64Frame.X64Frame
+         , Temp.Generator )
+alloc = undefined
+
 newtype NewTemps = NewTemps [TempId]
 
 rewriteProgram :: [Assem.Inst]
