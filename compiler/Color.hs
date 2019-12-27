@@ -1,6 +1,7 @@
 module Color where
 
 import qualified Assem
+import qualified Graph
 import qualified Liveness
 import qualified X64Frame
 
@@ -94,13 +95,27 @@ color :: Liveness.IGraph
 color = undefined
 
 -- | sets up initial moveList, worklistMoves, coloredNodes, precolored
-build :: Liveness.IGraph
-      -> ( Map Int [Int] -- moveList
+build :: Liveness.IGraph ->
+         Set Int ->
+         ( Map Int [Int] -- moveList
          , Set Int -- worklistMoves
          , Set Int -- coloredNodes
          , Set Int -- precolored
+         , Set Int -- initial
          )
-build = undefined
+build (Liveness.IGraph { Liveness.graph=graph
+                       , Liveness.gtemp=gtemp }) initAlloc =
+  let
+    nodeList = Map.elems $ Graph.nodes graph
+    lookups = fmap
+                (\n -> let
+                         temp = gtemp Map.! (Graph.nodeId n)
+                       in
+                         (Set.member temp initAlloc, temp)
+                )
+                nodeList
+  in
+    undefined
 
 addEdge :: Set Int -> Int -> Int -> Allocator ()
 addEdge precolored' u v = do
