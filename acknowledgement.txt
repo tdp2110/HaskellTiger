@@ -1,7 +1,8 @@
 I used Simon Marlow's lexer with very small modifications (https://github.com/simonmar/alex/master/examples/tiger.x)
 
-I've also benefitted from prikhi's ML implementation:
+I've benefitted from the following ML implementations:
+     https://github.com/sunchao/tiger
      https://github.com/prikhi/modern-compiler-implementation-ml/
-And the following Haskell implementations:
+and the following Haskell implementations:
     https://github.com/svenpanne/tiger/
     https://github.com/unnohideyuki/Tiger-in-Haskell/
