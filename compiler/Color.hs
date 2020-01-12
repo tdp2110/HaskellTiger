@@ -2,7 +2,7 @@ module Color where
 
 import qualified Assem
 import qualified Graph
-import qualified Liveness
+import qualified Liveness as L
 import qualified X64Frame
 
 import Control.Monad (when, forM_)
@@ -10,15 +10,17 @@ import Control.Monad.Loops (whileM_)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State (StateT, runStateT, put, get)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, ask)
+import Data.Function (on)
 import Data.Functor.Identity
 import Data.List
 import Data.Map (Map)
+import Data.Ord (comparing)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
 
-type TempId = Liveness.TempId
+type TempId = L.TempId
 
 data NodeState =
     Precolored
@@ -86,7 +88,7 @@ type Allocator = StateT AllocatorState (
 
 type Allocation = Map TempId X64Frame.Register
 
-color :: Liveness.IGraph
+color :: L.IGraph
       -> Allocation -- initial allocation, provided by Frame.tempMap
       -> (Int -> Float) -- spillCost
       -> [X64Frame.Register] -- available registers
@@ -94,17 +96,17 @@ color :: Liveness.IGraph
 color = undefined
 
 -- | sets up initial moveList, worklistMoves, coloredNodes, precolored
-build :: Liveness.IGraph ->
+build :: L.IGraph ->
          Set Int -> -- initial allocations
-         ( Map Int [(Int, Int)] -- moveList
-         , Set Int -- worklistMoves
-         , Set Int -- coloredNodes
-         , Set Int -- precolored
-         , Set Int -- initial
+         ( Map L.NodeId [(L.NodeId, L.NodeId)] -- moveList
+         , Set (L.NodeId, L.NodeId) -- worklistMoves
+         , Set L.TempId -- coloredNodes
+         , Set L.NodeId -- precolored
+         , Set L.NodeId -- initial
          )
-build (Liveness.IGraph { Liveness.graph=graph
-                       , Liveness.gtemp=gtemp
-                       , Liveness.moves=moves }) initAlloc =
+build (L.IGraph { L.graph=graph
+                , L.gtemp=gtemp
+                , L.moves=moves }) initAlloc =
   let
     nodeList = Map.elems $ Graph.nodes graph
     lookups = fmap
@@ -119,9 +121,10 @@ build (Liveness.IGraph { Liveness.graph=graph
                     $ filter
                         (\(isInTemp,_,_) -> isInTemp)
                         lookups
-    precolored = fmap
+    precoloredList = fmap
                    (\(_,n) -> Graph.nodeId n)
                    nodesInInit
+    precolored = Set.fromList precoloredList
     colored = fmap
                 (\(t,_) -> t)
                 nodesInInit
@@ -130,9 +133,31 @@ build (Liveness.IGraph { Liveness.graph=graph
                 $ filter
                     (\(isInTemp,_,_) -> not isInTemp)
                     lookups
-    --moveListPairs =
+    movePairs = fmap
+                  (\(n1, n2) -> (Graph.nodeId n1, Graph.nodeId n2))
+                  moves
+    movesToAddSrcs = fmap
+                       (\m@(src,_) -> (src, m))
+                       $ filter
+                           (\(src,_) -> Set.member src precolored)
+                           movePairs
+    movesToAddDsts = fmap
+                       (\m@(_,dst) -> (dst, m))
+                       $ filter
+                           (\(_,dst) -> Set.member dst precolored)
+                           movePairs
+    movesToAdd = movesToAddSrcs ++ movesToAddDsts
+    moveList = Map.fromList $ groupByKey movesToAdd
   in
-    undefined
+    ( moveList
+    , Set.fromList movePairs
+    , Set.fromList colored
+    , precolored
+    , Set.fromList initial )
+  where
+    groupByKey :: (Eq a, Ord a) => [(a, b)] -> [(a, [b])]
+    groupByKey = map (\l -> (fst . head $ l, map snd l)) . groupBy ((==) `on` fst)
+                 . sortBy (comparing fst)
 
 addEdge :: Set Int -> Int -> Int -> Allocator ()
 addEdge precolored' u v = do
