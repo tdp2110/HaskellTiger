@@ -61,11 +61,11 @@ data AllocatorState = AllocatorState {
   There are five sets of move instructions, and every move is
   in exactly one of these sets (after Build through the end of Main)
   -}
-  , coalescedMoves :: Set Int -- moves that have been coalesced.
-  , constrainedMoves :: Set Int -- moves whose source and target interfere
-  , frozenMoves :: Set Int -- moves that will no longer be considered for coalescing
-  , worklistMoves :: Set Int -- moves enabled for possible coalescing.
-  , activeMoves :: Set Int -- moves not yet ready for coalescing.
+  , coalescedMoves :: Set (Int, Int) -- moves that have been coalesced.
+  , constrainedMoves :: Set (Int, Int) -- moves whose source and target interfere
+  , frozenMoves :: Set (Int, Int) -- moves that will no longer be considered for coalescing
+  , worklistMoves :: Set (Int, Int) -- moves enabled for possible coalescing.
+  , activeMoves :: Set (Int, Int) -- moves not yet ready for coalescing.
   , degree :: Map Int Int -- map containing the current degree of each node.
   , alias :: Map Int Int -- when a move (u, v) has been coalesced, and v is put
                          -- in coalescedNodes, then alias(v) = u
@@ -73,13 +73,12 @@ data AllocatorState = AllocatorState {
   , adjList :: Map Int (Set Int) -- adjacency list of graph: for each non-precolored
                                  -- temporary u, adjList[u] is the set of notes that
                                  -- interfere with u.
-  , moveList :: Map Int [Int] -- mapping from node to the list of moves it is associated with
+  , moveList :: Map Int [(Int, Int)] -- mapping from node to the list of moves it is associated with
   }
 
 data AllocatorReadOnlyData = AllocatorReadOnlyData {
     precolored :: Set Int -- machine registers, preassigned color
   , numColors :: Int
-  , moveMap :: Map Int (Int, Int)
   }
 
 type Allocator = StateT AllocatorState (
@@ -97,14 +96,15 @@ color = undefined
 -- | sets up initial moveList, worklistMoves, coloredNodes, precolored
 build :: Liveness.IGraph ->
          Set Int -> -- initial allocations
-         ( Map Int [Int] -- moveList
+         ( Map Int [(Int, Int)] -- moveList
          , Set Int -- worklistMoves
          , Set Int -- coloredNodes
          , Set Int -- precolored
          , Set Int -- initial
          )
 build (Liveness.IGraph { Liveness.graph=graph
-                       , Liveness.gtemp=gtemp }) initAlloc =
+                       , Liveness.gtemp=gtemp
+                       , Liveness.moves=moves }) initAlloc =
   let
     nodeList = Map.elems $ Graph.nodes graph
     lookups = fmap
@@ -130,6 +130,7 @@ build (Liveness.IGraph { Liveness.graph=graph
                 $ filter
                     (\(isInTemp,_,_) -> not isInTemp)
                     lookups
+    --moveListPairs =
   in
     undefined
 
@@ -175,17 +176,14 @@ adjacent n = do
                  , adjList=adjList' } <- get
   pure $ (adjList' Map.! n) `Set.difference` (Set.fromList selectStack' `Set.union` coalescedNodes')
 
-getMove :: Int -> Allocator (Maybe (Int, Int))
-getMove m = do
-  AllocatorReadOnlyData { moveMap=moveMap' } <- lift ask
-  pure $ Map.lookup m moveMap'
-
-nodeMoves :: Int -> Allocator (Set Int)
+nodeMoves :: Int -> Allocator (Set (Int, Int))
 nodeMoves n = do
   AllocatorState { activeMoves=activeMoves'
                  , worklistMoves=worklistMoves'
                  , moveList=moveList' } <- get
-  pure $ (Set.fromList $ moveList' Map.! n) `Set.intersection` (activeMoves' `Set.union` worklistMoves')
+  pure $ (Set.fromList $ moveList' Map.! n)
+         `Set.intersection`
+         (activeMoves' `Set.union` worklistMoves')
 
 moveRelated :: Int -> Allocator Bool
 moveRelated n = do
@@ -259,11 +257,9 @@ coalesce = do
                     , constrainedMoves=constrainedMoves'
                     , activeMoves=activeMoves'
                     , adjSet=adjSet' } <- get
-  AllocatorReadOnlyData { moveMap=moveMap'
-                        , precolored=precolored' } <- lift ask
+  AllocatorReadOnlyData { precolored=precolored' } <- lift ask
   let
-    m = Set.findMin worklistMoves'
-    (x', y') = moveMap' Map.! m
+    m@(x', y') = Set.findMin worklistMoves'
     in do
     x <- getAlias x'
     y <- getAlias y'
@@ -406,36 +402,32 @@ freezeMoves u = do
   moves <- nodeMoves u
   mapM_ freezeMove moves
   where
-    freezeMove m = do
-      maybeMove <- getMove m
-      case maybeMove of
-        Just (x, y) -> do
-          alias_x <- getAlias x
-          alias_y <- getAlias y
-          alias_u <- getAlias u
-          st@AllocatorState { activeMoves=activeMoves'
-                            , frozenMoves=frozenMoves'
-                            , freezeWorklist=freezeWorklist'
-                            , simplifyWorklist=simplifyWorklist'
-                            , degree=degree' } <- get
-          AllocatorReadOnlyData { numColors=numColors' } <- lift ask
+    freezeMove m@(x,y) = do
+      alias_x <- getAlias x
+      alias_y <- getAlias y
+      alias_u <- getAlias u
+      st@AllocatorState { activeMoves=activeMoves'
+                        , frozenMoves=frozenMoves'
+                        , freezeWorklist=freezeWorklist'
+                        , simplifyWorklist=simplifyWorklist'
+                        , degree=degree' } <- get
+      AllocatorReadOnlyData { numColors=numColors' } <- lift ask
+      let
+        v = if alias_x == alias_u then alias_x
+                                  else alias_y
+        activeMoves'' = Set.delete m activeMoves'
+        frozenMoves'' = Set.insert m frozenMoves'
+        in do
+        nodeMoves_v <- nodeMoves v
+        when (null nodeMoves_v && ((degree' Map.! v) < numColors')) $
           let
-            v = if alias_x == alias_u then alias_x
-                                      else alias_y
-            activeMoves'' = Set.delete m activeMoves'
-            frozenMoves'' = Set.insert m frozenMoves'
+            freezeWorklist'' = Set.delete v freezeWorklist'
+            simplifyWorklist'' = Set.insert v simplifyWorklist'
             in do
-            nodeMoves_v <- nodeMoves v
-            when (null nodeMoves_v && ((degree' Map.! v) < numColors')) $
-              let
-                freezeWorklist'' = Set.delete v freezeWorklist'
-                simplifyWorklist'' = Set.insert v simplifyWorklist'
-                in do
-                put st { activeMoves=activeMoves''
-                       , frozenMoves=frozenMoves''
-                       , freezeWorklist=freezeWorklist''
-                       , simplifyWorklist=simplifyWorklist'' }
-        Nothing -> error "couldn't find a move when we expected one"
+            put st { activeMoves=activeMoves''
+                   , frozenMoves=frozenMoves''
+                   , freezeWorklist=freezeWorklist''
+                   , simplifyWorklist=simplifyWorklist'' }
 
 selectSpill :: Allocator ()
 selectSpill = do
