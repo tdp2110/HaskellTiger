@@ -22,25 +22,6 @@ import qualified Data.Set as Set
 
 type TempId = L.TempId
 
-data NodeState =
-    Precolored
-  | Initial
-  | SimplifyWork
-  | FreezeWork
-  | SpillWork
-  | CoalescedNode
-  | Colored
-  | SelectStack
-  deriving (Eq, Show)
-
-data MoveState =
-    CoalescedMove
-  | Constrained
-  | Frozen
-  | WorklistMove
-  | ActiveMove
-  deriving (Eq, Show)
-
 data AllocatorState = AllocatorState {
   {-
   * Node work-lists, sets, and stacks. *
