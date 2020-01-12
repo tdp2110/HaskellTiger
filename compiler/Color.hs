@@ -96,7 +96,7 @@ color = undefined
 
 -- | sets up initial moveList, worklistMoves, coloredNodes, precolored
 build :: Liveness.IGraph ->
-         Set Int ->
+         Set Int -> -- initial allocations
          ( Map Int [Int] -- moveList
          , Set Int -- worklistMoves
          , Set Int -- coloredNodes
@@ -111,9 +111,25 @@ build (Liveness.IGraph { Liveness.graph=graph
                 (\n -> let
                          temp = gtemp Map.! (Graph.nodeId n)
                        in
-                         (Set.member temp initAlloc, temp)
+                         (Set.member temp initAlloc, temp, n)
                 )
                 nodeList
+    nodesInInit = fmap
+                    (\(_,t,n) -> (t,n))
+                    $ filter
+                        (\(isInTemp,_,_) -> isInTemp)
+                        lookups
+    precolored = fmap
+                   (\(_,n) -> Graph.nodeId n)
+                   nodesInInit
+    colored = fmap
+                (\(t,_) -> t)
+                nodesInInit
+    initial = fmap
+                (\(_,_,n) -> Graph.nodeId n)
+                $ filter
+                    (\(isInTemp,_,_) -> not isInTemp)
+                    lookups
   in
     undefined
 
