@@ -22,45 +22,48 @@ import qualified Data.Set as Set
 
 type TempId = L.TempId
 
+type MoveSet = Set (L.NodeId, L.NodeId)
+type WorkSet = Set L.NodeId
+
 data AllocatorState = AllocatorState {
   {-
   * Node work-lists, sets, and stacks. *
   The following lists and sets are always mutually disjoint and
   covers all nodes.
   -}
-    initial :: Set Int -- temp registers, not precolored and not yet processed
-  , simplifyWorklist :: Set Int -- list of low-degree non-move-related nodes
-  , freezeWorklist :: Set Int -- low-degree move-related nodes
-  , spillWorklist :: Set Int -- high-degree nodes
-  , spilledNodes :: Set Int -- nodes marked for spilling during this round, initially empty
-  , coalescedNodes :: Set Int -- registers that have been coalesced, when u <- v coalesced,
+    initial :: WorkSet -- temp registers, not precolored and not yet processed
+  , simplifyWorklist :: WorkSet -- list of low-degree non-move-related nodes
+  , freezeWorklist :: WorkSet -- low-degree move-related nodes
+  , spillWorklist :: WorkSet -- high-degree nodes
+  , spilledNodes :: WorkSet -- nodes marked for spilling during this round, initially empty
+  , coalescedNodes :: WorkSet -- registers that have been coalesced, when u <- v coalesced,
                               -- v is added to this set and u put back on some work-list
-  , coloredNodes :: Set Int -- nodes sucessfully colored
-  , selectStack :: [Int] -- stack containing temporaries removed from the graph
-  , colors :: Map Int Int -- the color chosen by the algorithm for a node; for precolored
-                          -- nodes this is initialized to the given color.
+  , coloredNodes :: WorkSet -- nodes sucessfully colored
+  , selectStack :: [L.NodeId] -- stack containing temporaries removed from the graph
+  , colors :: Map L.NodeId Int -- the color chosen by the algorithm for a node; for precolored
+                               -- nodes this is initialized to the given color.
   {-
   *Move Sets*
   There are five sets of move instructions, and every move is
   in exactly one of these sets (after Build through the end of Main)
   -}
-  , coalescedMoves :: Set (Int, Int) -- moves that have been coalesced.
-  , constrainedMoves :: Set (Int, Int) -- moves whose source and target interfere
-  , frozenMoves :: Set (Int, Int) -- moves that will no longer be considered for coalescing
-  , worklistMoves :: Set (Int, Int) -- moves enabled for possible coalescing.
-  , activeMoves :: Set (Int, Int) -- moves not yet ready for coalescing.
-  , degree :: Map Int Int -- map containing the current degree of each node.
-  , alias :: Map Int Int -- when a move (u, v) has been coalesced, and v is put
-                         -- in coalescedNodes, then alias(v) = u
-  , adjSet :: Set (Int, Int) -- set of interference edges in the graph
-  , adjList :: Map Int (Set Int) -- adjacency list of graph: for each non-precolored
-                                 -- temporary u, adjList[u] is the set of notes that
+  , coalescedMoves :: MoveSet -- moves that have been coalesced.
+  , constrainedMoves :: MoveSet -- moves whose source and target interfere
+  , frozenMoves :: MoveSet -- moves that will no longer be considered for coalescing
+  , worklistMoves :: MoveSet -- moves enabled for possible coalescing.
+  , activeMoves :: MoveSet -- moves not yet ready for coalescing.
+  , degree :: Map L.NodeId Int -- map containing the current degree of each node.
+  , alias :: Map L.NodeId L.NodeId -- when a move (u, v) has been coalesced, and v is put
+                                   -- in coalescedNodes, then alias(v) = u
+  , adjSet :: MoveSet -- set of interference edges in the graph
+  , adjList :: Map L.NodeId (Set L.NodeId) -- adjacency list of graph: for each non-precolored
+                                 -- temporary u, adjList[u] is the set of nodes that
                                  -- interfere with u.
-  , moveList :: Map Int [(Int, Int)] -- mapping from node to the list of moves it is associated with
+  , moveList :: Map L.NodeId [(L.NodeId, L.NodeId)] -- mapping from node to the list of moves it is associated with
   }
 
 data AllocatorReadOnlyData = AllocatorReadOnlyData {
-    precolored :: Set Int -- machine registers, preassigned color
+    precolored :: Set L.NodeId -- machine registers, preassigned color
   , numColors :: Int
   }
 
@@ -80,7 +83,7 @@ color = undefined
 build :: L.IGraph ->
          Set Int -> -- initial allocations
          ( Map L.NodeId [(L.NodeId, L.NodeId)] -- moveList
-         , Set (L.NodeId, L.NodeId) -- worklistMoves
+         , MoveSet -- worklistMoves
          , Set L.TempId -- coloredNodes
          , Set L.NodeId -- precolored
          , Set L.NodeId -- initial
@@ -105,42 +108,42 @@ build (L.IGraph { L.graph=graph
     precoloredList = fmap
                    (\(_,n) -> Graph.nodeId n)
                    nodesInInit
-    precolored = Set.fromList precoloredList
+    precolored' = Set.fromList precoloredList
     colored = fmap
                 (\(t,_) -> t)
                 nodesInInit
-    initial = fmap
-                (\(_,_,n) -> Graph.nodeId n)
-                $ filter
-                    (\(isInTemp,_,_) -> not isInTemp)
-                    lookups
+    initial' = fmap
+                 (\(_,_,n) -> Graph.nodeId n)
+                 $ filter
+                     (\(isInTemp,_,_) -> not isInTemp)
+                     lookups
     movePairs = fmap
                   (\(n1, n2) -> (Graph.nodeId n1, Graph.nodeId n2))
                   moves
     movesToAddSrcs = fmap
                        (\m@(src,_) -> (src, m))
                        $ filter
-                           (\(src,_) -> Set.member src precolored)
+                           (\(src,_) -> Set.member src precolored')
                            movePairs
     movesToAddDsts = fmap
                        (\m@(_,dst) -> (dst, m))
                        $ filter
-                           (\(_,dst) -> Set.member dst precolored)
+                           (\(_,dst) -> Set.member dst precolored')
                            movePairs
     movesToAdd = movesToAddSrcs ++ movesToAddDsts
-    moveList = Map.fromList $ groupByKey movesToAdd
+    moveList' = Map.fromList $ groupByKey movesToAdd
   in
-    ( moveList
+    ( moveList'
     , Set.fromList movePairs
     , Set.fromList colored
-    , precolored
-    , Set.fromList initial )
+    , precolored'
+    , Set.fromList initial' )
   where
     groupByKey :: (Eq a, Ord a) => [(a, b)] -> [(a, [b])]
     groupByKey = map (\l -> (fst . head $ l, map snd l)) . groupBy ((==) `on` fst)
                  . sortBy (comparing fst)
 
-addEdge :: Set Int -> Int -> Int -> Allocator ()
+addEdge :: Set L.NodeId -> L.NodeId -> L.NodeId -> Allocator ()
 addEdge precolored' u v = do
   s1@AllocatorState {
          degree=degree'
@@ -175,14 +178,16 @@ addEdge precolored' u v = do
       s3 <- get
       put s3 { adjSet=adjSet'' }
 
-adjacent :: Int -> Allocator (Set Int)
+adjacent :: L.NodeId -> Allocator (Set L.NodeId)
 adjacent n = do
   AllocatorState { selectStack=selectStack'
                  , coalescedNodes=coalescedNodes'
                  , adjList=adjList' } <- get
-  pure $ (adjList' Map.! n) `Set.difference` (Set.fromList selectStack' `Set.union` coalescedNodes')
+  pure $ (adjList' Map.! n)
+         `Set.difference`
+         (Set.fromList selectStack' `Set.union` coalescedNodes')
 
-nodeMoves :: Int -> Allocator (Set (Int, Int))
+nodeMoves :: L.NodeId -> Allocator (MoveSet)
 nodeMoves n = do
   AllocatorState { activeMoves=activeMoves'
                  , worklistMoves=worklistMoves'
@@ -191,7 +196,7 @@ nodeMoves n = do
          `Set.intersection`
          (activeMoves' `Set.union` worklistMoves')
 
-moveRelated :: Int -> Allocator Bool
+moveRelated :: L.NodeId -> Allocator Bool
 moveRelated n = do
   moves <- nodeMoves n
   pure $ not $ Set.null moves
@@ -213,7 +218,7 @@ simplify = do
         adjacents <- adjacent n
         mapM_ decrementDegree $ adjacents
 
-decrementDegree :: Int -> Allocator ()
+decrementDegree :: L.NodeId -> Allocator ()
 decrementDegree m = do
   st@AllocatorState { degree=degree'
                     , spillWorklist=spillWorklist'
@@ -239,7 +244,7 @@ decrementDegree m = do
              , simplifyWorklist=simplifyWorklist'' }
       pure ()
 
-enableMoves :: [Int] -> Allocator ()
+enableMoves :: [L.NodeId] -> Allocator ()
 enableMoves nodes =
   mapM_ enableMoves2 nodes
   where
@@ -300,7 +305,7 @@ coalesce = do
         put st { worklistMoves=worklistMoves''
                , activeMoves=activeMoves'' }
 
-addWorkList :: Int -> Allocator ()
+addWorkList :: L.NodeId -> Allocator ()
 addWorkList u = do
   st@AllocatorState { freezeWorklist=freezeWorklist'
                     , simplifyWorklist=simplifyWorklist'
@@ -317,7 +322,7 @@ addWorkList u = do
     put st { freezeWorklist=freezeWorklist''
            , simplifyWorklist=simplifyWorklist'' }
 
-ok :: Int -> Int -> Allocator Bool
+ok :: L.NodeId -> L.NodeId -> Allocator Bool
 ok t r = do
   AllocatorState { degree=degree'
                  , adjSet=adjSet' } <- get
@@ -328,7 +333,7 @@ ok t r = do
          Set.member t precolored' ||
          Set.member (t, r) adjSet'
 
-conservative :: [Int] -> Allocator Bool
+conservative :: [L.NodeId] -> Allocator Bool
 conservative nodes = do
   AllocatorState { degree=degree' } <- get
   AllocatorReadOnlyData { numColors=numColors' } <- lift ask
@@ -340,7 +345,7 @@ conservative nodes = do
     hasSignificantDegree degree' numColors' n =
       degree' Map.! n >= numColors'
 
-getAlias :: Int -> Allocator Int
+getAlias :: L.NodeId -> Allocator L.NodeId
 getAlias n = do
   AllocatorState { coalescedNodes=coalescedNodes'
                  , alias=alias' } <- get
@@ -349,7 +354,7 @@ getAlias n = do
   else
     pure n
 
-combine :: Int -> Int -> Allocator ()
+combine :: L.NodeId -> L.NodeId -> Allocator ()
 combine u v = do
   s1@AllocatorState { freezeWorklist=freezeWorklist'
                     , spillWorklist=spillWorklist'
@@ -403,7 +408,7 @@ freeze = do
         freezeMoves u
     Nothing -> do pure ()
 
-freezeMoves :: Int -> Allocator ()
+freezeMoves :: L.NodeId -> Allocator ()
 freezeMoves u = do
   moves <- nodeMoves u
   mapM_ freezeMove moves
@@ -451,7 +456,7 @@ selectSpill = do
   where
     -- TODO! Note: avoid choosing nodes that are the tiny live ranges
     --       resulting from the fetches of previously spilled registers.
-    chooseASpill :: Set Int -> Maybe Int
+    chooseASpill :: Set L.NodeId -> Maybe L.NodeId
     chooseASpill = Set.lookupMin
 
 assignColors :: Allocator ()
