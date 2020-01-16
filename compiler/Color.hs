@@ -143,6 +143,46 @@ build (L.IGraph { L.graph=graph
     groupByKey = map (\l -> (fst . head $ l, map snd l)) . groupBy ((==) `on` fst)
                  . sortBy (comparing fst)
 
+data SpillFreezeOrSimplify = Spill | Freeze | Simplify
+
+isSpill :: SpillFreezeOrSimplify -> Bool
+isSpill Spill = True
+isSpill _ = False
+
+isFreeze :: SpillFreezeOrSimplify -> Bool
+isFreeze Freeze = True
+isFreeze _ = False
+
+isSimplify :: SpillFreezeOrSimplify -> Bool
+isSimplify Simplify = True
+isSimplify _ = False
+
+makeWorkList :: [L.NodeId] ->
+                Int ->
+                MoveSet ->
+                MoveSet ->
+                Map L.NodeId [(L.NodeId, L.NodeId)] ->
+                Map L.NodeId Int ->
+                (WorkSet, WorkSet, WorkSet)
+makeWorkList initials numColors' activeMoves' worklistMoves' moveList' degree' =
+  let
+    (spillWorklist', notHighDegree) = partition isHighDegree initials
+    (freezeWorklist', simplifyWorklist') = partition moveRelated' notHighDegree
+  in
+    ( Set.fromList spillWorklist'
+    , Set.fromList freezeWorklist'
+    , Set.fromList simplifyWorklist' )
+  where
+    isHighDegree :: L.NodeId -> Bool
+    isHighDegree n = degree' Map.! n >= numColors'
+
+    moveRelated' :: L.NodeId -> Bool
+    moveRelated' n = moveRelated2
+                       activeMoves'
+                       worklistMoves'
+                       moveList'
+                       n
+
 addEdge :: Set L.NodeId -> L.NodeId -> L.NodeId -> Allocator ()
 addEdge precolored' u v = do
   s1@AllocatorState {
@@ -192,14 +232,47 @@ nodeMoves n = do
   AllocatorState { activeMoves=activeMoves'
                  , worklistMoves=worklistMoves'
                  , moveList=moveList' } <- get
-  pure $ (Set.fromList $ moveList' Map.! n)
+  pure $ nodeMoves2
+           activeMoves'
+           worklistMoves'
+           moveList'
+           n
+
+nodeMoves2 :: MoveSet ->
+              MoveSet ->
+              Map L.NodeId [(L.NodeId, L.NodeId)] ->
+              L.NodeId ->
+              MoveSet
+nodeMoves2 activeMoves' worklistMoves' moveList' n =
+  (Set.fromList $ moveList' Map.! n)
          `Set.intersection`
          (activeMoves' `Set.union` worklistMoves')
 
 moveRelated :: L.NodeId -> Allocator Bool
 moveRelated n = do
-  moves <- nodeMoves n
-  pure $ not $ Set.null moves
+  AllocatorState { activeMoves=activeMoves'
+                 , worklistMoves=worklistMoves'
+                 , moveList=moveList' } <- get
+  pure $ moveRelated2
+           activeMoves'
+           worklistMoves'
+           moveList'
+           n
+
+moveRelated2 :: MoveSet ->
+                MoveSet ->
+                Map L.NodeId [(L.NodeId, L.NodeId)] ->
+                L.NodeId ->
+                Bool
+moveRelated2 activeMoves' worklistMoves' moveList' n =
+  let
+    moves = nodeMoves2
+              activeMoves'
+              worklistMoves'
+              moveList'
+              n
+  in
+    not $ Set.null moves
 
 simplify :: Allocator ()
 simplify = do
