@@ -143,27 +143,13 @@ build (L.IGraph { L.graph=graph
     groupByKey = map (\l -> (fst . head $ l, map snd l)) . groupBy ((==) `on` fst)
                  . sortBy (comparing fst)
 
-data SpillFreezeOrSimplify = Spill | Freeze | Simplify
-
-isSpill :: SpillFreezeOrSimplify -> Bool
-isSpill Spill = True
-isSpill _ = False
-
-isFreeze :: SpillFreezeOrSimplify -> Bool
-isFreeze Freeze = True
-isFreeze _ = False
-
-isSimplify :: SpillFreezeOrSimplify -> Bool
-isSimplify Simplify = True
-isSimplify _ = False
-
 makeWorkList :: [L.NodeId] ->
                 Int ->
                 MoveSet ->
                 MoveSet ->
                 Map L.NodeId [(L.NodeId, L.NodeId)] ->
                 Map L.NodeId Int ->
-                (WorkSet, WorkSet, WorkSet)
+                (WorkSet, WorkSet, WorkSet) -- spill, freeze, simplify
 makeWorkList initials numColors' activeMoves' worklistMoves' moveList' degree' =
   let
     (spillWorklist', notHighDegree) = partition isHighDegree initials
