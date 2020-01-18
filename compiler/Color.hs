@@ -128,10 +128,15 @@ color igraph initAlloc spillCost registers =
 
     loopAction :: Allocator ()
     loopAction = do
-      simplify
-      coalesce
-      freeze
-      selectSpill
+      AllocatorState { simplifyWorklist=simplifyWorklist'
+                     , worklistMoves=worklistMoves'
+                     , freezeWorklist=freezeWorklist'
+                     , spillWorklist=spillWorklist' } <- get
+      if      not $ null simplifyWorklist' then simplify
+      else if not $ null worklistMoves'    then coalesce
+      else if not $ null freezeWorklist'   then freeze
+      else if not $ null spillWorklist'    then selectSpill
+      else pure ()
 
     loopDone :: Allocator Bool
     loopDone = do
