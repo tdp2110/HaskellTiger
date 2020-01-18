@@ -119,6 +119,7 @@ color igraph initAlloc spillCost registers =
                                   , adjSet=undefined -- TODO!!!
                                   , adjList=undefined -- TODO!!!
                                   , moveList=moveList' }
+    ((), finalState) = runIdentity $ runReaderT (runStateT loop initialState) readOnlyData
   in
     undefined
   where
