@@ -6,7 +6,7 @@ import qualified Liveness as L
 import qualified X64Frame
 
 import Control.Monad (when, forM_)
-import Control.Monad.Loops (whileM_)
+import Control.Monad.Loops (whileM_, untilM_)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State (StateT, runStateT, put, get)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, ask)
@@ -72,12 +72,76 @@ type Allocator = StateT AllocatorState (
 
 type Allocation = Map TempId X64Frame.Register
 
-color :: L.IGraph
-      -> Allocation -- initial allocation, provided by Frame.tempMap
-      -> (Int -> Float) -- spillCost
-      -> [X64Frame.Register] -- available registers
-      -> (Allocation, [Int]) -- assignments using available registers, list of spills
-color = undefined
+color :: L.IGraph ->
+         Allocation -> -- initial allocation, provided by Frame.tempMap
+         (Int -> Float) -> -- spillCost
+         [X64Frame.Register] -> -- available registers
+         (Allocation, [Int]) -- assignments using available registers, list of spills
+color igraph initAlloc spillCost registers =
+  let
+    numColors' = length registers
+    initial' = Map.keysSet initAlloc
+    ( moveList'
+      , worklistMoves'
+      , coloredNodes'
+      , precolored'
+      , initial'' ) = build igraph initial'
+    activeMoves' = Set.empty
+    degree' = undefined  -- TODO!!!
+    ( spillWorklist'
+        , freezeWorklist'
+        , simplifyWorklist') = makeWorkList
+                                 (Set.toList initial'')
+                                 numColors'
+                                 activeMoves'
+                                 worklistMoves'
+                                 moveList'
+                                 degree'
+
+    readOnlyData = AllocatorReadOnlyData { precolored=precolored'
+                                         , numColors=numColors' }
+    initialState = AllocatorState { initial=initial''
+                                  , simplifyWorklist=undefined
+                                  , freezeWorklist=freezeWorklist'
+                                  , spillWorklist=spillWorklist'
+                                  , spilledNodes=Set.empty
+                                  , coalescedNodes=Set.empty
+                                  , coloredNodes=undefined -- TODO!
+                                  , selectStack=[]
+                                  , colors=undefined -- TODO!!
+                                  , coalescedMoves=Set.empty
+                                  , constrainedMoves=Set.empty
+                                  , frozenMoves=Set.empty
+                                  , worklistMoves=worklistMoves'
+                                  , activeMoves=activeMoves'
+                                  , degree=degree'
+                                  , alias=Map.empty
+                                  , adjSet=undefined -- TODO!!!
+                                  , adjList=undefined -- TODO!!!
+                                  , moveList=moveList' }
+  in
+    undefined
+  where
+    loop :: Allocator ()
+    loop = untilM_ loopAction loopDone
+
+    loopAction :: Allocator ()
+    loopAction = do
+      simplify
+      coalesce
+      freeze
+      selectSpill
+
+    loopDone :: Allocator Bool
+    loopDone = do
+      AllocatorState { simplifyWorklist=simplifyWorklist'
+                     , worklistMoves=worklistMoves'
+                     , freezeWorklist=freezeWorklist'
+                     , spillWorklist=spillWorklist' } <- get
+      pure $ null simplifyWorklist' &&
+             null worklistMoves' &&
+             null freezeWorklist' &&
+             null spillWorklist'
 
 -- | sets up initial moveList, worklistMoves, coloredNodes, precolored
 build :: L.IGraph ->
