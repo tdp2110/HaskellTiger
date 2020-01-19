@@ -52,6 +52,10 @@ data AllocatorState = AllocatorState {
   , frozenMoves :: MoveSet -- moves that will no longer be considered for coalescing
   , worklistMoves :: MoveSet -- moves enabled for possible coalescing.
   , activeMoves :: MoveSet -- moves not yet ready for coalescing.
+  , moveList :: Map L.NodeId [(L.NodeId, L.NodeId)] -- mapping from node to the list of moves it is associated with
+  {-
+  *Graph Stuff*
+  -}
   , degree :: Map L.NodeId Int -- map containing the current degree of each node.
   , alias :: Map L.NodeId L.NodeId -- when a move (u, v) has been coalesced, and v is put
                                    -- in coalescedNodes, then alias(v) = u
@@ -59,7 +63,6 @@ data AllocatorState = AllocatorState {
   , adjList :: Map L.NodeId (Set L.NodeId) -- adjacency list of graph: for each non-precolored
                                  -- temporary u, adjList[u] is the set of nodes that
                                  -- interfere with u.
-  , moveList :: Map L.NodeId [(L.NodeId, L.NodeId)] -- mapping from node to the list of moves it is associated with
   }
 
 data AllocatorReadOnlyData = AllocatorReadOnlyData {
@@ -87,42 +90,68 @@ color igraph initAlloc spillCost registers =
       , precolored'
       , initial'' ) = build igraph initial'
     activeMoves' = Set.empty
-    degree' = undefined  -- TODO!!!
-    ( spillWorklist'
-        , freezeWorklist'
-        , simplifyWorklist') = makeWorkList
-                                 (Set.toList initial'')
-                                 numColors'
-                                 activeMoves'
-                                 worklistMoves'
-                                 moveList'
-                                 degree'
+
+    state = AllocatorState { initial=initial''
+                           , simplifyWorklist=undefined
+                           , freezeWorklist=undefined
+                           , spillWorklist=undefined
+                           , spilledNodes=Set.empty
+                           , coalescedNodes=Set.empty
+                           , coloredNodes=undefined -- TODO!
+                           , selectStack=[]
+                           , colors=undefined -- TODO!!
+                           , coalescedMoves=Set.empty
+                           , constrainedMoves=Set.empty
+                           , frozenMoves=Set.empty
+                           , worklistMoves=worklistMoves'
+                           , activeMoves=activeMoves'
+                           , degree=Map.empty
+                           , alias=Map.empty
+                           , adjSet=undefined
+                           , adjList=undefined
+                           , moveList=moveList' }
 
     readOnlyData = AllocatorReadOnlyData { precolored=precolored'
                                          , numColors=numColors' }
-    initialState = AllocatorState { initial=initial''
-                                  , simplifyWorklist=undefined
-                                  , freezeWorklist=freezeWorklist'
-                                  , spillWorklist=spillWorklist'
-                                  , spilledNodes=Set.empty
-                                  , coalescedNodes=Set.empty
-                                  , coloredNodes=undefined -- TODO!
-                                  , selectStack=[]
-                                  , colors=undefined -- TODO!!
-                                  , coalescedMoves=Set.empty
-                                  , constrainedMoves=Set.empty
-                                  , frozenMoves=Set.empty
-                                  , worklistMoves=worklistMoves'
-                                  , activeMoves=activeMoves'
-                                  , degree=degree'
-                                  , alias=Map.empty
-                                  , adjSet=undefined -- TODO!!!
-                                  , adjList=undefined -- TODO!!!
-                                  , moveList=moveList' }
-    ((), finalState) = runIdentity $ runReaderT (runStateT loop initialState) readOnlyData
+
+    -- fill in adjSet, adjList, degree by traversing igraph
+    ((), state') = runIdentity $ runReaderT (runStateT buildGraph  state) readOnlyData
+
+    ( spillWorklist'
+        , freezeWorklist'
+        , simplifyWorklist' ) = makeWorkList
+                                  (Set.toList initial'')
+                                  numColors'
+                                  activeMoves'
+                                  worklistMoves'
+                                  moveList'
+                                  (degree state')
+
+    state'' = state' { simplifyWorklist=undefined
+                     , freezeWorklist=freezeWorklist'
+                     , spillWorklist=spillWorklist' }
+    ((), state''') = runIdentity $ runReaderT (runStateT loop state'') readOnlyData
+
+    -- extract color map, convert to Allocation. extract list of spills
   in
     undefined
   where
+    buildGraph :: Allocator ()
+    buildGraph =
+      let
+        graph = L.graph igraph
+      in do
+        AllocatorReadOnlyData { precolored=precolored' } <- lift ask
+        mapM_ (processNode precolored') $ Map.elems $ Graph.nodes graph
+
+    processNode :: Set L.NodeId  -> L.Node -> Allocator ()
+    processNode precolored' node =
+      let
+        nodeId = Graph.nodeId node
+        successors = Graph.succ node
+      in
+        mapM_ (addEdge precolored' nodeId) successors
+
     loop :: Allocator ()
     loop = untilM_ loopAction loopDone
 
@@ -136,7 +165,7 @@ color igraph initAlloc spillCost registers =
       else if not $ null worklistMoves'    then coalesce
       else if not $ null freezeWorklist'   then freeze
       else if not $ null spillWorklist'    then selectSpill
-      else pure ()
+      else                                      pure ()
 
     loopDone :: Allocator Bool
     loopDone = do
