@@ -82,7 +82,7 @@ color :: L.IGraph ->
          (Int -> Float) -> -- spillCost
          [X64Frame.Register] -> -- available registers
          (Allocation, [Int]) -- assignments using available registers, list of spills
-color igraph initAlloc spillCost registers =
+color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc spillCost registers =
   let
     numColors' = length registers
     allColors' = [0 .. numColors' - 1]
@@ -90,6 +90,16 @@ color igraph initAlloc spillCost registers =
     zippedRegColor = zip registers allColors'
     regToColor = Map.fromList zippedRegColor
     colorToReg = Map.fromList $ fmap swap zippedRegColor
+
+    initialColors = Map.fromList $
+      fmap
+        (\(tempId, reg) -> let
+                             nodeId = Graph.nodeId $ tnode Map.! tempId
+                             color = regToColor Map.! reg
+                           in
+                             (nodeId, color))
+        $ Map.toList initAlloc
+
     initial' = Map.keysSet initAlloc
     ( moveList'
       , worklistMoves'
@@ -106,7 +116,7 @@ color igraph initAlloc spillCost registers =
                            , coalescedNodes=Set.empty
                            , coloredNodes=initialColoredNodes
                            , selectStack=[]
-                           , colors=undefined -- TODO
+                           , colors=initialColors
                            , coalescedMoves=Set.empty
                            , constrainedMoves=Set.empty
                            , frozenMoves=Set.empty
@@ -146,12 +156,9 @@ color igraph initAlloc spillCost registers =
   where
     initialColoredNodes :: WorkSet
     initialColoredNodes =
-      let
-        tnode = L.tnode igraph
-      in
-        Set.fromList $ fmap
-                         (\tempId -> Graph.nodeId $ tnode Map.! tempId)
-                         $ Map.keys initAlloc
+      Set.fromList $ fmap
+                       (\tempId -> Graph.nodeId $ tnode Map.! tempId)
+                       $ Map.keys initAlloc
 
     initialColoreds :: Map L.NodeId Int
     initialColoreds = undefined
