@@ -97,9 +97,9 @@ color igraph initAlloc spillCost registers =
                            , spillWorklist=undefined
                            , spilledNodes=Set.empty
                            , coalescedNodes=Set.empty
-                           , coloredNodes=undefined -- TODO!
+                           , coloredNodes=initialColoredNodes
                            , selectStack=[]
-                           , colors=undefined -- TODO!!
+                           , colors=undefined -- TODO
                            , coalescedMoves=Set.empty
                            , constrainedMoves=Set.empty
                            , frozenMoves=Set.empty
@@ -136,6 +136,15 @@ color igraph initAlloc spillCost registers =
   in
     undefined
   where
+    initialColoredNodes :: WorkSet
+    initialColoredNodes =
+      let
+        tnode = L.tnode igraph
+      in
+        Set.fromList $ fmap
+                         (\tempId -> Graph.nodeId $ tnode Map.! tempId)
+                         $ Map.keys initAlloc
+
     buildGraph :: Allocator ()
     buildGraph =
       let
