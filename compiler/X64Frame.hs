@@ -171,7 +171,7 @@ freshFrame frameName x64Inst maybeDebug =
 
 data Register = RAX | RBX | RCX | RDX | RBP | RSI | RDI | RSP
               | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15
-  deriving (Eq)
+  deriving (Eq, Ord)
 
 instance Show Register where
   show RAX = "rax"

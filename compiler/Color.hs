@@ -18,6 +18,7 @@ import Data.Ord (comparing)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.Tuple (swap)
 
 
 type TempId = L.TempId
@@ -68,6 +69,7 @@ data AllocatorState = AllocatorState {
 data AllocatorReadOnlyData = AllocatorReadOnlyData {
     precolored :: Set L.NodeId -- machine registers, preassigned color
   , numColors :: Int
+  , allColors :: [Int]
   }
 
 type Allocator = StateT AllocatorState (
@@ -83,6 +85,11 @@ color :: L.IGraph ->
 color igraph initAlloc spillCost registers =
   let
     numColors' = length registers
+    allColors' = [0 .. numColors' - 1]
+
+    zippedRegColor = zip registers allColors'
+    regToColor = Map.fromList zippedRegColor
+    colorToReg = Map.fromList $ fmap swap zippedRegColor
     initial' = Map.keysSet initAlloc
     ( moveList'
       , worklistMoves'
@@ -112,7 +119,8 @@ color igraph initAlloc spillCost registers =
                            , moveList=moveList' }
 
     readOnlyData = AllocatorReadOnlyData { precolored=precolored'
-                                         , numColors=numColors' }
+                                         , numColors=numColors'
+                                         , allColors=allColors' }
 
     -- fill in adjSet, adjList, degree by traversing igraph
     ((), state') = runIdentity $ runReaderT (runStateT buildGraph  state) readOnlyData
@@ -144,6 +152,9 @@ color igraph initAlloc spillCost registers =
         Set.fromList $ fmap
                          (\tempId -> Graph.nodeId $ tnode Map.! tempId)
                          $ Map.keys initAlloc
+
+    initialColoreds :: Map L.NodeId Int
+    initialColoreds = undefined
 
     buildGraph :: Allocator ()
     buildGraph =
@@ -651,7 +662,8 @@ assignColors = do
                        , colors=colors'
                        , adjList=adjList' } <- get
      AllocatorReadOnlyData { precolored=precolored'
-                           , numColors=numColors' } <- lift ask
+                           , numColors=numColors'
+                           , allColors=allColors' } <- lift ask
      case selectStack' of
        (n:selectStack'') -> do
          adjacentAliases <- mapM getAlias $ Set.toList $ adjList' Map.! n
@@ -662,8 +674,7 @@ assignColors = do
            colorsAdjacent = fmap
                               (\a -> colors' Map.! a)
                               coloredAdjacentAliases
-           allColors = [0 .. numColors']
-           okColors = allColors \\ colorsAdjacent
+           okColors = allColors' \\ colorsAdjacent
            in
            case okColors of
              [] -> let
