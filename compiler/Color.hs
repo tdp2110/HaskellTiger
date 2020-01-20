@@ -106,6 +106,10 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc spillCost regis
       , coloredNodes'
       , precolored'
       , initial'' ) = build igraph initial'
+
+    initialColoredNodes = Set.map
+                            (\tempId -> Graph.nodeId $ tnode Map.! tempId)
+                            coloredNodes'
     activeMoves' = Set.empty
 
     state = AllocatorState { initial=initial''
@@ -124,8 +128,8 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc spillCost regis
                            , activeMoves=activeMoves'
                            , degree=Map.empty
                            , alias=Map.empty
-                           , adjSet=undefined
-                           , adjList=undefined
+                           , adjSet=Set.empty
+                           , adjList=Map.empty
                            , moveList=moveList' }
 
     readOnlyData = AllocatorReadOnlyData { precolored=precolored'
@@ -133,7 +137,7 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc spillCost regis
                                          , allColors=allColors' }
 
     -- fill in adjSet, adjList, degree by traversing igraph
-    ((), state') = runIdentity $ runReaderT (runStateT buildGraph  state) readOnlyData
+    ((), state') = runIdentity $ runReaderT (runStateT buildGraph state) readOnlyData
 
     ( spillWorklist'
         , freezeWorklist'
@@ -145,7 +149,7 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc spillCost regis
                                   moveList'
                                   (degree state')
 
-    state'' = state' { simplifyWorklist=undefined
+    state'' = state' { simplifyWorklist=simplifyWorklist'
                      , freezeWorklist=freezeWorklist'
                      , spillWorklist=spillWorklist' }
     ((), finalState) = runIdentity $ runReaderT (runStateT loop state'') readOnlyData
@@ -164,15 +168,6 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc spillCost regis
   in
     (finalAlloc, spills)
   where
-    initialColoredNodes :: WorkSet
-    initialColoredNodes =
-      Set.fromList $ fmap
-                       (\tempId -> Graph.nodeId $ tnode Map.! tempId)
-                       $ Map.keys initAlloc
-
-    initialColoreds :: Map L.NodeId Int
-    initialColoreds = undefined
-
     buildGraph :: Allocator ()
     buildGraph =
       let
@@ -679,7 +674,6 @@ assignColors = do
                        , colors=colors'
                        , adjList=adjList' } <- get
      AllocatorReadOnlyData { precolored=precolored'
-                           , numColors=numColors'
                            , allColors=allColors' } <- lift ask
      case selectStack' of
        (n:selectStack'') -> do
