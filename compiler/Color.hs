@@ -95,9 +95,9 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc spillCost regis
       fmap
         (\(tempId, reg) -> let
                              nodeId = Graph.nodeId $ tnode Map.! tempId
-                             color = regToColor Map.! reg
+                             colorId = regToColor Map.! reg
                            in
-                             (nodeId, color))
+                             (nodeId, colorId))
         $ Map.toList initAlloc
 
     initial' = Map.keysSet initAlloc
@@ -148,11 +148,21 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc spillCost regis
     state'' = state' { simplifyWorklist=undefined
                      , freezeWorklist=freezeWorklist'
                      , spillWorklist=spillWorklist' }
-    ((), state''') = runIdentity $ runReaderT (runStateT loop state'') readOnlyData
+    ((), finalState) = runIdentity $ runReaderT (runStateT loop state'') readOnlyData
 
-    -- extract color map, convert to Allocation. extract list of spills
+    finalAlloc = Map.fromList $
+                   fmap
+                     (\(nodeId, colorId) -> let
+                                            tempId = gtemp Map.! nodeId
+                                            reg = colorToReg Map.! colorId
+                                          in
+                                            (tempId, reg))
+                     $ Map.toList $ colors finalState
+    spills = fmap
+               (\nodeId -> gtemp Map.! nodeId)
+               $ Set.toList $ spilledNodes finalState
   in
-    undefined
+    (finalAlloc, spills)
   where
     initialColoredNodes :: WorkSet
     initialColoredNodes =
