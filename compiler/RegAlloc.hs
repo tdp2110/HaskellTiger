@@ -3,7 +3,9 @@ module RegAlloc where
 import qualified Assem
 import qualified Codegen
 import qualified Color
+import qualified Flow
 import qualified Frame
+import qualified Liveness
 import qualified Temp
 import qualified TreeIR
 import qualified X64Frame
@@ -24,7 +26,21 @@ alloc :: [Assem.Inst]
          , Color.Allocation
          , X64Frame.X64Frame
          , Temp.Generator )
-alloc = undefined
+alloc insts frame gen =
+  let
+    spillCost = \_ -> 1.0 :: Float -- TODO! use a better cost
+    (flowGraph, _) = Flow.instrsToGraph insts
+    (igraph, _) = Liveness.interferenceGraph flowGraph
+    x64 = X64Frame.x64 frame
+    initialAllocs = X64Frame.tempMap x64
+    registers = X64Frame.registers x64
+    (allocations, spills) = Color.color
+                              igraph
+                              initialAllocs
+                              spillCost
+                              registers
+  in
+    undefined
 
 newtype NewTemps = NewTemps [TempId]
 

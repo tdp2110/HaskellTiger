@@ -55,6 +55,9 @@ data X64 = X64 { rax :: Int
                , tempMap :: Map Int Register }
   deriving (Show)
 
+registers :: X64 -> [Register]
+registers x64' = Map.elems $ tempMap x64'
+
 data X64Frame = X64Frame { name :: Temp.Label
                          , formals :: [X64Access]
                          , locals :: [X64Access]
