@@ -13,6 +13,8 @@ import qualified X64Frame
 import Control.Monad (join)
 import Control.Monad.Trans.State (State, runState, put, get)
 import Data.Foldable (foldl')
+import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
@@ -41,6 +43,17 @@ alloc insts frame gen =
                               registers
   in
     undefined
+  where
+    isRedundant :: Color.Allocation -> Assem.Inst -> Bool
+    isRedundant allocation inst =
+      case inst of
+        Assem.MOVE { Assem.moveDst=moveDst
+                   , Assem.moveSrc=moveSrc } ->
+          case ( Map.lookup moveDst allocation
+               , Map.lookup moveSrc allocation ) of
+            (Just r1, Just r2) -> r1 == r2
+            _                  -> False
+        _                                    -> False
 
 newtype NewTemps = NewTemps [TempId]
 
