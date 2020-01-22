@@ -13,7 +13,6 @@ import qualified X64Frame
 import Control.Monad (join)
 import Control.Monad.Trans.State (State, runState, put, get)
 import Data.Foldable (foldl')
-import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -42,7 +41,20 @@ alloc insts frame gen =
                               spillCost
                               registers
   in
-    undefined
+    if null spills then
+      ( filter (\i -> not $ isRedundant allocations i) insts
+      , allocations
+      , frame
+      , gen)
+    else
+      let
+        (insts', _, frame', gen') = rewriteProgram
+                                      insts
+                                      frame
+                                      spills
+                                      gen
+      in
+        alloc insts' frame' gen'
   where
     isRedundant :: Color.Allocation -> Assem.Inst -> Bool
     isRedundant allocation inst =
@@ -59,16 +71,15 @@ newtype NewTemps = NewTemps [TempId]
 
 rewriteProgram :: [Assem.Inst]
                -> X64Frame.X64Frame
-               -> Set Int -- spills
+               -> [Int] -- spills
                -> Temp.Generator
                -> ([Assem.Inst], NewTemps, X64Frame.X64Frame, Temp.Generator)
 rewriteProgram insts frame spills gen =
   let
-    spillsList = Set.toList spills
     (accesses, (frame', gen')) =
-       runState (mapM allocLocal spillsList) (frame, gen)
+       runState (mapM allocLocal spills) (frame, gen)
     (insts', newTemps, gen'') =
-      foldl' spillTemp (insts, [], gen') $ zip spillsList accesses
+      foldl' spillTemp (insts, [], gen') $ zip spills accesses
   in
     (insts', NewTemps newTemps, frame', gen'')
   where
