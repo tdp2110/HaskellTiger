@@ -82,7 +82,7 @@ color :: L.IGraph ->
          (Int -> Float) -> -- spillCost
          [X64Frame.Register] -> -- available registers
          (Allocation, [Int]) -- assignments using available registers, list of spills
-color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc spillCost registers =
+color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers =
   let
     numColors' = length registers
     allColors' = [0 .. numColors' - 1]
@@ -100,7 +100,6 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc spillCost regis
                              (nodeId, colorId))
         $ Map.toList initAlloc
 
-    initial' = Map.keysSet initAlloc
     ( moveList'
       , worklistMoves'
       , coloredNodes'
@@ -168,6 +167,18 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc spillCost regis
   in
     (finalAlloc, spills)
   where
+    initial' :: Set TempId
+    initial' =
+      let
+        graph = L.graph igraph
+        nodeIds = fmap Graph.nodeId $ Map.elems $ Graph.nodes graph
+        tempIds = fmap (\nodeId -> gtemp Map.! nodeId) nodeIds
+        isNotInital = (\tempId -> case Map.lookup tempId initAlloc of
+                                    Just _ -> False
+                                    _      -> True)
+      in
+        Set.fromList $ filter isNotInital tempIds
+
     buildGraph :: Allocator ()
     buildGraph =
       let
