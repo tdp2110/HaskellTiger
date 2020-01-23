@@ -1,6 +1,5 @@
 module Color where
 
-import qualified Assem
 import qualified Graph
 import qualified Liveness as L
 import qualified X64Frame

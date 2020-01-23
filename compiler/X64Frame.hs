@@ -313,7 +313,7 @@ procEntryExit1 frame bodyExp gen =
         (TreeIR.makeSeq saves, TreeIR.makeSeq restores, g')
 
 -- | This function appends a "sink" instruction to the function body to tell the register allocator
--- that certain regisers are live at procedure exit. In the case of the Jouette machine, this is simply
+-- that certain regisers are live at procedure exit.
 -- fun procEntryExit2(frame, body) =
 --   body @
 --   [A.OPER{assem="",

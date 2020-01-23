@@ -44,12 +44,17 @@ compileToAsm text =
                                   step1
                                   ([], gen4)
                                   stmts'
+                insts' = X64Frame.procEntryExit2 frame insts
                 maxCallArgs = TreeIR.maxCallArgsStm bodyStm
-                insts' = X64Frame.procEntryExit3
-                           frame
-                           insts
-                           (X64Frame.MaxCallArgs maxCallArgs)
-                           (X64Frame.NumSpilledLocals 0) -- TODO set this based on register allocation
+                (insts'', _, frame', gen6) = RegAlloc.alloc
+                                                insts'
+                                                frame
+                                                gen5
+                insts''' = X64Frame.procEntryExit3
+                             frame'
+                             insts''
+                             (X64Frame.MaxCallArgs maxCallArgs)
+                             (X64Frame.NumSpilledLocals 0) -- TODO set this based on register allocation
                 formatAsm :: Assem.Inst -> String
                 formatAsm asm =
                   let
@@ -88,7 +93,7 @@ compileToAsm text =
                                                                 [moveSrc]
                                                                 Nothing
               in
-                (intercalate "\n" (fmap formatAsm insts'), gen5)
+                (intercalate "\n" (fmap formatAsm insts'''), gen6)
               where
                 step1 :: ([Assem.Inst], Temp.Generator) -> TreeIR.Stm -> ([Assem.Inst], Temp.Generator)
                 step1 (insts, g) stm =
