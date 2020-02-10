@@ -326,8 +326,9 @@ addEdge precolored' u v = do
           adjList'' =
             let adjList_u' = Set.insert v (adjList' Map.! u) in
               Map.insert u adjList_u' adjList'
+          oldDegree = Map.findWithDefault 0 u degree'
           degree'' =
-            Map.insert u ((degree' Map.! u) + 1) degree'
+            Map.insert u (oldDegree + 1) degree'
           in do
           put s1 { degree=degree''
                  , adjList=adjList'' }
@@ -336,8 +337,9 @@ addEdge precolored' u v = do
           adjList'' =
             let adjList_v' = Set.insert u (adjList' Map.! v) in
               Map.insert v adjList_v' adjList'
+          oldDegree = Map.findWithDefault 0 v degree'
           degree'' =
-            Map.insert v ((degree' Map.! v) + 1) degree'
+            Map.insert v (oldDegree + 1) degree'
           in do
           s2 <- get
           put s2 { degree=degree''
