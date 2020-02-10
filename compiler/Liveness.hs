@@ -92,13 +92,13 @@ interferenceGraph flowGraph =
             Set.empty
             $ Map.elems tempMap
         defs = accumTemps $ Flow.def flowGraph
-        uses = accumTemps $ Flow.def flowGraph
+        uses = accumTemps $ Flow.use flowGraph
       in
         Set.union defs uses
 
-    processNode ::    Map TempId Node
-                   -> (Flow.NodeId, Set TempId)
-                   -> IGraphBuilder()
+    processNode :: Map TempId Node ->
+                   (Flow.NodeId, Set TempId) ->
+                   IGraphBuilder()
     processNode tempToNode (flowNode, liveSet) =
       let
         defs = (Flow.def flowGraph) Map.! flowNode
@@ -114,15 +114,15 @@ interferenceGraph flowGraph =
                                 pure ()
           _               -> pure ()
 
-    addInterferenceEdges ::    Set TempId
-                            -> Map TempId Node
-                            -> Maybe (TempId, TempId) -- is the defined id a move?
-                            -> TempId
-                            -> IGraphBuilder ()
+    addInterferenceEdges :: Set TempId ->
+                            Map TempId Node ->
+                            Maybe (TempId, TempId) -> -- is the defined id a move?
+                            TempId ->
+                            IGraphBuilder ()
     addInterferenceEdges liveSet tempToNode isMove defdId =
       mapM_
         (\liveId -> let defdNode = tempToNode Map.! defdId
-                        liveNode = tempToNode Map.! liveId
+                        liveNode = (tempToNode Map.! liveId)
                         addEdgeAction = do
                           lift . lift $ G.addEdge defdNode liveNode
                           lift . lift $ G.addEdge liveNode defdNode
