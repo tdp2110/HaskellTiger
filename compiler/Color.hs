@@ -332,7 +332,7 @@ addEdge precolored' u v = do
       when (not (Set.member u precolored')) $
         let
           adjList'' =
-            let adjList_u' = Set.insert v (adjList' Map.! u) in
+            let adjList_u' = Set.insert v (Map.findWithDefault Set.empty u adjList') in
               Map.insert u adjList_u' adjList'
           oldDegree = Map.findWithDefault 0 u degree'
           degree'' =
@@ -343,7 +343,7 @@ addEdge precolored' u v = do
       when (not (Set.member v precolored')) $
         let
           adjList'' =
-            let adjList_v' = Set.insert u (adjList' Map.! v) in
+            let adjList_v' = Set.insert u (Map.findWithDefault Set.empty v adjList') in
               Map.insert v adjList_v' adjList'
           oldDegree = Map.findWithDefault 0 v degree'
           degree'' =
