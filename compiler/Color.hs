@@ -436,7 +436,7 @@ decrementDegree m = do
                     , simplifyWorklist=simplifyWorklist' } <- get
   isMoveRelated <- moveRelated m
   let
-    d = degree' Map.! m
+    d = Map.findWithDefault 0 m degree'
     degree'' = Map.insert m (d - 1) degree'
     spillWorklist'' = Set.delete m spillWorklist'
     freezeWorklist'' = if isMoveRelated then
