@@ -360,7 +360,7 @@ adjacent n = do
   AllocatorState { selectStack=selectStack'
                  , coalescedNodes=coalescedNodes'
                  , adjList=adjList' } <- get
-  pure $ (adjList' Map.! n)
+  pure $ (Map.findWithDefault Set.empty n adjList')
          `Set.difference`
          (Set.fromList selectStack' `Set.union` coalescedNodes')
 
