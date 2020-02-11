@@ -273,8 +273,14 @@ build (L.IGraph { L.graph=graph
                            movePairs
     movesToAdd = movesToAddSrcs ++ movesToAddDsts
     moveList' = Map.fromList $ groupByKey movesToAdd
+    nodeIds = fmap Graph.nodeId nodeList
+    nodesNoMoves = filter (\nodeId -> not $ Map.member nodeId moveList') nodeIds
+    moveList'' = foldl'
+                   (\acc nodeId -> Map.insert nodeId [] acc)
+                   moveList'
+                   nodesNoMoves
   in
-    ( moveList'
+    ( moveList''
     , Set.fromList movePairs
     , Set.fromList colored
     , precolored'
