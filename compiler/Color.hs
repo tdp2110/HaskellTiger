@@ -307,7 +307,9 @@ makeWorkList initials numColors' activeMoves' worklistMoves' moveList' degree' =
     , Set.fromList simplifyWorklist' )
   where
     isHighDegree :: L.NodeId -> Bool
-    isHighDegree n = degree' Map.! n >= numColors'
+    isHighDegree n = case Map.lookup n degree' of
+                       Just d -> d >= numColors'
+                       Nothing -> False
 
     moveRelated' :: L.NodeId -> Bool
     moveRelated' n = moveRelated2
