@@ -13,6 +13,7 @@ import Data.Function (on)
 import Data.Functor.Identity
 import Data.List
 import Data.Map (Map)
+import Data.Maybe (isJust)
 import Data.Ord (comparing)
 import qualified Data.Map as Map
 import Data.Set (Set)
@@ -90,14 +91,19 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers =
     regToColor = Map.fromList zippedRegColor
     colorToReg = Map.fromList $ fmap swap zippedRegColor
 
+    {-
+    TODO Next
+    problem is not all register temps appear in igraph tempMap.
+    -}
+
     initialColors = Map.fromList $
       fmap
-        (\(tempId, reg) -> let
-                             nodeId = Graph.nodeId $ tnode Map.! tempId
-                             colorId = regToColor Map.! reg
-                           in
-                             (nodeId, colorId))
-        $ Map.toList initAlloc
+        (\(Just nodeId, reg) -> (nodeId, regToColor Map.! reg))
+        $ filter
+          (\(maybeNodeId, _) -> isJust maybeNodeId)
+          $ fmap
+              (\(tempId, reg) -> (fmap Graph.nodeId $ Map.lookup tempId tnode, reg))
+              $ Map.toList initAlloc
 
     ( moveList'
       , worklistMoves'
