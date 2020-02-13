@@ -239,21 +239,6 @@ munchExp (TreeIR.BINOP (op, e1, e2)) =
                        TreeIR.RSHIFT -> "shr"
                        TreeIR.XOR -> "xor"
                        _ -> error $ "unsupported operator: " ++ (show oper)
-munchExp (TreeIR.CALL (TreeIR.NAME lab, args, escapes)) =
-  result (\r -> do
-                  operSrc <- mapM munchExp args
-                  x64 <- getArch
-                  saveRestoreAndSetupArgs
-                    (A.OPER { A.assem="\tcall `j0"
-                            , A.operDst=X64Frame.callDests x64
-                            , A.operSrc=operSrc
-                            , A.jump=Just [lab] })
-                    (A.MOVE { A.assem="\tmov `d0, `s0"
-                            , A.moveDst=r
-                            , A.moveSrc=X64Frame.rax x64 })
-                    operSrc
-                    escapes
-         )
 munchExp (TreeIR.CALL (expr, args, escapes)) =
   result (\r -> do
                   argRegs <- mapM munchExp args
@@ -261,9 +246,9 @@ munchExp (TreeIR.CALL (expr, args, escapes)) =
                   x64 <- getArch
                   saveRestoreAndSetupArgs
                     (A.OPER { A.assem="\tcall `s0"
-                           , A.operDst=X64Frame.callDests x64
-                           , A.operSrc=[exprReg] ++ argRegs
-                           , A.jump=Nothing })
+                            , A.operDst=X64Frame.callDests x64
+                            , A.operSrc=[exprReg] ++ argRegs
+                            , A.jump=Nothing })
                     (A.MOVE { A.assem="\tmov `d0, `s0"
                            , A.moveDst=r
                            , A.moveSrc=X64Frame.rax x64 })
@@ -302,7 +287,7 @@ munchExp (TreeIR.NAME lab@(Temp.Label (S.Symbol s))) =
                   pure [ A.OPER { A.assem="\tlea `d0, [rip + " ++ s ++ "]"
                                 , A.operDst=[r]
                                 , A.operSrc=[]
-                                , A.jump=Just [lab] } ]
+                                , A.jump=Nothing } ]
          )
 
 saveRestoreAndSetupArgs :: A.Inst -> A.Inst -> [Int] -> [Frame.EscapesOrNot]
