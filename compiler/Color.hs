@@ -161,10 +161,10 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers =
     finalAlloc = Map.fromList $
                    fmap
                      (\(nodeId, colorId) -> let
-                                            tempId = gtemp Map.! nodeId
-                                            reg = colorToReg Map.! colorId
-                                          in
-                                            (tempId, reg))
+                                              tempId = gtemp Map.! nodeId
+                                              reg = colorToReg Map.! colorId
+                                            in
+                                              (tempId, reg))
                      $ Map.toList $ colors finalState
     spills = fmap
                (\nodeId -> gtemp Map.! nodeId)
