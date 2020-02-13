@@ -282,7 +282,7 @@ munchExp (TreeIR.MEM expr) =
                                 , A.operSrc=[exprReg]
                                 , A.jump=Nothing } ]
          )
-munchExp (TreeIR.NAME lab@(Temp.Label (S.Symbol s))) =
+munchExp (TreeIR.NAME (Temp.Label (S.Symbol s))) =
   result (\r -> do
                   pure [ A.OPER { A.assem="\tlea `d0, [rip + " ++ s ++ "]"
                                 , A.operDst=[r]
