@@ -540,7 +540,7 @@ ok t r = do
   AllocatorReadOnlyData { numColors=numColors'
                         , precolored=precolored'
                         } <- lift ask
-  pure $ (degree' Map.! t < numColors') ||
+  pure $ (Map.findWithDefault 0 t degree' < numColors') ||
          Set.member t precolored' ||
          Set.member (t, r) adjSet'
 
