@@ -91,11 +91,6 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers =
     regToColor = Map.fromList zippedRegColor
     colorToReg = Map.fromList $ fmap swap zippedRegColor
 
-    {-
-    TODO Next
-    problem is not all register temps appear in igraph tempMap.
-    -}
-
     initialColors = Map.fromList $
       fmap
         (\(Just nodeId, reg) -> (nodeId, regToColor Map.! reg))
