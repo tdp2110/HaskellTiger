@@ -596,7 +596,7 @@ combine u v = do
       addEdge precolored' t u
       decrementDegree t
       )
-    when (degree' Map.! u >= numColors' &&
+    when (Map.findWithDefault 0 u degree' >= numColors' &&
          Set.member u freezeWorklist') $ let
            freezeWorklist'' = Set.delete u freezeWorklist'
            spillWorklist'' = Set.insert u spillWorklist'
