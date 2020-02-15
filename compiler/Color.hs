@@ -526,7 +526,7 @@ addWorkList u = do
   isMoveRelated <- moveRelated u
   when ((Set.member u precolored') &&
         not isMoveRelated &&
-        (degree' Map.! u < numColors')) $ let
+        (Map.findWithDefault 0 u degree' < numColors')) $ let
     freezeWorklist'' = Set.delete u freezeWorklist'
     simplifyWorklist'' = Set.insert u simplifyWorklist'
     in do
