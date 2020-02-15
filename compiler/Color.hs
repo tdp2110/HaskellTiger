@@ -435,25 +435,24 @@ decrementDegree m = do
                     , spillWorklist=spillWorklist'
                     , freezeWorklist=freezeWorklist'
                     , simplifyWorklist=simplifyWorklist' } <- get
+  AllocatorReadOnlyData { numColors=numColors' } <- lift ask
   isMoveRelated <- moveRelated m
+  adj_m <- adjacent m
   let
     d = Map.findWithDefault 0 m degree'
     degree'' = Map.insert m (d - 1) degree'
     spillWorklist'' = Set.delete m spillWorklist'
-    freezeWorklist'' = if isMoveRelated then
-                         Set.insert m freezeWorklist'
-                       else
-                         freezeWorklist'
-    simplifyWorklist'' = if isMoveRelated then
-                           simplifyWorklist'
-                         else
-                           Set.insert m simplifyWorklist'
+    (freezeWorklist'', simplifyWorklist'') = if isMoveRelated then
+                                               (Set.insert m freezeWorklist', simplifyWorklist')
+                                             else
+                                               (freezeWorklist', Set.insert m simplifyWorklist')
     in do
-      put st { degree=degree''
-             , spillWorklist=spillWorklist''
-             , freezeWorklist=freezeWorklist''
-             , simplifyWorklist=simplifyWorklist'' }
-      pure ()
+      when (d == numColors') $ do
+        enableMoves $ Set.toList $ Set.insert m adj_m
+        put st { degree=degree''
+               , spillWorklist=spillWorklist''
+               , freezeWorklist=freezeWorklist''
+               , simplifyWorklist=simplifyWorklist'' }
 
 enableMoves :: [L.NodeId] -> Allocator ()
 enableMoves nodes =
