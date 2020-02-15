@@ -506,8 +506,8 @@ coalesce = do
                , constrainedMoves=constrainedMoves'' }
         addWorkList u
         addWorkList v
-      else if Set.member u precolored' && (all (==True) adjacents_ok)
-                || not (Set.member u precolored') && isConservative then do
+      else if (Set.member u precolored' && (all (==True) adjacents_ok))
+                || (not (Set.member u precolored') && isConservative) then do
         put st { worklistMoves=worklistMoves''
                , coalescedMoves=coalescedMoves'' }
         combine u v
@@ -524,7 +524,7 @@ addWorkList u = do
   AllocatorReadOnlyData { numColors=numColors'
                         , precolored=precolored' } <- lift ask
   isMoveRelated <- moveRelated u
-  when ((Set.member u precolored') &&
+  when ((not $ Set.member u precolored') &&
         not isMoveRelated &&
         (Map.findWithDefault 0 u degree' < numColors')) $ let
     freezeWorklist'' = Set.delete u freezeWorklist'
