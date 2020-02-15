@@ -146,7 +146,7 @@ munchStm (TreeIR.MOVE (TreeIR.TEMP t, e2)) = do
               , A.jump = Nothing }
 munchStm m@(TreeIR.MOVE _) = error $ "codegen can't handle move: " ++ show m
 munchStm (TreeIR.JUMP (TreeIR.NAME lab, _)) =
-  emit A.OPER { A.assem="\tJMP `j0"
+  emit A.OPER { A.assem="\tjmp `j0"
               , A.operDst = []
               , A.operSrc = []
               , A.jump = Just [lab] }
@@ -159,23 +159,23 @@ munchStm (TreeIR.JUMP (e, labels)) = do
 munchStm (TreeIR.CJUMP (op, e1, e2, t, f)) = do
   src1 <- munchExp e1
   src2 <- munchExp e2
-  emit A.OPER { A.assem="\tcmp `s0, `s1" ++ (opToJump op) ++ " `j0\nJMP `j1"
+  emit A.OPER { A.assem="\tcmp `s0, `s1\n\t" ++ (opToJump op) ++ " `j0\n\tjmp `j1"
               , A.operDst = []
               , A.operSrc = [src1, src2]
               , A.jump = Just [t, f] }
   where
     opToJump :: TreeIR.Relop -> String
     opToJump oper = case oper of
-                      TreeIR.EQ -> "JE"
-                      TreeIR.NE -> "JNE"
-                      TreeIR.LT -> "JL"
-                      TreeIR.LE -> "JLE"
-                      TreeIR.ULT -> "JL"
-                      TreeIR.ULE -> "JLE"
-                      TreeIR.GT -> "JG"
-                      TreeIR.GE -> "JGE"
-                      TreeIR.UGT -> "JG"
-                      TreeIR.UGE -> "JGE"
+                      TreeIR.EQ -> "je"
+                      TreeIR.NE -> "jne"
+                      TreeIR.LT -> "jl"
+                      TreeIR.LE -> "jle"
+                      TreeIR.ULT -> "jl"
+                      TreeIR.ULE -> "jle"
+                      TreeIR.GT -> "jg"
+                      TreeIR.GE -> "jge"
+                      TreeIR.UGT -> "jg"
+                      TreeIR.UGE -> "jge"
 
 munchExp :: TreeIR.Exp -> CodeGenerator Int
 munchExp (TreeIR.CONST c) =
