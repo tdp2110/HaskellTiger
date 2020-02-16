@@ -345,17 +345,20 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgs) (NumSpilledLocals numSpil
   let
     (label:bodyAsm') = bodyAsm
     stackSize = maxCallArgs + numEscapingLocals + numSpilledLocals
+    stackAdjustment = if stackSize /= 0 then
+                        [ Assem.OPER { Assem.assem="\tsub `d0, " ++ (show stackSize)
+                                    , Assem.operDst=[rsp $ x64 frame]
+                                    , Assem.operSrc=[]
+                                    , Assem.jump=Nothing } ]
+                      else
+                        []
     prologue = [ Assem.OPER { Assem.assem="\tpush `d0" ++ (fmtDebug frame)
                             , Assem.operDst=[rsp $ x64 frame]
                             , Assem.operSrc=[rbp $ x64 frame]
                             , Assem.jump=Nothing }
                , Assem.MOVE { Assem.assem="\tmov `d0, `s0"
                             , Assem.moveDst=rbp $ x64 frame
-                            , Assem.moveSrc=rsp $ x64 frame }
-               , Assem.OPER { Assem.assem="\tsub `d0, " ++ (show stackSize)
-                            , Assem.operDst=[rsp $ x64 frame]
-                            , Assem.operSrc=[]
-                            , Assem.jump=Nothing } ]
+                            , Assem.moveSrc=rsp $ x64 frame } ] ++ stackAdjustment
     epilogue = [ Assem.OPER { Assem.assem="\tadd `d0, " ++ (show stackSize)
                             , Assem.operDst=[rsp $ x64 frame]
                             , Assem.operSrc=[]

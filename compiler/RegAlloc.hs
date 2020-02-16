@@ -10,11 +10,15 @@ import qualified Temp
 import qualified TreeIR
 import qualified X64Frame
 
+import qualified Graph
+
 import Control.Monad (join)
 import Control.Monad.Trans.State (State, runState, put, get)
 import Data.Foldable (foldl')
 import qualified Data.Map as Map
+import Debug.Trace
 
+debug = flip trace
 
 type TempId = Color.TempId
 
@@ -40,7 +44,7 @@ alloc insts frame gen =
                               registers
   in
     if null spills then
-      ( filter (\i -> not $ isRedundant allocations i) insts
+      ( filter (\i -> not $ isRedundant allocations i) insts `debug` show insts
       , allocations
       , frame
       , gen)
@@ -63,7 +67,7 @@ alloc insts frame gen =
                , Map.lookup moveSrc allocation ) of
             (Just r1, Just r2) -> r1 == r2
             _                  -> False
-        _                                    -> False
+        _                      -> False
 
 newtype NewTemps = NewTemps [TempId]
 

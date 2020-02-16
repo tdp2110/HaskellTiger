@@ -32,7 +32,7 @@ toDot g =
   let
     graphBody = execWriter $ dotBuilder $ nodes g
   in
-    "digraph {\n" ++ graphBody ++ "}"
+    "graph {\n" ++ graphBody ++ "}"
   where
   dotBuilder m = mapM_ processNode $ Map.toList m
 
@@ -45,7 +45,7 @@ toDot g =
   fmtNode n = indent ++ (dotId n) ++ " [label=\"" ++ (show n) ++ "\"];\n"
   fmtSuccs n succs = mapM_ (fmtEdge n) succs
   fmtEdge n1 n2 = do
-    tell $ indent ++ (dotId n1) ++ " -> " ++ (dotId n2) ++ ";\n"
+    tell $ indent ++ (dotId n1) ++ " -- " ++ (dotId n2) ++ ";\n"
 
 newGraph :: a -> Graph a
 newGraph firstId = Graph { nodes=Map.empty

@@ -140,10 +140,9 @@ munchStm (TreeIR.MOVE (TreeIR.MEM e1, e2)) = do
               , A.jump = Nothing }
 munchStm (TreeIR.MOVE (TreeIR.TEMP t, e2)) = do
   src <- munchExp e2
-  emit A.OPER { A.assem="\tmov `d0, `s0"
-              , A.operDst = [t]
-              , A.operSrc = [src]
-              , A.jump = Nothing }
+  emit A.MOVE { A.assem="\tmov `d0, `s0"
+              , A.moveDst = t
+              , A.moveSrc = src }
 munchStm m@(TreeIR.MOVE _) = error $ "codegen can't handle move: " ++ show m
 munchStm (TreeIR.JUMP (TreeIR.NAME lab, _)) =
   emit A.OPER { A.assem="\tjmp `j0"

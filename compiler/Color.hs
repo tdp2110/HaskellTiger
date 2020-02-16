@@ -65,12 +65,34 @@ data AllocatorState = AllocatorState {
                                  -- temporary u, adjList[u] is the set of nodes that
                                  -- interfere with u.
   }
+  deriving (Show)
+
+showAdj :: AllocatorState -> String
+showAdj (AllocatorState { adjSet=adjSet'
+                        , coalescedNodes=coalescedNodes'
+                        , worklistMoves=worklistMoves'
+                        , selectStack=selectStack' }) =
+  "graph {\n\t" ++ edges ++ "\n\t" ++  moves ++ "\n}"
+  where
+    edges = intercalate "\n\t" $ fmap showEdge filteredEdges
+    moves = intercalate "\n\t" $ fmap (\e -> showEdge e ++ " [style=dotted]")
+                               $ filterNodes
+                               $ Set.toList worklistMoves'
+    showEdge (nodeId1, nodeId2) = (show nodeId1) ++ " -- " ++ (show nodeId2)
+    filterDone = filter (\(a,b) -> ( not $ elem a selectStack')
+                                        && (not $ elem a coalescedNodes')
+                                        && (not $ elem b selectStack')
+                                        && (not $ elem b coalescedNodes')
+                                   )
+    filterLess = filter (uncurry (<))
+    filterNodes = filterDone . filterLess
+    filteredEdges = filterNodes $ Set.toList adjSet'
 
 data AllocatorReadOnlyData = AllocatorReadOnlyData {
     precolored :: Set L.NodeId -- machine registers, preassigned color
   , numColors :: Int
   , allColors :: [Int]
-  }
+  } deriving (Show)
 
 type Allocator = StateT AllocatorState (
                    ReaderT AllocatorReadOnlyData Identity)
@@ -89,7 +111,8 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers =
 
     zippedRegColor = zip registers allColors'
     regToColor = Map.fromList zippedRegColor
-    colorToReg = Map.fromList $ fmap swap zippedRegColor
+    tempMap = Map.map Graph.nodeId tnode
+    colorToReg = Map.fromList $ fmap swap zippedRegColor `debug` show ("initAlloc: ", initAlloc, "tempMap", tempMap)
 
     initialColors = Map.fromList $
       fmap
@@ -103,15 +126,14 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers =
     ( moveList'
       , worklistMoves'
       , coloredNodes'
-      , precolored'
-      , initial'' ) = build igraph initial'
+      , precolored' ) = build igraph $ Set.fromList $ Map.keys initAlloc
 
     initialColoredNodes = Set.map
                             (\tempId -> Graph.nodeId $ tnode Map.! tempId)
                             coloredNodes'
     activeMoves' = Set.empty
 
-    state = AllocatorState { initial=initial''
+    state = AllocatorState { initial=initial'
                            , simplifyWorklist=undefined
                            , freezeWorklist=undefined
                            , spillWorklist=undefined
@@ -119,7 +141,7 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers =
                            , coalescedNodes=Set.empty
                            , coloredNodes=initialColoredNodes
                            , selectStack=[]
-                           , colors=initialColors
+                           , colors=initialColors `debug` show ("initialColors", initialColors)
                            , coalescedMoves=Set.empty
                            , constrainedMoves=Set.empty
                            , frozenMoves=Set.empty
@@ -141,7 +163,7 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers =
     ( spillWorklist'
         , freezeWorklist'
         , simplifyWorklist' ) = makeWorkList
-                                  (Set.toList initial'')
+                                  (Set.toList initial')
                                   numColors'
                                   activeMoves'
                                   worklistMoves'
@@ -151,7 +173,7 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers =
     state'' = state' { simplifyWorklist=simplifyWorklist'
                      , freezeWorklist=freezeWorklist'
                      , spillWorklist=spillWorklist' }
-    ((), finalState) = runIdentity $ runReaderT (runStateT loop state'') readOnlyData
+    ((), finalState) = runIdentity $ runReaderT (runStateT (loop >> assignColors) state'') readOnlyData
 
     finalAlloc = Map.fromList $
                    fmap
@@ -161,23 +183,27 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers =
                                             in
                                               (tempId, reg))
                      $ Map.toList $ colors finalState
+
     spills = fmap
-               (\nodeId -> gtemp Map.! nodeId)
-               $ Set.toList $ spilledNodes finalState
+               (\nodeId -> case Map.lookup nodeId gtemp of
+                             Just t -> t
+                             Nothing -> error $ "couldn't find " ++ (show nodeId) ++ " in " ++ (show gtemp))
+               $ Set.toList $ spilledNodes finalState -- `debug` ((show tempMap) ++ "\n" ++ (show finalState))
   in
-    (finalAlloc, spills)
+    (finalAlloc, spills) `debug` ("initAlloc: " ++ (show initAlloc) ++ "\nalloc: " ++ (show finalAlloc) ++
+                                 "\nspills: " ++ (show spills))
   where
-    initial' :: Set TempId
+    initial' :: Set L.NodeId
     initial' =
       let
         graph = L.graph igraph
         nodeIds = fmap Graph.nodeId $ Map.elems $ Graph.nodes graph
-        tempIds = fmap (\nodeId -> gtemp Map.! nodeId) nodeIds
-        isNotInital = (\tempId -> case Map.lookup tempId initAlloc of
+        tempIds = fmap (\nodeId -> (gtemp Map.! nodeId, nodeId)) nodeIds
+        isNotInital = (\(tempId,_) -> case Map.lookup tempId initAlloc of
                                     Just _ -> False
                                     _      -> True)
       in
-        Set.fromList $ filter isNotInital tempIds
+        Set.fromList $ fmap snd $ filter isNotInital tempIds
 
     buildGraph :: Allocator ()
     buildGraph =
@@ -200,14 +226,14 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers =
 
     loopAction :: Allocator ()
     loopAction = do
-      AllocatorState { simplifyWorklist=simplifyWorklist'
+      s@AllocatorState { simplifyWorklist=simplifyWorklist'
                      , worklistMoves=worklistMoves'
                      , freezeWorklist=freezeWorklist'
                      , spillWorklist=spillWorklist' } <- get
-      if      not $ null simplifyWorklist' then simplify
-      else if not $ null worklistMoves'    then coalesce
-      else if not $ null freezeWorklist'   then freeze
-      else if not $ null spillWorklist'    then selectSpill
+      if      not $ null simplifyWorklist' then simplify `debug` ("\n\nSIMPLIFY:\n" ++ (showAdj s))
+      else if not $ null worklistMoves'    then coalesce `debug` ("\n\nCOALESCE:\n" ++ (showAdj s))
+      else if not $ null freezeWorklist'   then freeze `debug` ("\n\nFREEZE:\n" ++ (showAdj s))
+      else if not $ null spillWorklist'    then selectSpill `debug` ("\nSELECT SPILL:\n" ++ (showAdj s))
       else                                      pure ()
 
     loopDone :: Allocator Bool
@@ -228,7 +254,6 @@ build :: L.IGraph ->
          , MoveSet -- worklistMoves
          , Set L.TempId -- coloredNodes
          , Set L.NodeId -- precolored
-         , Set L.NodeId -- initial
          )
 build (L.IGraph { L.graph=graph
                 , L.gtemp=gtemp
@@ -245,32 +270,27 @@ build (L.IGraph { L.graph=graph
     nodesInInit = fmap
                     (\(_,t,n) -> (t,n))
                     $ filter
-                        (\(isInTemp,_,_) -> isInTemp)
+                        (\(tempIsInitial,_,_) -> tempIsInitial)
                         lookups
-    precoloredList = fmap
-                   (\(_,n) -> Graph.nodeId n)
-                   nodesInInit
-    precolored' = Set.fromList precoloredList
+    precolored' = Set.fromList $ fmap
+                                   (\(_,n) -> Graph.nodeId n)
+                                   nodesInInit
     colored = fmap
                 (\(t,_) -> t)
                 nodesInInit
-    initial' = fmap
-                 (\(_,_,n) -> Graph.nodeId n)
-                 $ filter
-                     (\(isInTemp,_,_) -> not isInTemp)
-                     lookups
     movePairs = fmap
                   (\(n1, n2) -> (Graph.nodeId n1, Graph.nodeId n2))
                   moves
+    notPrecolored = not . flip Set.member precolored'
     movesToAddSrcs = fmap
                        (\m@(src,_) -> (src, m))
                        $ filter
-                           (\(src,_) -> Set.member src precolored')
+                           (\(src,_) -> notPrecolored src)
                            movePairs
     movesToAddDsts = fmap
                        (\m@(_,dst) -> (dst, m))
                        $ filter
-                           (\(_,dst) -> Set.member dst precolored')
+                           (\(_,dst) -> notPrecolored dst)
                            movePairs
     movesToAdd = movesToAddSrcs ++ movesToAddDsts
     moveList' = Map.fromList $ groupByKey movesToAdd
@@ -284,8 +304,7 @@ build (L.IGraph { L.graph=graph
     ( moveList''
     , Set.fromList movePairs
     , Set.fromList colored
-    , precolored'
-    , Set.fromList initial' )
+    , precolored' )
   where
     groupByKey :: (Eq a, Ord a) => [(a, b)] -> [(a, [b])]
     groupByKey = map (\l -> (fst . head $ l, map snd l)) . groupBy ((==) `on` fst)
@@ -330,6 +349,7 @@ addEdge precolored' u v = do
     let
       adjSet'' = adjSet' `Set.union` Set.fromList [ (u,v), (v,u) ]
       in do
+      -- TODO: DRY this up
       when (not (Set.member u precolored')) $
         let
           adjList'' =
@@ -422,7 +442,7 @@ simplify = do
     let
       n = Set.findMin simplifyWorklist'
       simplifyWorklist'' = Set.delete n simplifyWorklist'
-      selectStack'' = (n:selectStack')
+      selectStack'' = (n:selectStack') `debug` ("simplifying " ++ (show n))
       in do
         put st{ simplifyWorklist=simplifyWorklist''
               , selectStack=selectStack''}
@@ -553,7 +573,7 @@ conservative nodes = do
       pure $ k < numColors'
   where
     hasSignificantDegree degree' numColors' n =
-      degree' Map.! n >= numColors'
+      Map.findWithDefault 0 n degree' >= numColors'
 
 getAlias :: L.NodeId -> Allocator L.NodeId
 getAlias n = do
@@ -580,7 +600,7 @@ combine u v = do
   else
     put s1 { spillWorklist=Set.delete v spillWorklist' }
   let
-    coalescedNodes'' = Set.insert v coalescedNodes'
+    coalescedNodes'' = Set.insert v coalescedNodes' `debug` ("coalescing " ++ (show (u, v)))
     alias'' = Map.insert v u alias'
     mv_u = moveList' Map.! u
     mv_v = moveList' Map.! v
@@ -678,14 +698,17 @@ assignColors = do
             st@AllocatorState { colors=colors' } <- get
             a <- getAlias n
             let
-              colors'' = Map.insert a (colors' Map.! n) colors'
+              color' = case Map.lookup a colors' of
+                         Just col -> col
+                         Nothing -> error $ "couldn't find a color for " ++ (show n) ++ " in colors " ++ show colors'
+              colors'' = Map.insert n color' colors'
               in do
               put st { colors=colors'' })
    coalescedNodes'
  where
    stackNotEmpty = do
      AllocatorState { selectStack=selectStack' } <- get
-     pure $ null selectStack'
+     pure $ not $ null selectStack'
 
    processStackElt = do
      st@AllocatorState { selectStack=selectStack'
@@ -703,7 +726,14 @@ assignColors = do
                                (\a -> Set.member a $ coloredNodes' `Set.union` precolored')
                                adjacentAliases
            colorsAdjacent = fmap
-                              (\a -> colors' Map.! a)
+                              (\a -> case Map.lookup a colors' of
+                                       Just c -> c
+                                       Nothing -> error $"couldn't find " ++ (show a) ++
+                                                        " in colors " ++ (show colors') ++
+                                                        "\ncoloredNodes: " ++ (show coloredNodes') ++
+                                                        "\nprecolored: " ++ (show precolored') ++
+                                                        "\nnode: " ++ (show n) ++
+                                                        "\nstate: " ++ (show st))
                               coloredAdjacentAliases
            okColors = allColors' \\ colorsAdjacent
            in
@@ -715,7 +745,10 @@ assignColors = do
                       , spilledNodes=spilledNodes'' }
              (c:_) -> let
                coloredNodes'' = Set.insert n coloredNodes'
-               colors'' = Map.insert n c colors'
+               colors'' = Map.insert n c colors' `debug` ("\nselectStack: " ++ (show selectStack') ++
+                                                          "\nadjacentAliases: " ++ (show adjacentAliases) ++
+                                                          "\ncolorsAdjacent: " ++ (show colorsAdjacent) ++
+                                                          "\ncoloring " ++ (show n) ++ " as " ++ (show c))
                in do
                put st { selectStack=selectStack''
                       , coloredNodes=coloredNodes''
