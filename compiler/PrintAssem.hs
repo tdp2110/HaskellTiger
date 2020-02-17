@@ -62,8 +62,8 @@ formatAsm alloc asm =
                                                 Nothing
 
 
-compileToAsm :: String -> String
-compileToAsm text =
+compileToAsm :: String -> Bool -> String
+compileToAsm text performRegAlloc =
   case Parser.parse text of
     Left err -> show err
     Right ast ->
@@ -87,10 +87,14 @@ compileToAsm text =
                                   stmts'
                 insts' = X64Frame.procEntryExit2 frame insts
                 maxCallArgs = TreeIR.maxCallArgsStm bodyStm
-                (insts'', alloc, frame', gen6) = RegAlloc.alloc
-                                                   insts'
-                                                   frame
-                                                   gen5
+                (insts'', alloc, frame', gen6) =
+                  if performRegAlloc then
+                    RegAlloc.alloc
+                      insts'
+                      frame
+                      gen5
+                  else
+                    (insts', X64Frame.tempMap x64, frame, gen5)
                 insts''' = X64Frame.procEntryExit3
                              frame'
                              insts''
@@ -120,4 +124,4 @@ main :: IO ()
 main = do
   args <- getArgs
   str <- readFile $ head args
-  putStrLn $ compileToAsm str
+  putStrLn $ compileToAsm str (not $ elem "noreg" args)
