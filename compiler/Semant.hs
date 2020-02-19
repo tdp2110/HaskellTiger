@@ -29,7 +29,7 @@ data SemantError = SemantError{what :: String, at :: A.Pos} deriving (Eq)
 instance Show SemantError where
   show (SemantError err pos) = "semantic issue at " ++ (show pos) ++ ": " ++ (show err)
 
-data ExpTy = ExpTy{exp :: Translate.Exp, ty :: Types.Ty } deriving (Show)
+data ExpTy = ExpTy {exp :: Translate.Exp, ty :: Types.Ty } deriving (Show)
 
 transThunked :: A.Exp -> Either SemantError (ExpTy, FragList, Temp.Generator, X64Frame.X64)
 transThunked expr =
@@ -440,7 +440,7 @@ transExp (A.SeqExp expAndPosns) = do
     exps = fmap exp expTys
     transFn = case typ of
                 Types.UNIT -> Translate.seqStm exps
-                _ -> Translate.seqExp exps
+                _          -> Translate.seqExp exps
     in
     translate transFn typ
 transExp (A.AssignExp var expr pos) = do
@@ -747,13 +747,13 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
                          maybeTypenameAndPos
   ExpTy{exp=initExpr, ty=actualInitTy} <- transExp initExp
   env <- askEnv
-  st@SemantState{level=lev, generator=gen} <- get
+  st@SemantState{level=lev} <- get
   if actualInitTy == Types.NIL then
     case maybeTypeAnnotation of
       Just recTy@(Types.RECORD _) ->
         let
           (access, st') = allocLocal escape st env
-          (initTreeIR, gen') = Translate.initExp access lev initExpr gen
+          (initTreeIR, gen') = Translate.initExp access lev initExpr $ generator st'
         in do
           put st'{generator=gen'}
           pure ( env{ venv'=Map.insert
@@ -767,14 +767,14 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
       result =
         let
           (access, st') = allocLocal escape st env
-          (initTreeIR, gen') = Translate.initExp access lev initExpr gen
+          (initTreeIR, gen') = Translate.initExp access lev initExpr $ generator st'
         in do
           put st'{generator=gen'}
           pure ( env { venv'=Map.insert
                                name
                                (Env.VarEntry access actualInitTy)
                                (venv' env) }
-                 , [initTreeIR] )
+               , [initTreeIR] )
     in
       case maybeTypeAnnotation of
         Just typeAnnotation ->
