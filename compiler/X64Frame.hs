@@ -359,11 +359,15 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgs) (NumSpilledLocals numSpil
                , Assem.MOVE { Assem.assem="\tmov `d0, `s0"
                             , Assem.moveDst=rbp $ x64 frame
                             , Assem.moveSrc=rsp $ x64 frame } ] ++ stackAdjustment
-    epilogue = [ Assem.OPER { Assem.assem="\tadd `d0, " ++ (show stackSize)
-                            , Assem.operDst=[rsp $ x64 frame]
-                            , Assem.operSrc=[]
-                            , Assem.jump=Nothing }
-               , Assem.OPER { Assem.assem="\tpop `d0"
+    epilogue = if stackSize /= 0 then
+                 [ Assem.OPER { Assem.assem="\tadd `d0, " ++ (show stackSize)
+                              , Assem.operDst=[rsp $ x64 frame]
+                              , Assem.operSrc=[]
+                              , Assem.jump=Nothing } ]
+                else
+                 []
+                ++
+               [ Assem.OPER { Assem.assem="\tpop `d0"
                             , Assem.operDst=[rbp $ x64 frame]
                             , Assem.operSrc=[]
                             , Assem.jump=Nothing }
