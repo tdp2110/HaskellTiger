@@ -125,7 +125,6 @@ interferenceGraph flowGraph =
                         liveNode = (tempToNode Map.! liveId)
                         addEdgeAction = do
                           lift . lift $ G.addEdge defdNode liveNode
-                          lift . lift $ G.addEdge liveNode defdNode
                     in case isMove of
                          Just (_, src) -> if liveId /= src then
                                               addEdgeAction
