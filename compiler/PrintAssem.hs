@@ -99,7 +99,6 @@ compileToAsm text performRegAlloc =
                              frame'
                              insts''
                              (X64Frame.MaxCallArgs maxCallArgs)
-                             (X64Frame.NumSpilledLocals 0) -- TODO set this based on register allocation
                 insts4 = filter notEmptyInst insts''' -- an empty instr is appended to function bodies
                                                       -- in order to communicate some liveness info to regalloc
               in

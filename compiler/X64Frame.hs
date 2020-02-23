@@ -331,19 +331,17 @@ procEntryExit2 frame bodyAsm =
             ]
 
 newtype MaxCallArgs = MaxCallArgs Int
-newtype NumSpilledLocals = NumSpilledLocals Int
 
 -- | Creates the procedure prologue and epilogue assembly language. Calculates the size of the
 -- outgoing parameter space in the frame. This is equal to the maximum number of outgoing parameters
 -- of any CALL instruction in the procedure body. Once this is known, the assembly language
 -- for procedure entry, stack pointer adjustment, and procedure exit can be put together;
 -- these are the _prologue_ and _epilogue_.
-procEntryExit3 :: X64Frame -> [Assem.Inst] -> MaxCallArgs -> NumSpilledLocals
-               -> [Assem.Inst]
-procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgs) (NumSpilledLocals numSpilledLocals) =
+procEntryExit3 :: X64Frame -> [Assem.Inst] -> MaxCallArgs -> [Assem.Inst]
+procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgs) =
   let
     (label:bodyAsm') = bodyAsm
-    stackSize = maxCallArgs + numEscapingLocals + numSpilledLocals
+    stackSize = maxCallArgs + numEscapingLocals
     stackAdjustment = if stackSize /=0 then
                         [ Assem.OPER { Assem.assem="\tsub `d0, " ++ (show stackSize)
                                      , Assem.operDst=[rsp $ x64 frame]
