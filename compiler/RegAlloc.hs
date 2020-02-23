@@ -139,23 +139,44 @@ rewriteProgram insts frame spills gen =
               put g'
               pure t
 
+        replace :: Eq a => a -> a -> a -> a
+        replace toReplace replacer query = if query == toReplace then replacer
+                                                                 else query
+
+        replaceAll :: Eq a => a -> a -> [a] -> [a]
+        replaceAll toReplace replacer = fmap $ replace toReplace replacer
+
         rewriteInst :: Assem.Inst -> State Temp.Generator ([Assem.Inst], [TempId])
         rewriteInst inst = do
+          readTemp <- newTemp
+          writeTemp <- newTemp
           (maybeLoad, maybeLoadTemp) <- if readsTemp inst then
-                                          do freshTemp <- newTemp
-                                             loadCode <- loadCodeFn freshTemp
-                                             pure (loadCode, [freshTemp])
+                                          do loadCode <- loadCodeFn readTemp
+                                             pure (loadCode, [readTemp])
                                         else
                                           pure ([], [])
           (maybeStore, maybeStoreTemp) <- if writesTemp inst then
-                                            do freshTemp <- newTemp
-                                               storeCode <- storeCodeFn freshTemp
-                                               pure (storeCode, [freshTemp])
+                                            do storeCode <- storeCodeFn writeTemp
+                                               pure (storeCode, [writeTemp])
                                           else
                                             pure ([], [])
+          let
+            inst' = case inst of
+                      i@Assem.OPER { Assem.operSrc=operSrc } ->
+                        i { Assem.operSrc=replaceAll tempId readTemp operSrc }
+                      i@Assem.LABEL {} -> i
+                      i@Assem.MOVE { Assem.moveSrc=moveSrc } ->
+                        i { Assem.moveSrc=replace tempId readTemp moveSrc }
 
-          pure ( maybeLoad ++ [inst] ++ maybeStore
-               , maybeLoadTemp ++ maybeStoreTemp)
+            inst'' = case inst' of
+                       i@Assem.OPER { Assem.operDst=operDst } ->
+                         i { Assem.operDst=replaceAll tempId writeTemp operDst }
+                       i@Assem.LABEL {} -> i
+                       i@Assem.MOVE { Assem.moveDst=moveDst } ->
+                         i { Assem.moveDst = replace tempId writeTemp moveDst }
+            in do
+            pure ( maybeLoad ++ [inst''] ++ maybeStore
+                 , maybeLoadTemp ++ maybeStoreTemp)
 
         (toJoin, gen'') = runState (mapM rewriteInst insts') gen'
         insts'' = join $ fmap fst toJoin
