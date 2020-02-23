@@ -111,8 +111,7 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers =
 
     zippedRegColor = zip registers allColors'
     regToColor = Map.fromList zippedRegColor
-    tempMap = Map.map Graph.nodeId tnode
-    colorToReg = Map.fromList $ fmap swap zippedRegColor `debug` show ("initAlloc: ", initAlloc, "tempMap", tempMap)
+    colorToReg = Map.fromList $ fmap swap zippedRegColor
 
     initialColors = Map.fromList $
       fmap
@@ -141,7 +140,7 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers =
                            , coalescedNodes=Set.empty
                            , coloredNodes=initialColoredNodes
                            , selectStack=[]
-                           , colors=initialColors `debug` show ("initialColors", initialColors)
+                           , colors=initialColors
                            , coalescedMoves=Set.empty
                            , constrainedMoves=Set.empty
                            , frozenMoves=Set.empty
@@ -188,10 +187,9 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers =
                (\nodeId -> case Map.lookup nodeId gtemp of
                              Just t -> t
                              Nothing -> error $ "couldn't find " ++ (show nodeId) ++ " in " ++ (show gtemp))
-               $ Set.toList $ spilledNodes finalState -- `debug` ((show tempMap) ++ "\n" ++ (show finalState))
+               $ Set.toList $ spilledNodes finalState
   in
-    (finalAlloc, spills) `debug` ("initAlloc: " ++ (show initAlloc) ++ "\nalloc: " ++ (show finalAlloc) ++
-                                 "\nspills: " ++ (show spills))
+    (finalAlloc, spills)
   where
     initial' :: Set L.NodeId
     initial' =
@@ -226,14 +224,14 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers =
 
     loopAction :: Allocator ()
     loopAction = do
-      s@AllocatorState { simplifyWorklist=simplifyWorklist'
+      AllocatorState { simplifyWorklist=simplifyWorklist'
                      , worklistMoves=worklistMoves'
                      , freezeWorklist=freezeWorklist'
                      , spillWorklist=spillWorklist' } <- get
-      if      not $ null simplifyWorklist' then simplify `debug` ("\n\nSIMPLIFY:\n" ++ (showAdj s))
-      else if not $ null worklistMoves'    then coalesce `debug` ("\n\nCOALESCE:\n" ++ (showAdj s))
-      else if not $ null freezeWorklist'   then freeze `debug` ("\n\nFREEZE:\n" ++ (showAdj s))
-      else if not $ null spillWorklist'    then selectSpill `debug` ("\nSELECT SPILL:\n" ++ (showAdj s))
+      if      not $ null simplifyWorklist' then simplify
+      else if not $ null worklistMoves'    then coalesce
+      else if not $ null freezeWorklist'   then freeze
+      else if not $ null spillWorklist'    then selectSpill
       else                                      pure ()
 
     loopDone :: Allocator Bool
@@ -442,7 +440,7 @@ simplify = do
     let
       n = Set.findMin simplifyWorklist'
       simplifyWorklist'' = Set.delete n simplifyWorklist'
-      selectStack'' = (n:selectStack') `debug` ("simplifying " ++ (show n))
+      selectStack'' = (n:selectStack')
       in do
         put st{ simplifyWorklist=simplifyWorklist''
               , selectStack=selectStack''}
@@ -515,7 +513,7 @@ coalesce = do
       adjacent_u <- adjacent u
       adjacent_v <- adjacent v
       isConservative <- conservative $ Set.toList $ adjacent_u `Set.union` adjacent_v
-      adjacents_ok <- mapM (\t -> ok u t) $ Set.toList adjacent_v
+      adjacents_ok <- mapM (\t -> ok t u) $ Set.toList adjacent_v
       if u == v then do
         put st { worklistMoves=worklistMoves''
                , coalescedMoves=coalescedMoves'' }
@@ -535,17 +533,24 @@ coalesce = do
         put st { worklistMoves=worklistMoves''
                , activeMoves=activeMoves'' }
 
+findDegree :: L.NodeId -> Allocator Int
+findDegree n = do
+  AllocatorState { degree=degree' } <- get
+  AllocatorReadOnlyData { precolored=precolored' } <- lift ask
+  pure $ if elem n precolored' then 1000000 -- hack!!
+         else degree' Map.! n
+
 addWorkList :: L.NodeId -> Allocator ()
 addWorkList u = do
   st@AllocatorState { freezeWorklist=freezeWorklist'
-                    , simplifyWorklist=simplifyWorklist'
-                    , degree=degree' } <- get
+                    , simplifyWorklist=simplifyWorklist' } <- get
   AllocatorReadOnlyData { numColors=numColors'
                         , precolored=precolored' } <- lift ask
   isMoveRelated <- moveRelated u
+  d <- findDegree u
   when ((not $ Set.member u precolored') &&
         not isMoveRelated &&
-        (Map.findWithDefault 0 u degree' < numColors')) $ let
+        (d < numColors')) $ let
     freezeWorklist'' = Set.delete u freezeWorklist'
     simplifyWorklist'' = Set.insert u simplifyWorklist'
     in do
@@ -554,12 +559,12 @@ addWorkList u = do
 
 ok :: L.NodeId -> L.NodeId -> Allocator Bool
 ok t r = do
-  AllocatorState { degree=degree'
-                 , adjSet=adjSet' } <- get
+  AllocatorState { adjSet=adjSet' } <- get
   AllocatorReadOnlyData { numColors=numColors'
                         , precolored=precolored'
                         } <- lift ask
-  pure $ (Map.findWithDefault 0 t degree' < numColors') ||
+  d <- findDegree t
+  pure $ (d < numColors') ||
          Set.member t precolored' ||
          Set.member (t, r) adjSet'
 
@@ -600,7 +605,7 @@ combine u v = do
   else
     put s1 { spillWorklist=Set.delete v spillWorklist' }
   let
-    coalescedNodes'' = Set.insert v coalescedNodes' `debug` ("coalescing " ++ (show (u, v)))
+    coalescedNodes'' = Set.insert v coalescedNodes'
     alias'' = Map.insert v u alias'
     mv_u = moveList' Map.! u
     mv_v = moveList' Map.! v
@@ -692,7 +697,7 @@ selectSpill = do
 assignColors :: Allocator ()
 assignColors = do
  whileM_ stackNotEmpty processStackElt
- AllocatorState { coalescedNodes=coalescedNodes' } <- get
+ AllocatorState { coalescedNodes=coalescedNodes', coloredNodes=coloredNodes', spilledNodes=spilledNodes' } <- get
  mapM_
    (\n -> do
             st@AllocatorState { colors=colors' } <- get
@@ -700,7 +705,10 @@ assignColors = do
             let
               color' = case Map.lookup a colors' of
                          Just col -> col
-                         Nothing -> error $ "couldn't find a color for " ++ (show n) ++ " in colors " ++ show colors'
+                         Nothing -> error $ "couldn't find a color for " ++ (show n) ++
+                                                " (alias=" ++ (show a) ++ ") in colors " ++ (show colors') ++
+                                                "\ncoloredNodes = " ++ (show coloredNodes') ++
+                                                "\nspilledNodes = " ++ (show spilledNodes')
               colors'' = Map.insert n color' colors'
               in do
               put st { colors=colors'' })
@@ -714,13 +722,13 @@ assignColors = do
      st@AllocatorState { selectStack=selectStack'
                        , coloredNodes=coloredNodes'
                        , spilledNodes=spilledNodes'
-                       , colors=colors'
-                       , adjList=adjList' } <- get
+                       , colors=colors' } <- get
      AllocatorReadOnlyData { precolored=precolored'
                            , allColors=allColors' } <- lift ask
      case selectStack' of
        (n:selectStack'') -> do
-         adjacentAliases <- mapM getAlias $ Set.toList $ adjList' Map.! n
+         adjacents <- adjacent n
+         adjacentAliases <- mapM getAlias $ Set.toList $ adjacents
          let
            coloredAdjacentAliases = filter
                                (\a -> Set.member a $ coloredNodes' `Set.union` precolored')
@@ -745,10 +753,7 @@ assignColors = do
                       , spilledNodes=spilledNodes'' }
              (c:_) -> let
                coloredNodes'' = Set.insert n coloredNodes'
-               colors'' = Map.insert n c colors' `debug` ("\nselectStack: " ++ (show selectStack') ++
-                                                          "\nadjacentAliases: " ++ (show adjacentAliases) ++
-                                                          "\ncolorsAdjacent: " ++ (show colorsAdjacent) ++
-                                                          "\ncoloring " ++ (show n) ++ " as " ++ (show c))
+               colors'' = Map.insert n c colors'
                in do
                put st { selectStack=selectStack''
                       , coloredNodes=coloredNodes''

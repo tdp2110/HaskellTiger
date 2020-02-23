@@ -12,7 +12,6 @@ import qualified TreeIR
 import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
-
 import Prelude hiding (exp)
 
 
