@@ -100,9 +100,15 @@ compileToAsm text performRegAlloc =
                              insts''
                              (X64Frame.MaxCallArgs maxCallArgs)
                              (X64Frame.NumSpilledLocals 0) -- TODO set this based on register allocation
+                insts4 = filter notEmptyInst insts''' -- an empty instr is appended to function bodies
+                                                      -- in order to communicate some liveness info to regalloc
               in
-                (intercalate "\n" (fmap (formatAsm alloc) insts'''), gen6)
+                ((intercalate "\n" (fmap (formatAsm alloc) insts4) ++ "\n"), gen6)
               where
+                notEmptyInst :: Assem.Inst -> Bool
+                notEmptyInst (Assem.OPER { Assem.assem=assem } ) = assem /= ""
+                notEmptyInst _ = True
+
                 step1 :: ([Assem.Inst], Temp.Generator) -> TreeIR.Stm -> ([Assem.Inst], Temp.Generator)
                 step1 (insts, g) stm =
                   let

@@ -369,7 +369,7 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgs) (NumSpilledLocals numSpil
                              , Assem.operDst=[rbp $ x64 frame]
                              , Assem.operSrc=[]
                              , Assem.jump=Nothing }
-                , Assem.OPER { Assem.assem="\tret\n"
+                , Assem.OPER { Assem.assem="\tret"
                              , Assem.operDst=[rsp $ x64 frame]
                              , Assem.operSrc=[]
                              , Assem.jump=Nothing } ]
