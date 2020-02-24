@@ -227,7 +227,7 @@ newFrame x64Inst frameName maybeDebug gen escapes =
           case paramRegsRemaining of
             (paramReg:paramRegsRemaining') ->
               let
-                (t, gen'') = Temp.newtemp gen
+                (t, gen'') = Temp.newtemp gen'
                 move = TreeIR.MOVE (TreeIR.TEMP t, TreeIR.TEMP paramReg)
               in
                 ( gen''
