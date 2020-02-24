@@ -73,7 +73,7 @@ wordSize :: Int
 wordSize = 8
 
 exp :: X64Access -> TreeIR.Exp -> TreeIR.Exp
-exp (InFrame k) framePtr = TreeIR.MEM $ TreeIR.BINOP (TreeIR.PLUS, framePtr, TreeIR.CONST k)
+exp (InFrame k) framePtr = TreeIR.MEM $ TreeIR.BINOP (TreeIR.PLUS, framePtr, TreeIR.CONST $ k * wordSize)
 exp (InReg regNum) _ = TreeIR.TEMP regNum
 
 frameExp :: X64Frame -> TreeIR.Exp
@@ -341,7 +341,7 @@ procEntryExit3 :: X64Frame -> [Assem.Inst] -> MaxCallArgs -> [Assem.Inst]
 procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgs) =
   let
     (label:bodyAsm') = bodyAsm
-    stackSize = maxCallArgs + numEscapingLocals
+    stackSize = nextMultipleOf16 $ wordSize * (maxCallArgs + numEscapingLocals)
     stackAdjustment = if stackSize /=0 then
                         [ Assem.OPER { Assem.assem="\tsub `d0, " ++ (show stackSize)
                                      , Assem.operDst=[rsp $ x64 frame]
@@ -375,6 +375,9 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgs) =
   in
     [label] ++ prologue ++ bodyAsm' ++ epilogue
   where
+    nextMultipleOf16 :: Int -> Int
+    nextMultipleOf16 n = 16 * ((n + 15) `div` 16)
+
     fmtDebug :: X64Frame -> String
     fmtDebug (X64Frame { frameDebug=Just dbg }) = "\t\t ; " ++ show dbg
     fmtDebug _ = ""
