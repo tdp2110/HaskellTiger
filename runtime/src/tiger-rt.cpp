@@ -111,6 +111,8 @@ void tiger_exit(int64_t const retcode) {
 
 TgString *tiger_allocString(uint8_t const *const bytes,
                             int64_t const numBytes) {
+  AssertNotNull(bytes, __FUNCTION__);
+
   if (numBytes < 0) {
     std::cerr << "must pass a positive int64_t to " << __FUNCTION__ << ". Got "
               << numBytes << "\n";
@@ -118,7 +120,7 @@ TgString *tiger_allocString(uint8_t const *const bytes,
   }
 
   auto *const res = new (std::nothrow) TgString(std::string(
-      reinterpret_cast<char const *>(*bytes), static_cast<uint64_t>(numBytes)));
+      reinterpret_cast<char const *>(bytes), static_cast<uint64_t>(numBytes)));
   AssertNotNull(res, __FUNCTION__);
   return res;
 }
