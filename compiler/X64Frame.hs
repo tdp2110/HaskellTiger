@@ -290,7 +290,7 @@ procEntryExit1 frame bodyExp gen =
     getSaveRestores :: Temp.Generator -> (TreeIR.Stm, TreeIR.Stm, Temp.Generator)
     getSaveRestores g =
       let
-        calleeSavesRegs = calleeSaves $ x64 frame
+        calleeSavesRegs = (calleeSaves $ x64 frame) \\ [rbp $ x64 frame] -- rbp is pushed at function entry
         (calleeSavesTemps, g') = foldl'
                                    step
                                    ([], g)
@@ -350,8 +350,8 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgs) =
                       else
                         []
     prologue = [ Assem.OPER { Assem.assem="\tpush `d0" ++ (fmtDebug frame)
-                            , Assem.operDst=[rsp $ x64 frame]
-                            , Assem.operSrc=[rbp $ x64 frame]
+                            , Assem.operDst=[rbp $ x64 frame]
+                            , Assem.operSrc=[rsp $ x64 frame]
                             , Assem.jump=Nothing }
                , Assem.MOVE { Assem.assem="\tmov `d0, `s0"
                             , Assem.moveDst=rbp $ x64 frame

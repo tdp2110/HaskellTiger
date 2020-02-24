@@ -1,6 +1,6 @@
 let
     var x := 42
-    function f(x: int) = x + 1
+    function f(x: int) : int = x + 1
 in
-    f(x)
+    print(itoa(f(x)))
 end
