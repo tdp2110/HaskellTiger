@@ -71,7 +71,8 @@ compileToAsm text performRegAlloc =
         Left err -> show err
         Right (_, frags, gen, x64) ->
           let
-            header = "\t.section    __TEXT,__text,regular,pure_instructions\n" ++
+            header = "\t.globl _main\n" ++
+                     "\t.section    __TEXT,__text,regular,pure_instructions\n" ++
                      "\t.intel_syntax noprefix\n"
 
             emit :: X64Frame.Frag -> Temp.Generator -> (String, Temp.Generator)
