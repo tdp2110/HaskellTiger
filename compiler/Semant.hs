@@ -850,7 +850,7 @@ transDec (A.FunctionDec fundecs) = do
         paramEnv = Map.fromList $ fmap
                                     (\(sym,typ,_) -> (sym, Env.VarEntry (formalAccess sym) typ))
                                     formalsTys
-        bodyVEnv = Map.union venv paramEnv
+        bodyVEnv = Map.union paramEnv venv
         bodyEnv = env{venv'=bodyVEnv}
         formalAccess :: Symbol.Symbol -> Access
         formalAccess sym = case
@@ -858,7 +858,7 @@ transDec (A.FunctionDec fundecs) = do
             Just (Env.FunEntry{Env.level=funLev}) -> case
               lookup sym $ zip
                 (fmap A.fieldName funParams)
-                (tail $ formalAccesses $ funLev) -- drop first access, the static link
+                (tail $ formalAccesses funLev) -- drop first access, the static link
               of
                 Just acc -> acc
                 _ -> error $ "must not get here " ++ (show $ formalAccesses $ level st)
