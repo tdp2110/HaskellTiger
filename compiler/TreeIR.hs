@@ -21,7 +21,7 @@ data Exp =
   deriving (Eq)
 
 data Stm =
-    MOVE (Exp, Exp)
+    MOVE (Exp, Exp) -- (dst, src)
   | EXP Exp
   | JUMP (Exp, [Temp.Label])
   | CJUMP (Relop, Exp, Exp, Temp.Label, Temp.Label)
