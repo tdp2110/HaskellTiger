@@ -379,7 +379,7 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgs) =
     nextMultipleOf16 n = 16 * ((n + 15) `div` 16)
 
     fmtDebug :: X64Frame -> String
-    fmtDebug (X64Frame { frameDebug=Just dbg }) = "\t\t ; " ++ show dbg
+    fmtDebug (X64Frame { frameDebug=Just dbg }) = "\t\t ## " ++ show dbg
     fmtDebug _ = ""
 
     numEscapingLocals :: Int

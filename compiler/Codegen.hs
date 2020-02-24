@@ -307,12 +307,12 @@ saveRestoreAndSetupArgs callStm moveStm callArgs escapes = do
                      ++ restores
   where
     save :: (Int, Int) -> A.Inst
-    save (reg, temp) = A.MOVE { A.assem="\tmov `d0, `s0\t\t; caller saves"
+    save (reg, temp) = A.MOVE { A.assem="\tmov `d0, `s0\t\t## caller saves"
                               , A.moveDst = temp
                               , A.moveSrc = reg }
 
     restore :: (Int, Int) -> A.Inst
-    restore (reg, temp) = A.MOVE { A.assem="\tmov `d0, `s0\t\t; caller saves"
+    restore (reg, temp) = A.MOVE { A.assem="\tmov `d0, `s0\t\t## caller saves"
                                  , A.moveDst = reg
                                  , A.moveSrc = temp }
 
