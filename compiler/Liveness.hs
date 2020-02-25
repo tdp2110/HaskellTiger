@@ -102,10 +102,11 @@ interferenceGraph flowGraph =
     processNode tempToNode (flowNode, liveSet) =
       let
         defs = (Flow.def flowGraph) Map.! flowNode
-        --uses = (Flow.use flowGraph) Map.! flowNode
+        implicitInterferes = (Flow.implicitInterferes flowGraph) Map.! flowNode
         isMove = (Flow.ismove flowGraph) Map.! flowNode
       in do
         mapM_ (addInterferenceEdges liveSet tempToNode isMove) defs
+        mapM_ (addImplicitInterfere tempToNode) implicitInterferes
         case isMove of
           Just (dst, src) -> let dstNode = tempToNode Map.! dst
                                  srcNode = tempToNode Map.! src
@@ -113,6 +114,14 @@ interferenceGraph flowGraph =
                                 tell [(dstNode, srcNode)]
                                 pure ()
           _               -> pure ()
+
+    addImplicitInterfere :: Map TempId Node -> (TempId, TempId) -> IGraphBuilder ()
+    addImplicitInterfere tempToNode (temp1, temp2) =
+      let node1 = tempToNode Map.! temp1
+          node2 = tempToNode Map.! temp2 in
+      do
+        lift . lift $ G.addEdge node1 node2
+        pure ()
 
     addInterferenceEdges :: Set TempId ->
                             Map TempId Node ->
