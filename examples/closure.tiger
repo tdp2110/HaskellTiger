@@ -1,0 +1,6 @@
+let
+    var x := 42
+    function f(y: int) : int = x + y
+in
+    print(itoa(f(x)))
+end
