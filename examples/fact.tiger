@@ -5,5 +5,5 @@ let
         else
             n * fact(n - 1)
 in
-    print(itoa(fact(42)))
+    print(itoa(fact(10)))
 end

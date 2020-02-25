@@ -722,13 +722,15 @@ assignColors = do
      st@AllocatorState { selectStack=selectStack'
                        , coloredNodes=coloredNodes'
                        , spilledNodes=spilledNodes'
-                       , colors=colors' } <- get
+                       , colors=colors'
+                       , adjList=adjList' } <- get
      AllocatorReadOnlyData { precolored=precolored'
                            , allColors=allColors' } <- lift ask
      case selectStack' of
-       (n:selectStack'') -> do
-         adjacents <- adjacent n
-         adjacentAliases <- mapM getAlias $ Set.toList $ adjacents
+       (n:selectStack'') ->
+        let adjlist_n = Map.findWithDefault Set.empty n adjList' in
+        do
+         adjacentAliases <- mapM getAlias $ Set.toList adjlist_n
          let
            coloredAdjacentAliases = filter
                                (\a -> Set.member a $ coloredNodes' `Set.union` precolored')
