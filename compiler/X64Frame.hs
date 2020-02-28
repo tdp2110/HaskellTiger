@@ -83,7 +83,7 @@ externalCall :: Temp.Label -> [TreeIR.Exp] -> TreeIR.Exp
 externalCall (Temp.Label (Symbol.Symbol funname)) params =
   TreeIR.CALL ( TreeIR.NAME (Temp.Label (Symbol.Symbol $ "_" ++ funname)) -- hack for MacOS
               , params
-              , fmap (\_ -> Frame.NoEscape) params)
+              , fmap (\_ -> Frame.DoesNotEscape) params)
 
 accessExp :: X64Frame -> X64Access -> TreeIR.Exp
 accessExp frame acc = exp acc $ frameExp frame
@@ -223,7 +223,7 @@ newFrame x64Inst frameName maybeDebug gen escapes =
             -> (Temp.Generator, X64Frame, Int, [Int])
     step (gen', frame, numEscapesSeen, paramRegsRemaining) escapesOrNot =
       case escapesOrNot of
-        Frame.NoEscape ->
+        Frame.DoesNotEscape ->
           case paramRegsRemaining of
             (paramReg:paramRegsRemaining') ->
               let
@@ -245,14 +245,14 @@ newFrame x64Inst frameName maybeDebug gen escapes =
 
 allocLocal :: Temp.Generator -> X64Frame -> Frame.EscapesOrNot
   -> (Temp.Generator, X64Frame, X64Access)
-allocLocal gen frame escapesOrNot =
-  if Frame.escapes escapesOrNot then
+allocLocal gen frame escapesOrNot = case escapesOrNot of
+  Frame.Escapes ->
     let
       numLocals = length $ filter isInFrame $ locals frame
       access = InFrame $ -1 - numLocals
     in
       (gen, frame{locals=(locals frame) ++ [access]}, access)
-  else
+  Frame.DoesNotEscape ->
     let
       (regLabel, gen') = Temp.newtemp gen
       access = InReg regLabel

@@ -57,7 +57,7 @@ arbExp sz =
         funcExp <- expGen
         argSize <- choose (0, 2) :: Gen Int
         args <- vectorOf argSize expGen
-        pure $ T.CALL (funcExp, args, fmap (\_ -> Frame.NoEscape) args)
+        pure $ T.CALL (funcExp, args, fmap (\_ -> Frame.DoesNotEscape) args)
       _ -> do
         s <- stmGen
         e <- expGen

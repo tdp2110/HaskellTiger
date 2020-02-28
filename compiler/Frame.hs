@@ -6,12 +6,8 @@ import qualified Absyn
 import qualified Symbol
 import qualified Temp
 
-data EscapesOrNot = Escapes | NoEscape
+data EscapesOrNot = Escapes | DoesNotEscape
   deriving (Eq, Show)
-
-escapes :: EscapesOrNot -> Bool
-escapes Escapes = True
-escapes _ = False
 
 class Frame f where
   type Access f :: *

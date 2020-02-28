@@ -20,7 +20,7 @@ main = hspec $ do
                             lab
                             Nothing
                             gen''
-                            [Frame.Escapes, Frame.Escapes, Frame.NoEscape]
+                            [Frame.Escapes, Frame.Escapes, Frame.DoesNotEscape]
         (gen4, frame', access) = X64Frame.allocLocal gen''' frame Frame.Escapes
         accessExp = X64Frame.exp access $ TreeIR.TEMP $ Frame.fp frame'
         (tempId, gen5) = Temp.newtemp gen4

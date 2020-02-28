@@ -80,7 +80,7 @@ strLiteral = TestCase (
            TreeIR.NAME (Temp.Label (Symbol.Symbol "_tiger_allocString")),
            [TreeIR.NAME lab1,
            TreeIR.CONST strlen],
-           [Frame.NoEscape, Frame.NoEscape])),
+           [Frame.DoesNotEscape, Frame.DoesNotEscape])),
        TreeIR.TEMP t2))) = expr
 
     [ X64Frame.STRING (lab2, str2) ] = DList.toList frags

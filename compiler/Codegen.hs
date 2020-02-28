@@ -361,7 +361,7 @@ saveRestoreAndSetupArgs callStm moveStm callArgs escapes = do
                           , A.jump=Nothing }
           in
             (paramRegs, nextStackOffsets', acc ++ [inst])
-        Frame.NoEscape ->
+        Frame.DoesNotEscape ->
           case paramRegs of
             [] ->
               step x64 (paramRegs, nextStackOffsets, acc) (argReg, Frame.Escapes)

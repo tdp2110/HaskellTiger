@@ -106,7 +106,7 @@ allocLocalFn = Translate.x64AllocLocal
 
 toEscape :: Bool -> Frame.EscapesOrNot
 toEscape True = Frame.Escapes
-toEscape _ = Frame.NoEscape
+toEscape _ = Frame.DoesNotEscape
 
 data SemantEnv = SemantEnv { venv'::Env.VEnv
                            , tenv2 :: Env.TEnv
@@ -933,7 +933,7 @@ extractHeaderM venv fundecs formalsTys resultTys =
       (\ (A.Field _ escapesOrNot _ _) -> if escapesOrNot then
                                            Frame.Escapes
                                          else
-                                           Frame.NoEscape)
+                                           Frame.DoesNotEscape)
       params
     debugInfo :: A.FunDec -> (Symbol.Symbol, A.Pos)
     debugInfo fundec = (A.fundecName fundec, A.funPos fundec)
