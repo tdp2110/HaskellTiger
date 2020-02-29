@@ -63,11 +63,17 @@ data X64Frame = X64Frame { name :: Temp.Label
                          , x64 :: X64
                          , frameDebug :: Maybe (Symbol.Symbol, Absyn.Pos)
                          , viewShift :: [TreeIR.Stm] }
-  deriving (Show)
+
+instance Show X64Frame where
+  show f = "frame { name=" ++ (show $ name f) ++
+                  ", formals=" ++ (show $ formals f) ++
+                  ", locals=" ++ (show $ locals f) ++
+                  ", debug=" ++ (show $ frameDebug f) ++ " }"
 
 data Frag = PROC { body :: TreeIR.Stm
                  , fragFrame :: X64Frame }
           | STRING (Temp.Label, String)
+  deriving (Show)
 
 wordSize :: Int
 wordSize = 8

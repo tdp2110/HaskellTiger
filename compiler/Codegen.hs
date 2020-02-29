@@ -262,7 +262,7 @@ munchExp (TreeIR.CALL (expr, args, escapes)) =
                   saveRestoreAndSetupArgs
                     (A.OPER { A.assem="\tcall `s0"
                             , A.operDst=X64Frame.callDests x64
-                            , A.operSrc=[exprReg] ++ argRegs
+                            , A.operSrc=exprReg:argRegs
                             , A.implicitInterferes=[]
                             , A.jump=Nothing })
                     (A.MOVE { A.assem="\tmov `d0, `s0"

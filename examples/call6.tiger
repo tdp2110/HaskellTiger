@@ -1,8 +1,8 @@
 let
-    var str : string := "hello world"
+    /*var str : string := "hello world"*/
     function f(x: int, y: int) : int = x + y
     function g(x: int, y: int) : int = f(x * 1337, y)
 in
-    print(chr(g(1, 2)));
-    print(str)
+    print(itoa(g(1, 2)))
+    /*print(str)*/
 end

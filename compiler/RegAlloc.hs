@@ -77,7 +77,7 @@ rewriteProgram insts frame spills gen =
     (accesses, (frame', gen')) =
        runState (mapM allocLocal spills) (frame, gen)
     (insts', newTemps, gen'') =
-      foldl' spillTemp (insts, [], gen') $ zip spills accesses
+      foldl' (spillTemp frame') (insts, [], gen') $ zip spills accesses
   in
     (insts', NewTemps newTemps, frame', gen'')
   where
@@ -91,18 +91,20 @@ rewriteProgram insts frame spills gen =
                        put (frame'', gen'')
                        pure access
 
-    spillTemp :: ([Assem.Inst], [TempId], Temp.Generator) -> (Int, X64Frame.X64Access)
-              -> ([Assem.Inst], [TempId], Temp.Generator)
-    spillTemp (insts', temps, gen') (tempId, frameAccess) =
+    spillTemp :: X64Frame.X64Frame ->
+                 ([Assem.Inst], [TempId], Temp.Generator) ->
+                 (Int, X64Frame.X64Access) ->
+                 ([Assem.Inst], [TempId], Temp.Generator)
+    spillTemp frame' (insts', temps, gen') (tempId, frameAccess) =
       let
-        accessExp = X64Frame.exp frameAccess $ TreeIR.TEMP $ Frame.fp frame
+        accessExp = X64Frame.exp frameAccess $ TreeIR.TEMP $ Frame.fp frame'
 
         storeCodeFn tempId' = do
           g <- get
           let
             storeStm = TreeIR.MOVE ( accessExp
                                    , TreeIR.TEMP tempId' )
-            (code, g') = Codegen.codegen (X64Frame.x64 frame) g storeStm
+            (code, g') = Codegen.codegen (X64Frame.x64 frame') g storeStm
             in do
             put g'
             pure code
@@ -111,7 +113,7 @@ rewriteProgram insts frame spills gen =
           let
             loadStm = TreeIR.MOVE ( TreeIR.TEMP tempId'
                                   , accessExp )
-            (code, g') = Codegen.codegen (X64Frame.x64 frame) g loadStm
+            (code, g') = Codegen.codegen (X64Frame.x64 frame') g loadStm
             in do
             put g'
             pure code

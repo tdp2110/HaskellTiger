@@ -611,7 +611,7 @@ transExp (A.LetExp decs bodyExp letPos) = do
     Left err -> throwErr err
     Right (((bodyEnv, initializers), st'), frags1) ->
       case
-        runTransT st' bodyEnv (transExp bodyExp)
+        runTransT st' bodyEnv $ transExp bodyExp
       of
         Left err -> throwErr err
         Right ((ExpTy{exp=bodyTreeIR, ty=typ}, st''), frags2) -> do
@@ -756,10 +756,14 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
           (initTreeIR, gen') = Translate.initExp access lev initExpr $ generator st'
         in do
           put st'{generator=gen'}
-          pure ( env{ venv'=Map.insert
-                            name (Env.VarEntry access recTy)
-                            (venv' env) }
-                 , [initTreeIR] )
+          -- the current level has changed! we need to update all entries in the env which use it!!
+          let
+            valenv' = Map.insert
+                        name (Env.VarEntry access recTy)
+                        (venv' env)
+            valenv'' = updateLevelInEnv (level st') valenv'
+            in do
+            pure (env{ venv'= valenv''}, [initTreeIR])
       _ -> throwT posn $ "nil expression declarations must be " ++
            "constrained by a RECORD type"
     else
@@ -767,14 +771,20 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
       result =
         let
           (access, st') = allocLocal escape st env
-          (initTreeIR, gen') = Translate.initExp access lev initExpr $ generator st'
         in do
-          put st'{generator=gen'}
-          pure ( env { venv'=Map.insert
-                               name
-                               (Env.VarEntry access actualInitTy)
-                               (venv' env) }
-               , [initTreeIR] )
+          put st'
+          let
+            (initTreeIR, gen') = Translate.initExp access (level st') initExpr $ generator st'
+            in do
+            put st'{generator=gen'}
+            let
+              valenv' = Map.insert
+                          name
+                          (Env.VarEntry access actualInitTy)
+                          (venv' env)
+              valenv'' = updateLevelInEnv (level st') valenv'
+              in do
+              pure (env { venv'=valenv'' }, [initTreeIR])
     in
       case maybeTypeAnnotation of
         Just typeAnnotation ->
@@ -785,6 +795,27 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
             ", computed type " ++ (show actualInitTy)
           else result
         Nothing -> result
+  where
+    updateLevelInEnv :: Level ->
+                        Map.Map Symbol.Symbol Env.EnvEntry ->
+                        Map.Map Symbol.Symbol Env.EnvEntry
+    updateLevelInEnv newLev valenv  = Map.map (updateLevelInEntry newLev) valenv
+
+    updateLevelInEntry :: Level -> Env.EnvEntry -> Env.EnvEntry
+    updateLevelInEntry newLev entry = case entry of
+      funEntry@Env.FunEntry { Env.level=oldLev } ->
+        funEntry { Env.level=updateLevel oldLev newLev }
+      varEntry@Env.VarEntry {
+        Env.access=acc@Translate.X64Access {
+                     Translate.level=oldLev
+        }
+      } -> varEntry { Env.access=acc { Translate.level=updateLevel oldLev newLev } }
+
+    updateLevel :: Level -> Level -> Level
+    updateLevel oldLev newLev =
+      if (Translate.identifier oldLev) == (Translate.identifier newLev) then newLev
+                                                                        else oldLev
+
 transDec (A.FunctionDec fundecs) = do
   st <- get
   env <- askEnv
@@ -875,12 +906,13 @@ transDec (A.FunctionDec fundecs) = do
               (show bodyTy) ++ " and annotated type " ++
               (show resultTy) ++ " do not match"
             else do
-              put state'
+              put st { generator=generator state'
+                     , counter'=counter' state' }
               pushFrags frags
               state''@SemantState{generator=gen} <- get
               let
                 (frag, gen') = Translate.functionDec
-                                 funLevel
+                                 (level state')
                                  bodyExp
                                  gen
                 in
@@ -888,6 +920,7 @@ transDec (A.FunctionDec fundecs) = do
                 pushFrag frag
                 put state''{generator=gen'}
                 pure (env, initializers)
+
 transDec (A.TypeDec tydecs) =
   let
     stronglyConnComps = typeSCCs tydecs

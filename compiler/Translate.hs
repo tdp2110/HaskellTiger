@@ -493,9 +493,9 @@ string str gen =
     sExp = TreeIR.TEMP r
     resExp = Ex $ TreeIR.ESEQ (
                     TreeIR.MOVE ( sExp
-                              , X64Frame.externalCall
-                                  (Temp.Label $ Symbol.Symbol "tiger_allocString")
-                                  [TreeIR.NAME(label), TreeIR.CONST $ length str])
+                                , X64Frame.externalCall
+                                    (Temp.Label $ Symbol.Symbol "tiger_allocString")
+                                    [TreeIR.NAME(label), TreeIR.CONST $ length str])
                   , sExp )
     frag = X64Frame.STRING (label, str)
   in
