@@ -198,13 +198,13 @@ record exps gen =
     numExps = length exps
     wordSize = X64Frame.wordSize
     mallocStm = TreeIR.MOVE ( rExp
-                          , X64Frame.externalCall
-                              (Temp.Label $ Symbol.Symbol "tiger_alloc")
-                              [TreeIR.CONST $ numExps * wordSize] )
+                            , X64Frame.externalCall
+                                (Temp.Label $ Symbol.Symbol "tiger_alloc")
+                                [TreeIR.CONST $ numExps * wordSize] )
     (initStm, gen'') = foldl'
                        step
                        (passStm, gen')
-                       $ zip exps [1 :: Int ..]
+                       $ zip exps [0 :: Int ..]
     step :: (TreeIR.Stm, Temp.Generator) -> (Exp, Int) -> (TreeIR.Stm, Temp.Generator)
     step (stm, g) (exp, idx) =
       let
@@ -212,7 +212,7 @@ record exps gen =
         memExpr = TreeIR.MEM $ TreeIR.BINOP (TreeIR.PLUS, rExp,  TreeIR.CONST $ idx * wordSize)
       in
         ( TreeIR.SEQ ( stm
-                   , TreeIR.MOVE (memExpr, expr))
+                     , TreeIR.MOVE (memExpr, expr))
         , g' )
     resExp = Ex $ TreeIR.ESEQ ( TreeIR.SEQ ( mallocStm
                                        , initStm )
