@@ -124,4 +124,10 @@ TgString *tiger_allocString(uint8_t const *const bytes,
   AssertNotNull(res, __FUNCTION__);
   return res;
 }
+
+void tiger_nullRecordDereference() {
+  std::cerr << "FATAL TIGER ERROR: dereferenced null record\n";
+  std::terminate();
+}
+
 } // extern "C"

@@ -19,6 +19,7 @@ int64_t tiger_not(int64_t);
 [[noreturn]] void tiger_exit(int64_t);
 TgString *tiger_allocString(uint8_t const *bytes, int64_t numBytes);
 uint8_t *tiger_alloc(int64_t numBytes);
+[[noreturn]] void tiger_nullRecordDereference();
 
 } // extern "C"
 
