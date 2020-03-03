@@ -1,0 +1,7 @@
+let
+    type IntPair = { fst: int, snd: int }
+    var p := IntPair { fst=1, snd=2 }
+    function fst(p : IntPair) : int = p.fst
+in
+    print(itoa(fst(p)))
+end
