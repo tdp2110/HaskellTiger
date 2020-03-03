@@ -1,0 +1,11 @@
+let
+    type IntList = { head: int, tail: IntList }
+    var nilIntList : IntList := nil
+    function sum(xs : IntList) : int = if xs = nilIntList then 0 else xs.head + sum(xs.tail)
+    var xs := IntList { head=0
+                      , tail=IntList { head=1
+                                     , tail=IntList { head=2
+                                                    , tail=nilIntList } } }
+in
+    print(itoa(sum(xs)))
+end
