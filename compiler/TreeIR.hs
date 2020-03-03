@@ -229,5 +229,9 @@ maxCallArgsExp (TEMP _) = 0
 maxCallArgsExp (BINOP (_, e1, e2)) = max (maxCallArgsExp e1) (maxCallArgsExp e2)
 maxCallArgsExp (MEM e) = maxCallArgsExp e
 maxCallArgsExp (CALL (funcExp, args, _)) =
-  maximum [maxCallArgsExp funcExp, maximum $ fmap maxCallArgsExp args, fromIntegral $ length args]
+  maximum [maxCallArgsExp funcExp, maximumOrZeroIfEmpty $ fmap maxCallArgsExp args, fromIntegral $ length args]
 maxCallArgsExp (ESEQ (s, e)) = max (maxCallArgsStm s) (maxCallArgsExp e)
+
+maximumOrZeroIfEmpty :: [Int] -> Int
+maximumOrZeroIfEmpty [] = 0
+maximumOrZeroIfEmpty xs = maximum xs
