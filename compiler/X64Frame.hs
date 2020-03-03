@@ -18,6 +18,9 @@ import Prelude hiding (exp)
 data X64Access = InFrame Int | InReg Int
   deriving (Show)
 
+mainName :: Symbol.Symbol
+mainName = Symbol.Symbol "_main"
+
 {-
 We're implementing the AMD64 System V x86_64 calling convention.
 
@@ -269,6 +272,9 @@ isInFrame :: X64Access -> Bool
 isInFrame (InFrame _) = True
 isInFrame _ = False
 
+isMain :: X64Frame -> Bool
+isMain frame = name frame == (Temp.Label $ mainName)
+
 -- | (From Appel, p 261) For each incoming register parameter, move it to the place
 -- from which it is seen within the function (aka the "view shift"). This could be a frame location (for
 -- escaping parameters) or a fresh temporary. One good way to handle this is for newFrame
@@ -287,11 +293,17 @@ procEntryExit1 frame bodyExp gen =
     (saves, restores, gen'') = getSaveRestores gen'
     bodyTemp = TreeIR.TEMP t
   in
-    ( TreeIR.ESEQ ( TreeIR.makeSeq $ viewShift frame
-                , TreeIR.ESEQ ( saves
-                            , TreeIR.ESEQ ( TreeIR.MOVE (bodyTemp, bodyExp)
-                                        , TreeIR.ESEQ (restores, bodyTemp))))
-    , gen'')
+    if (not . isMain) frame then
+      ( TreeIR.ESEQ ( TreeIR.makeSeq $ viewShift frame
+                    , TreeIR.ESEQ ( saves
+                                  , TreeIR.ESEQ ( TreeIR.MOVE (bodyTemp, bodyExp)
+                                                , TreeIR.ESEQ (restores, bodyTemp))))
+      , gen'')
+    else
+      ( TreeIR.ESEQ ( TreeIR.makeSeq $ viewShift frame
+                    , TreeIR.ESEQ ( TreeIR.MOVE (bodyTemp, bodyExp)
+                                  , bodyTemp ))
+      , gen')
   where
     getSaveRestores :: Temp.Generator -> (TreeIR.Stm, TreeIR.Stm, Temp.Generator)
     getSaveRestores g =
@@ -328,11 +340,13 @@ procEntryExit2 :: X64Frame -> [Assem.Inst] -> [Assem.Inst]
 procEntryExit2 frame bodyAsm =
   let
     x64' = x64 frame
+    maybeCalleSaves = if isMain frame then []
+                                      else calleeSaves x64'
   in
     bodyAsm ++ [
         Assem.OPER { Assem.assem = ""
                    , Assem.operDst = []
-                   , Assem.operSrc = [rax x64', rsp x64'] ++ calleeSaves x64'
+                   , Assem.operSrc = [rax x64', rsp x64'] ++ maybeCalleSaves
                    , Assem.implicitInterferes = []
                    , Assem.jump = Just [] }
             ]

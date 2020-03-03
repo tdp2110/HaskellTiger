@@ -2,5 +2,5 @@ let
     var x := 42
     var y := 1337
 in
-    x + y
+    print(itoa(x + y))
 end

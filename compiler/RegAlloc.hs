@@ -18,14 +18,16 @@ import qualified Data.Map as Map
 
 type TempId = Color.TempId
 
+
 alloc :: [Assem.Inst]
       -> X64Frame.X64Frame
       -> Temp.Generator
+      -> [Int]
       -> ( [Assem.Inst]
          , Color.Allocation
          , X64Frame.X64Frame
          , Temp.Generator )
-alloc insts frame gen =
+alloc insts frame gen previousSpillTemps =
   let
     spillCost = \_ -> 1.0 :: Float -- TODO! use a better cost
     (flowGraph, _) = Flow.instrsToGraph insts
@@ -38,6 +40,7 @@ alloc insts frame gen =
                               initialAllocs
                               spillCost
                               registers
+                              previousSpillTemps
   in
     if null spills then
       ( filter (\i -> not $ isRedundant allocations i) insts
@@ -46,13 +49,13 @@ alloc insts frame gen =
       , gen)
     else
       let
-        (insts', _, frame', gen') = rewriteProgram
-                                      insts
-                                      frame
-                                      spills
-                                      gen
+        (insts', newTemps, frame', gen') = rewriteProgram
+                                             insts
+                                             frame
+                                             spills
+                                             gen
       in
-        alloc insts' frame' gen'
+        alloc insts' frame' gen' newTemps
   where
     isRedundant :: Color.Allocation -> Assem.Inst -> Bool
     isRedundant allocation inst =
@@ -65,13 +68,11 @@ alloc insts frame gen =
             _                  -> False
         _                      -> False
 
-newtype NewTemps = NewTemps [TempId]
-
 rewriteProgram :: [Assem.Inst]
                -> X64Frame.X64Frame
                -> [Int] -- spills
                -> Temp.Generator
-               -> ([Assem.Inst], NewTemps, X64Frame.X64Frame, Temp.Generator)
+               -> ([Assem.Inst], [Int], X64Frame.X64Frame, Temp.Generator)
 rewriteProgram insts frame spills gen =
   let
     (accesses, (frame', gen')) =
@@ -79,7 +80,7 @@ rewriteProgram insts frame spills gen =
     (insts', newTemps, gen'') =
       foldl' (spillTemp frame') (insts, [], gen') $ zip spills accesses
   in
-    (insts', NewTemps newTemps, frame', gen'')
+    (insts', newTemps, frame', gen'')
   where
     allocLocal _ = do
                      (frame', gen') <- get

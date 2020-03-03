@@ -62,8 +62,8 @@ data AllocatorState = AllocatorState {
                                    -- in coalescedNodes, then alias(v) = u
   , adjSet :: MoveSet -- set of interference edges in the graph
   , adjList :: Map L.NodeId (Set L.NodeId) -- adjacency list of graph: for each non-precolored
-                                 -- temporary u, adjList[u] is the set of nodes that
-                                 -- interfere with u.
+                                           -- temporary u, adjList[u] is the set of nodes that
+                                           -- interfere with u.
   }
   deriving (Show)
 
@@ -92,6 +92,7 @@ data AllocatorReadOnlyData = AllocatorReadOnlyData {
     precolored :: Set L.NodeId -- machine registers, preassigned color
   , numColors :: Int
   , allColors :: [Int]
+  , previousSpillTemps :: Set L.NodeId
   } deriving (Show)
 
 type Allocator = StateT AllocatorState (
@@ -103,8 +104,9 @@ color :: L.IGraph ->
          Allocation -> -- initial allocation, provided by Frame.tempMap
          (Int -> Float) -> -- spillCost
          [X64Frame.Register] -> -- available registers
+         [Int] -> -- short-lived temps from previous spills
          (Allocation, [Int]) -- assignments using available registers, list of spills
-color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers =
+color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers previousSpillTemps' =
   let
     numColors' = length registers
     allColors' = [0 .. numColors' - 1]
@@ -152,9 +154,14 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers =
                            , adjList=Map.empty
                            , moveList=moveList' }
 
+    previousSpillTempsNodes = fmap
+                                (\tempId -> Graph.nodeId $ tnode Map.! tempId)
+                                previousSpillTemps'
+
     readOnlyData = AllocatorReadOnlyData { precolored=precolored'
                                          , numColors=numColors'
-                                         , allColors=allColors' }
+                                         , allColors=allColors'
+                                         , previousSpillTemps=Set.fromList previousSpillTempsNodes }
 
     -- fill in adjSet, adjList, degree by traversing igraph
     ((), state') = runIdentity $ runReaderT (runStateT buildGraph state) readOnlyData
@@ -679,7 +686,8 @@ selectSpill :: Allocator ()
 selectSpill = do
   st@AllocatorState { spillWorklist=spillWorklist'
                     , simplifyWorklist=simplifyWorklist' } <- get
-  case chooseASpill spillWorklist' of
+  AllocatorReadOnlyData { previousSpillTemps=previousSpillTemps' } <- lift ask
+  case chooseASpill spillWorklist' previousSpillTemps' of
     Just m -> let
       spillWorklist'' = Set.delete m spillWorklist'
       simplifyWorklist'' = Set.insert m simplifyWorklist'
@@ -691,8 +699,8 @@ selectSpill = do
   where
     -- TODO! Note: avoid choosing nodes that are the tiny live ranges
     --       resulting from the fetches of previously spilled registers.
-    chooseASpill :: Set L.NodeId -> Maybe L.NodeId
-    chooseASpill = Set.lookupMin
+    chooseASpill :: Set L.NodeId -> Set L.NodeId -> Maybe L.NodeId
+    chooseASpill spillWS tempsFromPrevSpills = Set.lookupMin $ spillWS `Set.difference` tempsFromPrevSpills
 
 assignColors :: Allocator ()
 assignColors = do

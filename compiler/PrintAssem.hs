@@ -88,14 +88,16 @@ compileToAsm text performRegAlloc =
                                   stmts'
                 insts' = X64Frame.procEntryExit2 frame insts
                 maxCallArgs = TreeIR.maxCallArgsStm bodyStm
+                tempMap = X64Frame.tempMap x64
                 (insts'', alloc, frame', gen6) =
                   if performRegAlloc then
                     RegAlloc.alloc
                       insts'
                       frame
                       gen5
+                      []
                   else
-                    (insts', X64Frame.tempMap x64, frame, gen5)
+                    (insts', tempMap, frame, gen5)
                 insts''' = X64Frame.procEntryExit3
                              frame'
                              insts''
@@ -103,7 +105,7 @@ compileToAsm text performRegAlloc =
                 insts4 = filter notEmptyInst insts''' -- an empty instr is appended to function bodies
                                                       -- in order to communicate some liveness info to regalloc
               in
-                ((intercalate "\n" (fmap (formatAsm alloc) insts4) ++ "\n"), gen6)
+                ((intercalate "\n" (fmap (formatAsm (alloc `Map.union` tempMap)) insts4) ++ "\n"), gen6)
               where
                 notEmptyInst :: Assem.Inst -> Bool
                 notEmptyInst (Assem.OPER { Assem.assem=assem } ) = assem /= ""
