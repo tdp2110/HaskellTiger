@@ -347,7 +347,6 @@ procEntryExit2 frame bodyAsm =
         Assem.OPER { Assem.assem = ""
                    , Assem.operDst = []
                    , Assem.operSrc = [rax x64', rsp x64'] ++ maybeCalleSaves
-                   , Assem.implicitInterferes = []
                    , Assem.jump = Just [] }
             ]
 
@@ -367,14 +366,12 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgs) =
                         [ Assem.OPER { Assem.assem="\tsub `d0, " ++ (show stackSize)
                                      , Assem.operDst=[rsp $ x64 frame]
                                      , Assem.operSrc=[]
-                                     , Assem.implicitInterferes=[]
                                      , Assem.jump=Nothing } ]
                       else
                         []
     prologue = [ Assem.OPER { Assem.assem="\tpush `d0" ++ (fmtDebug frame)
                             , Assem.operDst=[rbp $ x64 frame]
                             , Assem.operSrc=[rsp $ x64 frame]
-                            , Assem.implicitInterferes=[]
                             , Assem.jump=Nothing }
                , Assem.MOVE { Assem.assem="\tmov `d0, `s0"
                             , Assem.moveDst=rbp $ x64 frame
@@ -383,19 +380,16 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgs) =
                  [ Assem.OPER { Assem.assem="\tadd `d0, " ++ (show stackSize)
                               , Assem.operDst=[rsp $ x64 frame]
                               , Assem.operSrc=[]
-                              , Assem.implicitInterferes=[]
                               , Assem.jump=Nothing } ]
                 else
                   []
     epilogue2 = [ Assem.OPER { Assem.assem="\tpop `d0"
                              , Assem.operDst=[rbp $ x64 frame]
                              , Assem.operSrc=[]
-                             , Assem.implicitInterferes=[]
                              , Assem.jump=Nothing }
                 , Assem.OPER { Assem.assem="\tret"
                              , Assem.operDst=[rsp $ x64 frame]
                              , Assem.operSrc=[]
-                             , Assem.implicitInterferes=[]
                              , Assem.jump=Nothing } ]
     epilogue = epilogue1 ++ epilogue2
   in

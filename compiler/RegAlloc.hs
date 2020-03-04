@@ -15,7 +15,6 @@ import Control.Monad.Trans.State (State, runState, put, get)
 import Data.Foldable (foldl')
 import qualified Data.Map as Map
 
-
 type TempId = Color.TempId
 
 

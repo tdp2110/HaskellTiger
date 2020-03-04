@@ -32,27 +32,24 @@ type Node = G.Node NodeId
 data FlowGraph = FlowGraph { control :: Graph
                            , def :: Map NodeId [TempId]
                            , use :: Map NodeId [TempId]
-                           , implicitInterferes :: Map NodeId [(TempId, TempId)]
                            , ismove :: Map NodeId (Maybe (TempId, TempId)) }
   deriving (Show)
 
 instrsToGraph :: [A.Inst] -> (FlowGraph, [Node])
 instrsToGraph insts =
   let
-    ((nodes, defs, uses, implicitInterferes', isMoves), cfg) =
+    ((nodes, defs, uses, isMoves), cfg) =
       runState buildGraph $ G.newGraph $ NodeId 0
   in
     ( FlowGraph { control=cfg
                 , def=defs
                 , use=uses
-                , implicitInterferes=implicitInterferes'
                 , ismove=isMoves }
     , fmap snd nodes )
   where
     buildGraph :: GraphBuilder ( [(A.Inst, Node)]
                                  , Map NodeId [TempId]
                                  , Map NodeId [TempId]
-                                 , Map NodeId [(TempId, TempId)]
                                  , Map NodeId (Maybe (TempId, TempId)) )
     buildGraph = do
       nodes <- buildCFG
@@ -73,13 +70,6 @@ instrsToGraph insts =
                                          A.LABEL {} -> []
                                          A.MOVE { A.moveSrc=src } -> [src] ))
                    nodes
-        implicitInterferes' = Map.fromList $
-                                fmap
-                                  (\(inst, node) -> ( G.nodeId node
-                                                    , case inst of
-                                                        A.OPER { A.implicitInterferes=interferes } -> interferes
-                                                        _ -> [] ))
-                                  nodes
         isMoves = Map.fromList $
                     fmap
                       (\(inst, node) -> ( G.nodeId node
@@ -89,7 +79,7 @@ instrsToGraph insts =
                                             _                        -> Nothing ))
                       nodes
         in
-        pure (nodes, defs, uses, implicitInterferes', isMoves)
+        pure (nodes, defs, uses, isMoves)
 
     allocNodes :: GraphBuilder [(A.Inst, Node)]
     allocNodes = mapM

@@ -215,16 +215,15 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers pre
       let
         graph = L.graph igraph
       in do
-        AllocatorReadOnlyData { precolored=precolored' } <- lift ask
-        mapM_ (processNode precolored') $ Map.elems $ Graph.nodes graph
+        mapM_ processNode $ Map.elems $ Graph.nodes graph
 
-    processNode :: Set L.NodeId  -> L.Node -> Allocator ()
-    processNode precolored' node =
+    processNode :: L.Node -> Allocator ()
+    processNode node =
       let
         nodeId = Graph.nodeId node
         successors = Graph.succ node
-      in
-        mapM_ (addEdge precolored' nodeId) successors
+        in do
+        mapM_ (addEdge nodeId) successors
 
     loop :: Allocator ()
     loop = untilM_ loopAction loopDone
@@ -343,13 +342,14 @@ makeWorkList initials numColors' activeMoves' worklistMoves' moveList' degree' =
                        moveList'
                        n
 
-addEdge :: Set L.NodeId -> L.NodeId -> L.NodeId -> Allocator ()
-addEdge precolored' u v = do
+addEdge :: L.NodeId -> L.NodeId -> Allocator ()
+addEdge u v = do
   s1@AllocatorState {
          degree=degree'
        , adjSet=adjSet'
        , adjList=adjList'
        } <- get
+  AllocatorReadOnlyData { precolored=precolored' } <- lift ask
   when (not (Set.member (u,v) adjSet') && (u /= v)) $
     let
       adjSet'' = adjSet' `Set.union` Set.fromList [ (u,v), (v,u) ]
@@ -366,14 +366,16 @@ addEdge precolored' u v = do
           in do
           put s1 { degree=degree''
                  , adjList=adjList'' }
-      when (not (Set.member v precolored')) $
+      when (not (Set.member v precolored')) $ do
+        AllocatorState { degree=degree_v
+                       , adjList=adjList_v } <- get
         let
           adjList'' =
-            let adjList_v' = Set.insert u (Map.findWithDefault Set.empty v adjList') in
-              Map.insert v adjList_v' adjList'
-          oldDegree = Map.findWithDefault 0 v degree'
+            let adjList_v' = Set.insert u (Map.findWithDefault Set.empty v adjList_v) in
+              Map.insert v adjList_v' adjList_v
+          oldDegree = Map.findWithDefault 0 v degree_v
           degree'' =
-            Map.insert v (oldDegree + 1) degree'
+            Map.insert v (oldDegree + 1) degree_v
           in do
           s2 <- get
           put s2 { degree=degree''
@@ -604,8 +606,7 @@ combine u v = do
                     , alias=alias'
                     , degree=degree'
                     , moveList=moveList' } <- get
-  AllocatorReadOnlyData { numColors=numColors'
-                        , precolored=precolored' } <- lift ask
+  AllocatorReadOnlyData { numColors=numColors' } <- lift ask
   adjacent_v <- adjacent v
   if Set.member v freezeWorklist' then
     put s1 { freezeWorklist=Set.delete v freezeWorklist' }
@@ -624,7 +625,7 @@ combine u v = do
            , alias=alias''
            , moveList=moveList'' }
     forM_ adjacent_v (\t -> do
-      addEdge precolored' t u
+      addEdge t u
       decrementDegree t
       )
     when (Map.findWithDefault 0 u degree' >= numColors' &&
