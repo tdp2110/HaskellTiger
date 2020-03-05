@@ -303,7 +303,7 @@ procEntryExit1 frame bodyExp gen =
       ( TreeIR.ESEQ ( TreeIR.makeSeq $ viewShift frame
                     , TreeIR.ESEQ ( TreeIR.MOVE (bodyTemp, bodyExp)
                                   , bodyTemp ))
-      , gen')
+      , gen'')
   where
     getSaveRestores :: Temp.Generator -> (TreeIR.Stm, TreeIR.Stm, Temp.Generator)
     getSaveRestores g =
