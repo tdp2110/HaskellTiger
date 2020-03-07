@@ -367,13 +367,11 @@ transExp (A.OpExp leftExp op rightExp pos) = do
         (Types.STRING, Types.STRING) ->
           translate (Translate.stringCmp expLeft expRight op) Types.INT
         (r1@(Types.RECORD _), r2@(Types.RECORD _)) ->
-          if r1 == r2 then
-            if isEqOrNe then
-              translate (Translate.ptrCmp expLeft expRight op) Types.INT
-            else
-              throwT pos "records may only be compared with EQ or NE"
+          if r1 == r2 then ptrCmp expLeft expRight
           else
             throwT pos "only identical record types may be compared"
+        ((Types.RECORD _), Types.NIL) -> ptrCmp expLeft expRight
+        (Types.NIL, (Types.RECORD _)) -> ptrCmp expLeft expRight
         (arr1@(Types.ARRAY _), arr2@(Types.ARRAY _)) ->
           if arr1 == arr2 then
             if isEqOrNe then
@@ -392,6 +390,12 @@ transExp (A.OpExp leftExp op rightExp pos) = do
                  A.EqOp -> True
                  A.NeqOp -> True
                  _ -> False
+    ptrCmp expLeft expRight =
+       if isEqOrNe then
+         translate (Translate.ptrCmp expLeft expRight op) Types.INT
+       else
+         throwT pos "records may only be compared with EQ or NE"
+
 transExp (A.RecordExp fieldSymExpPosns typSym pos) = do
   maybeRecordTy <- lookupT pos tenv2 typSym
   case maybeRecordTy of
