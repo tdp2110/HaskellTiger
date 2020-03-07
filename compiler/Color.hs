@@ -698,10 +698,11 @@ selectSpill = do
         freezeMoves m
     Nothing -> do pure ()
   where
-    -- TODO! Note: avoid choosing nodes that are the tiny live ranges
-    --       resulting from the fetches of previously spilled registers.
     chooseASpill :: Set L.NodeId -> Set L.NodeId -> Maybe L.NodeId
-    chooseASpill spillWS tempsFromPrevSpills = Set.lookupMin $ spillWS `Set.difference` tempsFromPrevSpills
+    chooseASpill spillWS tempsFromPrevSpills =
+      case Set.lookupMin $ spillWS `Set.difference` tempsFromPrevSpills of
+        s@(Just _) -> s
+        Nothing -> Set.lookupMin spillWS
 
 assignColors :: Allocator ()
 assignColors = do
@@ -737,7 +738,7 @@ assignColors = do
                            , allColors=allColors' } <- lift ask
      case selectStack' of
        (n:selectStack'') ->
-        let adjlist_n = Map.findWithDefault Set.empty n adjList' in
+        let adjlist_n = Map.findWithDefault Set.empty n adjList'  in
         do
          adjacentAliases <- mapM getAlias $ Set.toList adjlist_n
          let
