@@ -417,8 +417,12 @@ transExp (A.RecordExp fieldSymExpPosns typSym pos) = do
             actualFieldTys = fmap ty actualFieldExpTys
             fieldPosns = fmap (\(_,_,fieldPos) -> fieldPos) fieldSymExpPosns
             exps = fmap exp actualFieldExpTys
+            typesAreCompatible t1 t2 = case (t1, t2) of
+                                         (Types.RECORD _, Types.NIL) -> True
+                                         (Types.NIL, Types.RECORD _) -> True
+                                         _                           -> t1 == t2
             in
-            case filter (\(_,expectedTy,actualTy,_) -> expectedTy /= actualTy)
+            case filter (\(_,expectedTy,actualTy,_) -> not $ typesAreCompatible expectedTy actualTy)
                  (zip4 expectedSyms expectedFieldTys actualFieldTys fieldPosns)
             of
               [] ->
