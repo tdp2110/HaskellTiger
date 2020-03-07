@@ -1,0 +1,5 @@
+let
+    var x : int := 0
+in
+    print(itoa(x))
+end
