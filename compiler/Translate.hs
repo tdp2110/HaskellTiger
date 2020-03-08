@@ -266,9 +266,26 @@ binOp expLeft expRight op gen =
             Absyn.TimesOp -> TreeIR.MUL
             Absyn.DivideOp -> TreeIR.DIV -- TODO! check for division by zero!
             _ -> error "shouldn't get here"
-    resExp = Ex $ TreeIR.BINOP (op', expLeft', expRight')
+    binOpExp = Ex $ TreeIR.BINOP (op', expLeft', expRight')
+    (resExp, gen3) = case op of
+               Absyn.DivideOp -> let
+                   (testExp, gen''') = relOp
+                                         expRight
+                                         (Ex zero)
+                                         Absyn.NeqOp
+                                         gen''
+                   onDivByZero = Ex $ X64Frame.externalCall
+                                        (Temp.Label $ Symbol.Symbol "tiger_divByZero")
+                                        []
+                 in
+                   ifThenElse
+                     testExp
+                     binOpExp
+                     onDivByZero
+                     gen'''
+               _ -> (binOpExp, gen'')
   in
-    (resExp, gen'')
+    (resExp, gen3)
 
 ifThen :: Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
 ifThen testExpE thenExpE gen =

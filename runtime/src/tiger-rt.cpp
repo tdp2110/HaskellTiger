@@ -138,4 +138,9 @@ void tiger_nullRecordDereference() {
   std::terminate();
 }
 
+void tiger_divByZero() {
+  std::cerr << "FATAL TIGER ERROR: division by zero\n";
+  std::terminate();
+}
+
 } // extern "C"
