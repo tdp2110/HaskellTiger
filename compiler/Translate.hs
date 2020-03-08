@@ -428,11 +428,11 @@ while testExpE bodyExpE doneLab gen =
     (testExp, gen''') = unEx testExpE gen''
     (bodyExp, gen4) = unEx bodyExpE gen'''
     resExp = Nx $ TreeIR.makeSeq [ TreeIR.LABEL testLab
-                               , TreeIR.CJUMP (TreeIR.NE, zero, testExp, doneLab, bodyLab)
-                               , TreeIR.LABEL bodyLab
-                               , TreeIR.EXP bodyExp
-                               , TreeIR.JUMP (TreeIR.NAME testLab, [testLab])
-                               , TreeIR.LABEL doneLab ]
+                                 , TreeIR.CJUMP (TreeIR.NE, zero, testExp, bodyLab, doneLab)
+                                 , TreeIR.LABEL bodyLab
+                                 , TreeIR.EXP bodyExp
+                                 , TreeIR.JUMP (TreeIR.NAME testLab, [testLab])
+                                 , TreeIR.LABEL doneLab ]
   in
     (resExp, gen4)
 
