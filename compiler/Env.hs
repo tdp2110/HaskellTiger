@@ -36,6 +36,7 @@ baseVEnv x64 gen =
     signatures = [ ("print", [STRING], UNIT)
                  , ("flush", [], UNIT)
                  , ("getchar", [], STRING)
+                 , ("getline", [], STRING)
                  , ("ord", [STRING], INT)
                  , ("chr", [INT], STRING)
                  , ("itoa", [INT], STRING)

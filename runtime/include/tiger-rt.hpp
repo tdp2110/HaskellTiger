@@ -10,6 +10,7 @@ struct TgString;
 void tiger_print(TgString const *);
 void tiger_flush();
 TgString *tiger_getchar();
+TgString *tiger_getline();
 int64_t tiger_ord(TgString const *);
 TgString *tiger_itoa(int64_t);
 int64_t tiger_size(TgString const *);

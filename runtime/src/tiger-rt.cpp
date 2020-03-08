@@ -46,6 +46,14 @@ TgString *tiger_getchar() {
   return res;
 }
 
+TgString *tiger_getline() {
+  std::string str;
+  std::getline(std::cin, str);
+  TgString *const res = new (std::nothrow) TgString(std::move(str));
+  AssertNotNull(res, __FUNCTION__);
+  return res;
+}
+
 int64_t tiger_ord(TgString const *const s) {
   AssertNotNull(s, __FUNCTION__);
   if (s->impl.size() != 1) {
