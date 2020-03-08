@@ -707,7 +707,9 @@ selectSpill = do
 assignColors :: Allocator ()
 assignColors = do
  whileM_ stackNotEmpty processStackElt
- AllocatorState { coalescedNodes=coalescedNodes', coloredNodes=coloredNodes', spilledNodes=spilledNodes' } <- get
+ AllocatorState { coalescedNodes=coalescedNodes'
+                , coloredNodes=coloredNodes'
+                , spilledNodes=spilledNodes' } <- get
  mapM_
    (\n -> do
             st@AllocatorState { colors=colors' } <- get
@@ -738,7 +740,7 @@ assignColors = do
                            , allColors=allColors' } <- lift ask
      case selectStack' of
        (n:selectStack'') ->
-        let adjlist_n = Map.findWithDefault Set.empty n adjList'  in
+        let adjlist_n = Map.findWithDefault Set.empty n adjList' in
         do
          adjacentAliases <- mapM getAlias $ Set.toList adjlist_n
          let
@@ -748,12 +750,12 @@ assignColors = do
            colorsAdjacent = fmap
                               (\a -> case Map.lookup a colors' of
                                        Just c -> c
-                                       Nothing -> error $"couldn't find " ++ (show a) ++
-                                                        " in colors " ++ (show colors') ++
-                                                        "\ncoloredNodes: " ++ (show coloredNodes') ++
-                                                        "\nprecolored: " ++ (show precolored') ++
-                                                        "\nnode: " ++ (show n) ++
-                                                        "\nstate: " ++ (show st))
+                                       Nothing -> error $ "couldn't find " ++ (show a) ++
+                                                          " in colors " ++ (show colors') ++
+                                                          "\ncoloredNodes: " ++ (show coloredNodes') ++
+                                                          "\nprecolored: " ++ (show precolored') ++
+                                                          "\nnode: " ++ (show n) ++
+                                                          "\nstate: " ++ (show st))
                               coloredAdjacentAliases
            okColors = allColors' \\ colorsAdjacent
            in
