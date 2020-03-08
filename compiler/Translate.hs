@@ -133,10 +133,10 @@ unEx (Cx genstm) gen =
     (f, gen''') = Temp.newlabel gen''
     expRes = TreeIR.ESEQ(
       TreeIR.makeSeq [ TreeIR.MOVE (TreeIR.TEMP r, TreeIR.CONST 1)
-                   , genstm t f
-                   , TreeIR.LABEL f
-                   , TreeIR.MOVE (TreeIR.TEMP r, zero)
-                   , TreeIR.LABEL t],
+                     , genstm t f
+                     , TreeIR.LABEL f
+                     , TreeIR.MOVE (TreeIR.TEMP r, zero)
+                     , TreeIR.LABEL t],
       TreeIR.TEMP r)
   in
     (expRes, gen''')
@@ -183,10 +183,10 @@ stringCmp s1 s2 op gen =
     treeOp = transRelOp op
     resExp = Cx $ \t f ->
       TreeIR.CJUMP ( treeOp
-                 , cmpExp
-                 , zero
-                 , t
-                 , f )
+                   , cmpExp
+                   , zero
+                   , t
+                   , f )
   in
     (resExp, gen'')
 
@@ -215,8 +215,8 @@ record exps gen =
                      , TreeIR.MOVE (memExpr, expr))
         , g' )
     resExp = Ex $ TreeIR.ESEQ ( TreeIR.SEQ ( mallocStm
-                                       , initStm )
-                            , rExp)
+                                           , initStm )
+                              , rExp)
   in
     (resExp, gen'')
 
@@ -228,9 +228,9 @@ array sizeExp initExpr gen =
     (initExpr', gen''') = unEx initExpr gen''
     rExp = TreeIR.TEMP r
     initStm = TreeIR.MOVE ( rExp
-                        , X64Frame.externalCall
-                          (Temp.Label $ Symbol.Symbol "tiger_initArray")
-                          [sizeExpr, initExpr'] )
+                          , X64Frame.externalCall
+                            (Temp.Label $ Symbol.Symbol "tiger_initArray")
+                            [sizeExpr, initExpr'] )
     resExp = Ex $ TreeIR.ESEQ (initStm, rExp)
   in
     (resExp, gen''')
@@ -278,9 +278,9 @@ ifThen testExpE thenExpE gen =
     (t, gen'') = Temp.newlabel gen'
     (f, gen''') = Temp.newlabel gen''
     resExp = Nx $ TreeIR.makeSeq [ cx t f
-                               , TreeIR.LABEL t
-                               , thenStm
-                               , TreeIR.LABEL f ]
+                                 , TreeIR.LABEL t
+                                 , thenStm
+                                 , TreeIR.LABEL f ]
   in
     (resExp, gen''')
 
@@ -342,12 +342,12 @@ ifThenElseStm testExpE thenExp elseExp gen =
     (thenStm, gen4) = unNx thenExp gen'''
     (elseStm, gen5) = unNx elseExp gen4
     resExp = Nx $ TreeIR.makeSeq [ testGen t f
-                               , TreeIR.LABEL t
-                               , thenStm
-                               , TreeIR.JUMP (TreeIR.NAME joinLab, [joinLab])
-                               , TreeIR.LABEL f
-                               , elseStm
-                               , TreeIR.LABEL joinLab ]
+                                 , TreeIR.LABEL t
+                                 , thenStm
+                                 , TreeIR.JUMP (TreeIR.NAME joinLab, [joinLab])
+                                 , TreeIR.LABEL f
+                                 , elseStm
+                                 , TreeIR.LABEL joinLab ]
   in
     (resExp, gen5)
 
@@ -357,10 +357,10 @@ ifThenElseCx testGen thenGen elseGen gen =
     (z, gen') = Temp.newlabel gen
     (w, gen'') = Temp.newlabel gen'
     resExp = Cx $ \t f -> TreeIR.makeSeq [ testGen z f
-                                      , TreeIR.LABEL z
-                                      , thenGen w f
-                                      , TreeIR.LABEL w
-                                      , elseGen t f ]
+                                         , TreeIR.LABEL z
+                                         , thenGen w f
+                                         , TreeIR.LABEL w
+                                         , elseGen t f ]
   in
     (resExp, gen'')
 
@@ -387,13 +387,13 @@ ifThenElse testExpE thenExpE elseExpE gen =
     (joinLab, gen5) = Temp.newlabel gen4
     (r, gen6) = Temp.newtemp gen5
     resExp = Ex $ TreeIR.ESEQ (TreeIR.makeSeq [ testGen t f
-                                          , TreeIR.LABEL t
-                                          , TreeIR.MOVE (TreeIR.TEMP r, thenExp)
-                                          , TreeIR.JUMP (TreeIR.NAME joinLab, [joinLab])
-                                          , TreeIR.LABEL f
-                                          , TreeIR.MOVE (TreeIR.TEMP r, elseExp)
-                                          , TreeIR.LABEL joinLab ]
-                            , TreeIR.TEMP r)
+                                              , TreeIR.LABEL t
+                                              , TreeIR.MOVE (TreeIR.TEMP r, thenExp)
+                                              , TreeIR.JUMP (TreeIR.NAME joinLab, [joinLab])
+                                              , TreeIR.LABEL f
+                                              , TreeIR.MOVE (TreeIR.TEMP r, elseExp)
+                                              , TreeIR.LABEL joinLab ]
+                              , TreeIR.TEMP r)
   in
     (resExp, gen6)
 
@@ -466,10 +466,10 @@ subscript arrExpE indexExpE gen =
                 ( TreeIR.PLUS
                 , arrExp
                 , TreeIR.BINOP ( TreeIR.PLUS
-                             , TreeIR.BINOP ( TreeIR.MUL
-                                          , wordSize
-                                          , indexExp )
-                             , wordSize ) )
+                               , TreeIR.BINOP ( TreeIR.MUL
+                                              , wordSize
+                                              , indexExp )
+                               , wordSize ) )
     sadPath = Ex $ X64Frame.externalCall
               (Temp.Label $ Symbol.Symbol "tiger_indexError")
               [sizeExp, indexExp]
@@ -533,11 +533,11 @@ callM funLevel callerLevel funlab params = do
                       X64Frame.externalCall funlab treeParams
                     funParentLevel ->
                       TreeIR.CALL ( TreeIR.NAME funlab
-                                , [staticLink
-                                    callerLevel
-                                    funParentLevel]
-                                  ++ treeParams
-                                , escapes)
+                                  , [staticLink
+                                      callerLevel
+                                      funParentLevel]
+                                    ++ treeParams
+                                  , escapes)
 
 call :: X64Level -> X64Level -> Temp.Label -> [Exp] -> Temp.Generator
   -> (Exp, Temp.Generator)
@@ -561,7 +561,7 @@ functionDec X64Level{x64Frame=frame} bodyExp gen =
     (bodyExpr, gen') = unEx bodyExp gen
     (bodyExpr', gen'') = X64Frame.procEntryExit1 frame bodyExpr gen'
     bodyStm = TreeIR.MOVE ( TreeIR.TEMP $ Frame.rv frame
-                        , bodyExpr' )
+                          , bodyExpr' )
   in
     (makeProc bodyStm, gen'')
   where
