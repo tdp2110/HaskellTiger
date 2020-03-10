@@ -5,6 +5,7 @@ import qualified Codegen
 import qualified Color
 import qualified Flow
 import qualified Frame
+import qualified Graph
 import qualified Liveness
 import qualified Temp
 import qualified TreeIR
@@ -28,7 +29,6 @@ alloc :: [Assem.Inst]
          , Temp.Generator )
 alloc insts frame gen previousSpillTemps =
   let
-    spillCost = \_ -> 1.0 :: Float -- TODO! use a better cost
     (flowGraph, _) = Flow.instrsToGraph insts
     (igraph, _) = Liveness.interferenceGraph flowGraph
     x64 = X64Frame.x64 frame
@@ -37,7 +37,7 @@ alloc insts frame gen previousSpillTemps =
     (allocations, spills) = Color.color
                               igraph
                               initialAllocs
-                              spillCost
+                              (spillCost flowGraph igraph)
                               registers
                               previousSpillTemps
   in
@@ -66,6 +66,32 @@ alloc insts frame gen previousSpillTemps =
             (Just r1, Just r2) -> r1 == r2
             _                  -> False
         _                      -> False
+
+    spillCost :: Flow.FlowGraph -> Liveness.IGraph -> Int -> Float
+    spillCost (Flow.FlowGraph { Flow.control=control
+                              , Flow.def=def
+                              , Flow.use=use })
+              (Liveness.IGraph { Liveness.tnode=tnode })
+              temp =
+      let
+        useDefCount :: Float
+        useDefCount = fromIntegral $ foldl'
+                        (\acc nodeId ->
+                           let
+                             f = \s t -> fromEnum $ elem t s
+                             defs = def Map.! nodeId
+                             uses = use Map.! nodeId
+                           in
+                             acc + (f defs temp) + (f uses temp))
+                        0
+                        (Map.keys $ Graph.nodes control)
+        nodeDegree :: Float
+        nodeDegree = let
+                       node = tnode Map.! temp
+                     in
+                       fromIntegral $ length $ Graph.succ node
+      in
+        useDefCount / nodeDegree
 
 rewriteProgram :: [Assem.Inst]
                -> X64Frame.X64Frame

@@ -93,7 +93,9 @@ data AllocatorReadOnlyData = AllocatorReadOnlyData {
   , numColors :: Int
   , allColors :: [Int]
   , previousSpillTemps :: Set L.NodeId
-  } deriving (Show)
+  , spillCost :: Int -> Float
+  , nodeIdToTempId :: Map L.NodeId Int
+  }
 
 type Allocator = StateT AllocatorState (
                    ReaderT AllocatorReadOnlyData Identity)
@@ -106,7 +108,11 @@ color :: L.IGraph ->
          [X64Frame.Register] -> -- available registers
          [Int] -> -- short-lived temps from previous spills
          (Allocation, [Int]) -- assignments using available registers, list of spills
-color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers previousSpillTemps' =
+color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode }
+      initAlloc
+      spillCost'
+      registers
+      previousSpillTemps' =
   let
     numColors' = length registers
     allColors' = [0 .. numColors' - 1]
@@ -161,7 +167,9 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode } initAlloc _ registers pre
     readOnlyData = AllocatorReadOnlyData { precolored=precolored'
                                          , numColors=numColors'
                                          , allColors=allColors'
-                                         , previousSpillTemps=Set.fromList previousSpillTempsNodes }
+                                         , previousSpillTemps=Set.fromList previousSpillTempsNodes
+                                         , spillCost=spillCost'
+                                         , nodeIdToTempId=gtemp }
 
     -- fill in adjSet, adjList, degree by traversing igraph
     ((), state') = runIdentity $ runReaderT (runStateT buildGraph state) readOnlyData
@@ -687,22 +695,24 @@ selectSpill :: Allocator ()
 selectSpill = do
   st@AllocatorState { spillWorklist=spillWorklist'
                     , simplifyWorklist=simplifyWorklist' } <- get
-  AllocatorReadOnlyData { previousSpillTemps=previousSpillTemps' } <- lift ask
-  case chooseASpill spillWorklist' previousSpillTemps' of
-    Just m -> let
-      spillWorklist'' = Set.delete m spillWorklist'
-      simplifyWorklist'' = Set.insert m simplifyWorklist'
-      in do
-        put st { spillWorklist=spillWorklist''
-               , simplifyWorklist=simplifyWorklist'' }
-        freezeMoves m
-    Nothing -> do pure ()
+  AllocatorReadOnlyData { nodeIdToTempId=nodeIdToTempId'
+                        , spillCost=spillCost' } <- lift ask
+  let
+    m = chooseASpill spillCost' spillWorklist' nodeIdToTempId'
+    spillWorklist'' = Set.delete m spillWorklist'
+    simplifyWorklist'' = Set.insert m simplifyWorklist'
+    in do
+      put st { spillWorklist=spillWorklist''
+             , simplifyWorklist=simplifyWorklist'' }
+      freezeMoves m
   where
-    chooseASpill :: Set L.NodeId -> Set L.NodeId -> Maybe L.NodeId
-    chooseASpill spillWS tempsFromPrevSpills =
-      case Set.lookupMin $ spillWS `Set.difference` tempsFromPrevSpills of
-        s@(Just _) -> s
-        Nothing -> Set.lookupMin spillWS
+    chooseASpill :: (Int -> Float) -> Set L.NodeId -> Map L.NodeId Int -> L.NodeId
+    chooseASpill costFn spillWS nodeIdToTempId' =
+      minimumBy (comparing (\nodeId -> let
+                                         tempId = nodeIdToTempId' Map.! nodeId
+                                       in
+                                         costFn tempId))
+                spillWS
 
 assignColors :: Allocator ()
 assignColors = do
