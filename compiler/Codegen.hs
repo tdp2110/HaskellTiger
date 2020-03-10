@@ -253,7 +253,7 @@ munchExp (TreeIR.CALL (expr, args, escapes)) =
                   argRegs <- mapM munchExp args
                   exprReg <- munchExp expr
                   x64 <- getArch
-                  saveRestoreAndSetupArgs
+                  doCall
                     (A.OPER { A.assem="\tcall `s0"
                             , A.operDst=X64Frame.callDests x64
                             , A.operSrc=exprReg:(X64Frame.rsp x64):argRegs
@@ -263,6 +263,24 @@ munchExp (TreeIR.CALL (expr, args, escapes)) =
                             , A.moveSrc=X64Frame.rax x64 })
                     argRegs
                     escapes
+                    IsReturn
+         )
+munchExp (TreeIR.CALLNORETURN (expr, args, escapes)) =
+  result (\r -> do
+                  argRegs <- mapM munchExp args
+                  exprReg <- munchExp expr
+                  x64 <- getArch
+                  doCall
+                    (A.OPER { A.assem="\tcall `s0"
+                            , A.operDst=X64Frame.callDests x64
+                            , A.operSrc=exprReg:(X64Frame.rsp x64):argRegs
+                            , A.jump=Nothing })
+                    (A.MOVE { A.assem="\tmov `d0, `s0"
+                            , A.moveDst=r
+                            , A.moveSrc=X64Frame.rax x64 })
+                    argRegs
+                    escapes
+                    NoReturn
          )
 munchExp (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, e, TreeIR.CONST c))) =
   result (\r -> do
@@ -299,9 +317,11 @@ munchExp (TreeIR.NAME (Temp.Label (S.Symbol s))) =
                                 , A.jump=Nothing } ]
          )
 
-saveRestoreAndSetupArgs :: A.Inst -> A.Inst -> [Int] -> [Frame.EscapesOrNot]
+data ReturnsOrNot = IsReturn | NoReturn
+
+doCall :: A.Inst -> A.Inst -> [Int] -> [Frame.EscapesOrNot] -> ReturnsOrNot
                              -> CodeGenerator [A.Inst]
-saveRestoreAndSetupArgs callStm moveStm callArgs escapes = do
+doCall callStm moveStm callArgs escapes returnsOrNot = do
   x64 <- getArch
   let
     callerSaves = X64Frame.callerSaves x64
@@ -312,9 +332,13 @@ saveRestoreAndSetupArgs callStm moveStm callArgs escapes = do
         saves = fmap save $ zip callerSaves callerSaveDests
         restores = fmap restore $ zip callerSaves callerSaveDests
         in
-        pure $ saves ++ (setupArgs x64 $ zip callArgs escapes)
-                     ++ [callStm, moveStm]
-                     ++ restores
+        case returnsOrNot of
+          IsReturn ->
+            pure $ saves ++ (setupArgs x64 $ zip callArgs escapes)
+                         ++ [callStm, moveStm]
+                         ++ restores
+          NoReturn ->
+            pure $ (setupArgs x64 $ zip callArgs escapes) ++ [callStm]
   where
     save :: (Int, Int) -> A.Inst
     save (reg, temp) = A.MOVE { A.assem="\tmov `d0, `s0\t\t## caller saves"

@@ -94,6 +94,12 @@ externalCall (Temp.Label (Symbol.Symbol funname)) params =
               , params
               , fmap (\_ -> Frame.DoesNotEscape) params)
 
+externalCallNoReturn :: Temp.Label -> [TreeIR.Exp] -> TreeIR.Exp
+externalCallNoReturn (Temp.Label (Symbol.Symbol funname)) params =
+  TreeIR.CALLNORETURN ( TreeIR.NAME (Temp.Label (Symbol.Symbol $ "_" ++ funname)) -- hack for MacOS
+                      , params
+                      , fmap (\_ -> Frame.DoesNotEscape) params)
+
 accessExp :: X64Frame -> X64Access -> TreeIR.Exp
 accessExp frame acc = exp acc $ frameExp frame
 

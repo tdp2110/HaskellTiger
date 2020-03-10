@@ -274,7 +274,7 @@ binOp expLeft expRight op gen =
                                          (Ex zero)
                                          Absyn.NeqOp
                                          gen''
-                   onDivByZero = Ex $ X64Frame.externalCall
+                   onDivByZero = Ex $ X64Frame.externalCallNoReturn
                                         (Temp.Label $ Symbol.Symbol "tiger_divByZero")
                                         []
                  in
@@ -464,7 +464,7 @@ field recordExpE fieldNumber gen =
                 ( TreeIR.PLUS
                 , recordExp
                 , TreeIR.CONST $ fieldNumber * X64Frame.wordSize )
-    sadPath = Ex $ X64Frame.externalCall
+    sadPath = Ex $ X64Frame.externalCallNoReturn
               (Temp.Label $ Symbol.Symbol "tiger_nullRecordDereference")
               []
     jumpExp = Cx $ \happyLab sadLab ->
@@ -487,7 +487,7 @@ subscript arrExpE indexExpE gen =
                                               , wordSize
                                               , indexExp )
                                , wordSize ) )
-    sadPath = Ex $ X64Frame.externalCall
+    sadPath = Ex $ X64Frame.externalCallNoReturn
               (Temp.Label $ Symbol.Symbol "tiger_indexError")
               [sizeExp, indexExp]
     (gtZeroExp, gen3) = relOp indexExpE zeroExp Absyn.GeOp gen''

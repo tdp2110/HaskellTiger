@@ -17,6 +17,7 @@ data Exp =
   | BINOP (Binop, Exp, Exp)
   | MEM Exp
   | CALL (Exp, [Exp], [Frame.EscapesOrNot])
+  | CALLNORETURN (Exp, [Exp], [Frame.EscapesOrNot])
   | ESEQ (Stm, Exp)
   deriving (Eq)
 
@@ -189,6 +190,17 @@ putExp (CALL (e,el,_)) d = do
     )
     el
   putStrW ")"
+putExp (CALLNORETURN (e,el,_)) d = do
+  indent d
+  putStrLnW "CALLNORETURN("
+  putExp e $ d + 1
+  mapM_
+    (\a -> do
+             putStrLnW ","
+             putExp a $ d + 1
+    )
+    el
+  putStrW ")"
 
 binop :: Binop -> StmWriter
 binop PLUS = do putStrW "PLUS"
@@ -230,6 +242,8 @@ maxCallArgsExp (BINOP (_, e1, e2)) = max (maxCallArgsExp e1) (maxCallArgsExp e2)
 maxCallArgsExp (MEM e) = maxCallArgsExp e
 maxCallArgsExp (CALL (funcExp, args, _)) =
   maximum [maxCallArgsExp funcExp, maximumOrZeroIfEmpty $ fmap maxCallArgsExp args, fromIntegral $ length args]
+maxCallArgsExp (CALLNORETURN (funcExp, args, _)) =
+  maxCallArgsExp (CALL (funcExp, args, undefined))
 maxCallArgsExp (ESEQ (s, e)) = max (maxCallArgsStm s) (maxCallArgsExp e)
 
 maximumOrZeroIfEmpty :: [Int] -> Int
