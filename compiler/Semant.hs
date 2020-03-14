@@ -494,7 +494,8 @@ transExp (A.WhileExp testExp bodyExp pos) = do
   st@SemantState{breakTarget=originalBreakTarget} <- get
   put st{breakTarget=Just nextBreakTarget}
   ExpTy{exp=bodyE, ty=bodyTy} <- transExp bodyExp
-  put st{breakTarget=originalBreakTarget}
+  st' <- get
+  put st'{breakTarget=originalBreakTarget}
   if testTy /= Types.INT then
     throwT pos $ "in whileExp, the test expression must be integral: " ++
     "found type=" ++ (show testTy)
