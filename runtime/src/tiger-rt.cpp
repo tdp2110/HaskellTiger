@@ -143,4 +143,21 @@ void tiger_divByZero() {
   std::terminate();
 }
 
+uint8_t *tiger_initArray(int64_t const size, int64_t const initVal) {
+  int64_t *const res = new int64_t(size + 1);
+  AssertNotNull(res, __FUNCTION__);
+  res[0] = size;
+  for (int64_t ix = 0; ix < size; ++ix) {
+    res[ix + 1] = initVal;
+  }
+  return reinterpret_cast<uint8_t *>(res);
+}
+
+void tiger_indexError(int64_t const size, int64_t const indexExp) {
+  std::cerr << "FATAL TIGER ERROR: IndexError -- tried indexing into an array "
+               "of size "
+            << size << " with index " << indexExp << "\n";
+  std::terminate();
+}
+
 } // extern "C"

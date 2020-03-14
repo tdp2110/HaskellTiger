@@ -480,13 +480,13 @@ subscript arrExpE indexExpE gen =
     sizeExp = TreeIR.MEM arrExp
     wordSize = TreeIR.CONST $ X64Frame.wordSize
     happyPath = Ex $ TreeIR.MEM $ TreeIR.BINOP
-                ( TreeIR.PLUS
-                , arrExp
-                , TreeIR.BINOP ( TreeIR.PLUS
-                               , TreeIR.BINOP ( TreeIR.MUL
-                                              , wordSize
-                                              , indexExp )
-                               , wordSize ) )
+                  ( TreeIR.PLUS
+                  , arrExp
+                  , TreeIR.BINOP ( TreeIR.PLUS
+                                 , TreeIR.BINOP ( TreeIR.MUL
+                                                , wordSize
+                                                , indexExp )
+                                 , wordSize ) )
     sadPath = Ex $ X64Frame.externalCallNoReturn
               (Temp.Label $ Symbol.Symbol "tiger_indexError")
               [sizeExp, indexExp]
