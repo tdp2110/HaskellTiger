@@ -14,6 +14,7 @@ import Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
 import Data.DList (DList, singleton, toList)
 import Data.Functor.Identity
 import Data.List
+import qualified Data.Map as Map
 
 
 codegen :: X64Frame.X64 -> Temp.Generator -> TreeIR.Stm -> ([A.Inst], Temp.Generator)
@@ -331,15 +332,30 @@ doCall callStm moveStm callArgs escapes returnsOrNot = do
       let
         saves = fmap save $ zip callerSaves callerSaveDests
         restores = fmap restore $ zip callerSaves callerSaveDests
+        (argMap, argSetup) = setupArgs x64 $ zip callArgs escapes
+        callStm' = rewriteCall argMap callStm
         in
         case returnsOrNot of
           IsReturn ->
-            pure $ saves ++ (setupArgs x64 $ zip callArgs escapes)
-                         ++ [callStm, moveStm]
+            pure $ saves ++ argSetup
+                         ++ [callStm', moveStm]
                          ++ restores
           NoReturn ->
-            pure $ (setupArgs x64 $ zip callArgs escapes) ++ [callStm]
+            pure $ argSetup ++ [callStm']
   where
+    rewriteCall :: [(Int, Int)] -> A.Inst -> A.Inst
+    rewriteCall argMap i@(A.OPER { A.operSrc=operSrc }) =
+      let
+        argMap' = Map.fromList argMap
+        replaceElt ix = case Map.lookup ix argMap' of
+                          Just ix' -> ix'
+                          Nothing  -> ix
+        operSrc' = fmap replaceElt operSrc
+      in
+        i { A.operSrc=operSrc' }
+    rewriteCall _ i =
+       error $ "shouldn't get here: illegal call instr " ++ (show i)
+
     save :: (Int, Int) -> A.Inst
     save (reg, temp) = A.MOVE { A.assem="\tmov `d0, `s0\t\t## caller saves"
                               , A.moveDst = temp
@@ -350,19 +366,22 @@ doCall callStm moveStm callArgs escapes returnsOrNot = do
                                  , A.moveDst = reg
                                  , A.moveSrc = temp }
 
-    setupArgs :: X64Frame.X64 -> [(Int, Frame.EscapesOrNot)] -> [A.Inst]
+    setupArgs :: X64Frame.X64 -> [(Int, Frame.EscapesOrNot)] -> ([(Int, Int)], [A.Inst])
     setupArgs x64 paramsAndEscapes =
       let
-        (_, _, res) = foldl'
+        (_, paramMap, _, res) = foldl'
                         (step x64)
-                        (X64Frame.paramRegs x64, [0..], [] :: [A.Inst])
+                        (X64Frame.paramRegs x64, [] :: [(Int, Int)], [0..], [] :: [A.Inst])
                         paramsAndEscapes
       in
-        res
+        (paramMap, res)
 
-    step :: X64Frame.X64 -> ([Int], [Int], [A.Inst]) -> (Int, Frame.EscapesOrNot)
-              -> ([Int], [Int], [A.Inst])
-    step x64 (paramRegs, nextStackOffsets, acc) (argReg, escapesOrNot) =
+    step :: X64Frame.X64 -> ([Int], [(Int, Int)], [Int], [A.Inst]) -> (Int, Frame.EscapesOrNot)
+              -> ( [Int] -- remaining param regs
+                 , [(Int, Int)] -- argReg, paramReg
+                 , [Int] -- nextStackOffsets
+                 , [A.Inst])
+    step x64 (paramRegs, argMap, nextStackOffsets, acc) (argReg, escapesOrNot) =
       case escapesOrNot of
         Frame.Escapes ->
           let
@@ -372,13 +391,14 @@ doCall callStm moveStm callArgs escapes returnsOrNot = do
                           , A.operSrc=[X64Frame.rsp x64, argReg]
                           , A.jump=Nothing }
           in
-            (paramRegs, nextStackOffsets', acc ++ [inst])
+            (paramRegs, argMap, nextStackOffsets', acc ++ [inst])
         Frame.DoesNotEscape ->
           case paramRegs of
             [] ->
-              step x64 (paramRegs, nextStackOffsets, acc) (argReg, Frame.Escapes)
+              step x64 (paramRegs, argMap, nextStackOffsets, acc) (argReg, Frame.Escapes)
             (paramReg:paramRegs') ->
               ( paramRegs'
+              , (argReg, paramReg):argMap
               , nextStackOffsets
               , acc ++ [ A.MOVE { A.assem="\tmov `d0, `s0"
                                 , A.moveDst=paramReg
