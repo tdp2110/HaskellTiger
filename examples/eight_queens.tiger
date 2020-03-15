@@ -9,9 +9,9 @@ let /* The eight queens solver from Appel */
 function printboard() =
     (for i := 0 to N-1
     do (for j := 0 to N-1
-        do print(if col[i]=j then " O" else " .");
-        print("\n"));
-    print("\n"))
+        do println(if col[i]=j then " O" else " .");
+        println("\n"));
+    println("\n"))
 
 function try(c:int) =
     if c=N then printboard()

@@ -2,5 +2,5 @@ let
     function f(x: int, y: int) : int = x + y
     function g(x: int, y: int) : int = f(x, y)
 in
-    print(itoa(g(1, 2)))
+    println(itoa(g(1, 2)))
 end

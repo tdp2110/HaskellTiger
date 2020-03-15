@@ -6,5 +6,5 @@ let
                                      , tail=IntList { head=2
                                                     , tail=nil } } }
 in
-    print(itoa(sum(xs)))
+    println(itoa(sum(xs)))
 end

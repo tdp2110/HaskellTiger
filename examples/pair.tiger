@@ -3,5 +3,5 @@ let
     var p := IntPair { fst=1, snd=2 }
     function pairSum(p : IntPair) : int = p.fst + p.snd
 in
-    print(itoa(pairSum(p)))
+    println(itoa(pairSum(p)))
 end

@@ -8,5 +8,5 @@ let
             res
         end
 in
-    print(itoa(sum()))
+    println(itoa(sum()))
 end

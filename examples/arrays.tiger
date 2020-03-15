@@ -9,12 +9,12 @@ let
       in
         (for i := 0 to N - 1 do
           (res := res + a[i];
-           print(itoa(a[i]))));
+           println(itoa(a[i]))));
         res
       end
 
 in
     arr[0] := 1;
     arr[1] := 2;
-    print(itoa(sum(arr)))
+    println(itoa(sum(arr)))
 end

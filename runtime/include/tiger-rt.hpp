@@ -8,6 +8,7 @@ extern "C" {
 struct TgString;
 
 void tiger_print(TgString const *);
+void tiger_println(TgString const *);
 void tiger_flush();
 TgString *tiger_getchar();
 TgString *tiger_getline();

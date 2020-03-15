@@ -23,7 +23,12 @@ struct TgString {
 
 void tiger_print(TgString const *const str) {
   AssertNotNull(str, __FUNCTION__);
-  std::cout << str->impl << '\n';
+  std::cout << str->impl;
+}
+
+void tiger_println(TgString const *const str) {
+  tiger_print(str);
+  std::cout << '\n';
 }
 
 uint8_t *tiger_alloc(int64_t const numBytes) {

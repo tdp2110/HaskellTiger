@@ -2,5 +2,5 @@ let
     var x := 42
     function f(x: int) : int = x + 1
 in
-    print(itoa(f(x)))
+    println(itoa(f(x)))
 end

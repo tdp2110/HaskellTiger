@@ -10,5 +10,5 @@ let
         else
             isOdd(n - 1)
 in
-    print(itoa(isEven(42)))
+    println(itoa(isEven(42)))
 end

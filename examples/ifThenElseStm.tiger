@@ -3,7 +3,7 @@ let
 in
     if x = 1337
     then
-        print("cat")
+        println("cat")
     else
-        print("dog")
+        println("dog")
 end

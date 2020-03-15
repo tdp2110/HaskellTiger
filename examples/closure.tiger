@@ -3,5 +3,5 @@ let
     var z := 1337
     function f(y: int) : int = x + y
 in
-    print(itoa(f(z)))
+    println(itoa(f(z)))
 end

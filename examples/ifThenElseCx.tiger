@@ -7,7 +7,7 @@ let
                 46 > 47
 in
     if b then
-        print("hello")
+        println("hello")
     else
-        print("goodbye")
+        println("goodbye")
 end

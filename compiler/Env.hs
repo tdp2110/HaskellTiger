@@ -34,6 +34,7 @@ baseVEnv :: X64Frame.X64 -> Temp.Generator -> (VEnv, Temp.Generator)
 baseVEnv x64 gen =
   let
     signatures = [ ("print", [STRING], UNIT)
+                 , ("println", [STRING], UNIT)
                  , ("flush", [], UNIT)
                  , ("getchar", [], STRING)
                  , ("getline", [], STRING)

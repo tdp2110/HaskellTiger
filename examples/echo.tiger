@@ -1,4 +1,4 @@
 while 1 do
     let var str := getline() in
-    print(str)
+    println(str)
 end

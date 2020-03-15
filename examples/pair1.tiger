@@ -3,5 +3,5 @@ let
     var p := IntPair { fst=1, snd=2 }
     function fst(p : IntPair) : int = p.fst
 in
-    print(itoa(fst(p)))
+    println(itoa(fst(p)))
 end

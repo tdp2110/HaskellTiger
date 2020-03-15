@@ -1,0 +1,6 @@
+let
+    var str := "hello world!"
+in
+    println(str);
+    println(itoa(size(str)))
+end
