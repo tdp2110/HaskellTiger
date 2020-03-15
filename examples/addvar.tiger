@@ -1,0 +1,12 @@
+let
+    function sum() : int =
+        let
+            var res := 0
+        in
+            res := res + 1;
+            res := res + 2;
+            res
+        end
+in
+    print(itoa(sum()))
+end

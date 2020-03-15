@@ -303,6 +303,7 @@ ifThen testExpE thenExpE gen =
 
 seqExp :: [Exp] -> Temp.Generator -> (Exp, Temp.Generator)
 seqExp [] gen = (Ex zero, gen)
+seqExp [exp] gen = (exp, gen)
 seqExp (exp:exps) gen =
   let
     (headStm, gen') = unNx exp gen
