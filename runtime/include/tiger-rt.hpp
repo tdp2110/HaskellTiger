@@ -22,8 +22,9 @@ TgString *tiger_allocString(uint8_t const *bytes, int64_t numBytes);
 uint8_t *tiger_alloc(int64_t numBytes);
 [[noreturn]] void tiger_nullRecordDereference();
 [[noreturn]] void tiger_divByZero();
-uint8_t *tiger_initArray(int64_t size, int64_t initVal);
-[[noreturn]] void tiger_indexError(int64_t size, int64_t indexExp);
+void *tiger_initArray(int64_t size, int64_t initVal);
+int64_t tiger_getItem(void const *arr, int64_t index);
+void tiger_setItem(void *arr, int64_t index, int64_t value);
 
 } // extern "C"
 

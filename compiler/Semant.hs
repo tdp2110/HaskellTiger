@@ -451,6 +451,22 @@ transExp (A.SeqExp expAndPosns) = do
                 _          -> Translate.seqExp exps
     in
     translate transFn typ
+transExp (A.AssignExp (A.SubscriptVar var subscriptExpr subscriptPos) expr pos) = do
+  ExpTy{exp=varExp, ty=varTy} <- transVar var
+  ExpTy{exp=subscriptExp, ty=subscriptTy} <- transExp subscriptExpr
+  ExpTy{exp=rhs, ty=exprTy} <- transExp expr
+  if subscriptTy /= Types.INT then
+    throwT subscriptPos $ "in subscript expr, subscript type is not an INT, is " ++ (show subscriptTy)
+    else
+    case varTy of
+      Types.ARRAY (arrayEltTy,_) ->
+        if arrayEltTy /= exprTy then
+          throwT pos $ "in subscript expr, attempting to set a value of type " ++ (show exprTy) ++
+                       " in an array of type " ++ (show varTy)
+          else
+          translate (Translate.setitem varExp subscriptExp rhs) Types.UNIT
+      _ ->
+        throwT pos $ "in subscript expr, can only index into arrays. Got " ++ (show varTy)
 transExp (A.AssignExp var expr pos) = do
   ExpTy{exp=lhs, ty=varTy} <- transVar var
   ExpTy{exp=rhs, ty=exprTy} <- transExp expr

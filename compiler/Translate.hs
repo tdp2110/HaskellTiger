@@ -477,28 +477,34 @@ subscript arrExpE indexExpE gen =
   let
     (arrExp, gen') = unEx arrExpE gen
     (indexExp, gen'') = unEx indexExpE gen'
-    sizeExp = TreeIR.MEM arrExp
-    wordSize = TreeIR.CONST $ X64Frame.wordSize
-    happyPath = Ex $ TreeIR.MEM $ TreeIR.BINOP
-                  ( TreeIR.PLUS
-                  , arrExp
-                  , TreeIR.BINOP ( TreeIR.PLUS
-                                 , TreeIR.BINOP ( TreeIR.MUL
-                                                , wordSize
-                                                , indexExp )
-                                 , wordSize ) )
-    sadPath = Ex $ X64Frame.externalCallNoReturn
-              (Temp.Label $ Symbol.Symbol "tiger_indexError")
-              [sizeExp, indexExp]
-    (gtZeroExp, gen3) = relOp indexExpE zeroExp Absyn.GeOp gen''
-    (gtZero, gen4) = unEx gtZeroExp gen3
-    (ltSizeExp, gen5) = relOp indexExpE (Ex sizeExp) Absyn.LtOp gen4
-    (ltSize, gen6) = unEx ltSizeExp gen5
-    testExp = TreeIR.BINOP (TreeIR.AND, gtZero, ltSize)
-    jumpExp = Cx $ \happyLab sadLab ->
-      TreeIR.CJUMP (TreeIR.NE, testExp, zero, happyLab, sadLab)
+    (r, gen''') = Temp.newtemp gen''
+    rExp = TreeIR.TEMP r
+    resExp = Ex $ TreeIR.ESEQ (
+                    TreeIR.MOVE ( rExp
+                                , X64Frame.externalCall
+                                    (Temp.Label $ Symbol.Symbol "tiger_getItem")
+                                    [arrExp, indexExp] )
+                   , rExp)
   in
-    ifThenElse jumpExp happyPath sadPath gen6
+    (resExp, gen''')
+
+setitem :: Exp -> Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
+setitem arrExpE subscriptE valE gen =
+  let
+    (arrExp, gen') = unEx arrExpE gen
+    (subscriptExp, gen'') = unEx subscriptE gen'
+    (valExp, gen''') = unEx valE gen''
+    (r, gen4) = Temp.newtemp gen'''
+    rExp = TreeIR.TEMP r
+    resExp = Ex $ TreeIR.ESEQ (
+                    TreeIR.MOVE ( rExp
+                                , X64Frame.externalCall
+                                    (Temp.Label $ Symbol.Symbol "tiger_setItem")
+                                    [arrExp, subscriptExp, valExp] )
+                   , rExp)
+  in
+    (resExp, gen4)
+
 
 type Frag = X64Frame.Frag
 

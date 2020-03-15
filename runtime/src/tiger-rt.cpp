@@ -5,6 +5,7 @@
 #include <new>
 #include <string>
 #include <utility>
+#include <vector>
 
 template <typename T>
 static void AssertNotNull(T const *const p, char const *const funcname) {
@@ -143,21 +144,36 @@ void tiger_divByZero() {
   std::terminate();
 }
 
-uint8_t *tiger_initArray(int64_t const size, int64_t const initVal) {
-  int64_t *const res = new int64_t(size + 1);
+using TgArray = std::vector<int64_t>;
+
+void *tiger_initArray(int64_t const size, int64_t const initVal) {
+  auto *const res = new TgArray(size, initVal);
   AssertNotNull(res, __FUNCTION__);
-  res[0] = size;
-  for (int64_t ix = 0; ix < size; ++ix) {
-    res[ix + 1] = initVal;
-  }
-  return reinterpret_cast<uint8_t *>(res);
+  return reinterpret_cast<void *>(res);
 }
 
-void tiger_indexError(int64_t const size, int64_t const indexExp) {
-  std::cerr << "FATAL TIGER ERROR: IndexError -- tried indexing into an array "
-               "of size "
-            << size << " with index " << indexExp << "\n";
-  std::terminate();
+int64_t tiger_getItem(void const *const arr, int64_t const index) {
+  AssertNotNull(arr, __FUNCTION__);
+  auto const &vec = *reinterpret_cast<TgArray const *>(arr);
+
+  if (index < 0 || index >= vec.size()) {
+    std::cerr << "FATAL TIGER ERROR: IndexError in GetItem: index=" << index
+              << ", size=" << vec.size() << '\n';
+    std::terminate();
+  }
+  return vec[index];
+}
+
+void tiger_setItem(void *const arr, int64_t const index, int64_t const value) {
+  AssertNotNull(arr, __FUNCTION__);
+  auto &vec = *reinterpret_cast<TgArray *>(arr);
+
+  if (index < 0 || index >= vec.size()) {
+    std::cerr << "FATAL TIGER ERROR: IndexError in SetItem: index=" << index
+              << ", size=" << vec.size() << '\n';
+    std::terminate();
+  }
+  vec[index] = value;
 }
 
 } // extern "C"
