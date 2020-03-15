@@ -18,7 +18,7 @@ instance Eq Ty where
   INT == INT = True
   STRING == STRING = True
   RECORD(_,typeId) == RECORD(_,typeId') = typeId == typeId'
-  ARRAY(_,typeId) == RECORD(_,typeId') = typeId == typeId'
+  ARRAY(_,typeId) == ARRAY(_,typeId') = typeId == typeId'
   NIL == NIL = True
   UNIT == UNIT = True
   NAME(sym,maybeTy) == NAME(sym',maybeTy') = (sym == sym') &&
