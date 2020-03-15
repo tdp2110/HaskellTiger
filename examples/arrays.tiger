@@ -1,0 +1,20 @@
+let
+    var N := 2
+    type intArray = array of int
+    var arr := intArray [ N ] of 0
+
+    function sum(a : intArray) : int =
+      let
+        var res := 0
+      in
+        (for i := 0 to N - 1 do
+          (res := res + a[i];
+           print(itoa(a[i]))));
+        res
+      end
+
+in
+    arr[0] := 1;
+    arr[1] := 2;
+    print(itoa(sum(arr)))
+end
