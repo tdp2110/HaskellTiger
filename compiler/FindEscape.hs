@@ -13,7 +13,6 @@ import qualified Data.Map as Map
 import Data.List
 import Prelude hiding (exp)
 
-
 escapeExp :: A.Exp -> A.Exp
 
 type AstPath = [AstDir]
@@ -71,7 +70,7 @@ incrStaticDepth :: Escaper ()
 incrStaticDepth  = applyToStaticDepth (1+)
 
 decrStaticDepth :: Escaper ()
-decrStaticDepth = applyToStaticDepth $ \x -> x - 1
+decrStaticDepth = applyToStaticDepth (1-)
 
 applyToStaticDepth :: (Int -> Int) -> Escaper ()
 applyToStaticDepth fn = do
@@ -98,6 +97,9 @@ pushBinding sym bindingKind = do
 findEscapesM :: A.Exp -> Escaper ()
 findEscapesM (A.VarExp (A.SimpleVar sym _)) = findEscapesVar sym
 findEscapesM (A.VarExp (A.FieldVar var _ _)) = findEscapesVar $ findSym var
+findEscapesM (A.VarExp (A.SubscriptVar var expr _)) = do
+  findEscapesM expr
+  findEscapesVar $ findSym var
 findEscapesM (A.CallExp _ args _) = forM_ args findEscapesM
 findEscapesM (A.OpExp leftExp _ rightExp _) = do
   state <- lift get
@@ -186,16 +188,16 @@ extendEnv decs = forM_ (enumerate decs) mapFun
       state <- lift get
       pushDir state (LetDec decIdx)
       _ <- findEscapesM initExp
-      lift $ put state
+      lift $ put state{astPath = astPath state}
       pushBinding sym Var
       pure ()
     mapFun (_, (A.TypeDec _)) = do pure ()
 
 extendEnvWithFunctionDec :: [A.FunDec] -> Escaper ()
 extendEnvWithFunctionDec fundecs = do
-  _ <- insertHeaders $ map A.fundecName fundecs
+  _ <- insertHeaders $ fmap A.fundecName fundecs
   incrStaticDepth
-  _ <- processBodies $ zip (map A.params fundecs) (map A.funBody fundecs)
+  _ <- processBodies $ zip (fmap A.params fundecs) (fmap A.funBody fundecs)
   decrStaticDepth
   pure ()
   where

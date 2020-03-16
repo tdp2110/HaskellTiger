@@ -107,11 +107,31 @@ test_escapes2 = TestCase (
     assertEqual "Z remains unescaped" False $ getEscape escapedAst pathToZ
   )
 
+test_subscript :: Test
+test_subscript = TestCase (
+  let
+    text = "let\n" ++
+           "  var N := 7\n" ++
+           "  type intArray = array of int\n" ++
+           "  var arr := intArray[N] of 0\n" ++
+           "  function foo(x: int) : int = \n" ++
+           "    x + arr[N - 1]\n" ++
+           "in\n" ++
+           "  foo(2)\n" ++
+           "end"
+    escapes = findEscapes $ parse text
+  in do
+    assertEqual "subscript" [ (Symbol "N", [])
+                            , (Symbol "arr", []) ]
+        escapes
+  )
+
 tests :: Test
 tests = TestList [ TestLabel "test_directions1" test_directions1
                  , TestLabel "test_escapes1" test_escapes1
                  , TestLabel "test_directions2" test_directions2
                  , TestLabel "test_escapes2" test_escapes2
+                 , TestLabel "test_subscript" test_subscript
                  ]
 
 main :: IO Counts
