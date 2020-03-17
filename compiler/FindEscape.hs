@@ -125,7 +125,8 @@ findEscapesM (A.SeqExp seqElts) = forM_ (enumerate seqElts) mapFun
       _ <- findEscapesM exp
       lift $ put state
       pure ()
-findEscapesM (A.AssignExp _ exp _) = do
+findEscapesM (A.AssignExp var exp _) = do
+  findEscapesVar $ findSym var
   state <- lift get
   pushDir state AssignExp
   _ <- findEscapesM exp

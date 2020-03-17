@@ -126,12 +126,31 @@ test_subscript = TestCase (
         escapes
   )
 
+test_assign :: Test
+test_assign = TestCase (
+  let
+    text = "let\n" ++
+           "    var x := 42\n" ++
+           "    var y := 1337\n" ++
+           "    function set_x(arg : int) =\n" ++
+           "        x := arg\n" ++
+           "in\n" ++
+           "    println(itoa(x));\n" ++
+           "    set_x(y);\n" ++
+           "    println(itoa(x))\n" ++
+           "end"
+    escapes = findEscapes $ parse text
+  in do
+    assertEqual "assign" [(Symbol "x", [])] escapes
+  )
+
 tests :: Test
 tests = TestList [ TestLabel "test_directions1" test_directions1
                  , TestLabel "test_escapes1" test_escapes1
                  , TestLabel "test_directions2" test_directions2
                  , TestLabel "test_escapes2" test_escapes2
                  , TestLabel "test_subscript" test_subscript
+                 , TestLabel "test_assign" test_assign
                  ]
 
 main :: IO Counts
