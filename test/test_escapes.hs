@@ -144,6 +144,28 @@ test_assign = TestCase (
     assertEqual "assign" [(Symbol "x", [])] escapes
   )
 
+test_recursiveTypes :: Test
+test_recursiveTypes = TestCase (
+  let
+    text = "let\n" ++
+           "    type IntList = { head: int, tail: IntList }\n" ++
+           "    var nilIntList : IntList := nil\n" ++
+           "    function sum(xs : IntList) : int =\n" ++
+           "        if xs = nilIntList then\n" ++
+           "                42          else\n" ++
+           "                xs.head + sum(xs.tail)\n" ++
+           "    var xs := IntList { head=0\n" ++
+           "                      , tail=IntList { head=1\n" ++
+           "                                     , tail=IntList { head=2\n" ++
+           "                                                    , tail=nilIntList } } }\n" ++
+           "in\n" ++
+           "    println(itoa(sum(xs)))\n" ++
+           "end"
+    escapes = findEscapes $ parse text
+  in do
+    assertEqual "recursive" [(Symbol "nilIntList", [])] escapes
+  )
+
 tests :: Test
 tests = TestList [ TestLabel "test_directions1" test_directions1
                  , TestLabel "test_escapes1" test_escapes1
@@ -151,6 +173,7 @@ tests = TestList [ TestLabel "test_directions1" test_directions1
                  , TestLabel "test_escapes2" test_escapes2
                  , TestLabel "test_subscript" test_subscript
                  , TestLabel "test_assign" test_assign
+                 , TestLabel "test_recursive" test_recursiveTypes
                  ]
 
 main :: IO Counts
