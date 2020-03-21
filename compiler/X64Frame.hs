@@ -254,7 +254,10 @@ newFrame x64Inst frameName maybeDebug gen escapes =
               step (gen', frame, numEscapesSeen, paramRegsRemaining) Frame.Escapes
         Frame.Escapes ->
           ( gen'
-          , frame{formals=(formals frame) ++ [InFrame numEscapesSeen]}
+          , frame{formals=(formals frame) ++ [InFrame $ numEscapesSeen + 2]} -- +2 to bypass pushed rbp on
+                                                                             -- on function entry and
+                                                                             -- implicitly-pushed rip from
+                                                                             -- call instr.
           , numEscapesSeen + 1
           , paramRegsRemaining )
 
