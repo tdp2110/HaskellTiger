@@ -362,7 +362,7 @@ doCall callStm moveStm callArgs escapes returnsOrNot = do
                               , A.moveSrc = reg }
 
     restore :: (Int, Int) -> A.Inst
-    restore (reg, temp) = A.MOVE { A.assem="\tmov `d0, `s0\t\t## caller saves"
+    restore (reg, temp) = A.MOVE { A.assem="\tmov `d0, `s0\t\t## caller restores"
                                  , A.moveDst = reg
                                  , A.moveSrc = temp }
 
