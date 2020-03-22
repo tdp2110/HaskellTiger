@@ -366,7 +366,7 @@ procEntryExit2 frame bodyAsm =
     bodyAsm ++ [
         Assem.OPER { Assem.assem = ""
                    , Assem.operDst = []
-                   , Assem.operSrc = [rax x64', rsp x64'] ++ maybeCalleSaves
+                   , Assem.operSrc = [rax x64', rsp x64', rbp x64'] ++ maybeCalleSaves
                    , Assem.jump = Just [] }
             ]
 

@@ -257,7 +257,7 @@ munchExp (TreeIR.CALL (expr, args, escapes)) =
                   doCall
                     (A.OPER { A.assem="\tcall `s0"
                             , A.operDst=X64Frame.callDests x64
-                            , A.operSrc=exprReg:(X64Frame.rsp x64):argRegs
+                            , A.operSrc=exprReg:(X64Frame.rsp x64):(X64Frame.rbp x64):argRegs
                             , A.jump=Nothing })
                     (A.MOVE { A.assem="\tmov `d0, `s0"
                             , A.moveDst=r
