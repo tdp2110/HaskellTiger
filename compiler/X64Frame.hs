@@ -73,6 +73,20 @@ instance Show X64Frame where
                   ", locals=" ++ (show $ locals f) ++
                   ", debug=" ++ (show $ frameDebug f) ++ " }"
 
+staticLinkAccess :: X64Frame -> X64Access
+staticLinkAccess f = case formals f of
+                 [] -> error "expected static link in formals"
+                 (sl:_) -> sl
+
+staticLinkExp :: X64Frame -> TreeIR.Exp
+staticLinkExp f =
+  let
+    framePtr = frameExp f
+  in
+    case staticLinkAccess f of
+      (InReg _) -> error "static links should always be passed in memory"
+      acc@(InFrame _) -> exp acc framePtr
+
 data Frag = PROC { body :: TreeIR.Stm
                  , fragFrame :: X64Frame }
           | STRING (Temp.Label, String)
@@ -102,9 +116,6 @@ externalCallNoReturn (Temp.Label (Symbol.Symbol funname)) params =
 
 accessExp :: X64Frame -> X64Access -> TreeIR.Exp
 accessExp frame acc = exp acc $ frameExp frame
-
-staticLink :: TreeIR.Exp -> TreeIR.Exp
-staticLink framePtr = TreeIR.MEM framePtr
 
 numFormalsInReg :: X64Frame -> Int
 numFormalsInReg frame =

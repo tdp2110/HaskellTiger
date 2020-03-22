@@ -161,7 +161,7 @@ unNx (Cx genstm) gen =
 
 simpleVar :: X64Access -> X64Level -> Exp
 simpleVar X64Access{level=declaredLevel, access=accessInDeclaredFrame} levelAtUse =
-  Ex $ X64Frame.exp accessInDeclaredFrame $ staticLink levelAtUse declaredLevel
+  Ex $ X64Frame.exp accessInDeclaredFrame $ chaseStaticLinks levelAtUse declaredLevel
 
 ptrCmp :: Exp -> Exp -> Absyn.Oper -> Temp.Generator -> (Exp, Temp.Generator)
 ptrCmp r1 r2 op gen =
@@ -550,18 +550,21 @@ callM funLevel callerLevel funlab params = do
   let
     (treeParams, gen') = runState (mapM unExM params) gen
     escapes = x64Formals funLevel
+    callerParentLevel = x64Parent callerLevel
     in do
     put gen'
     pure $ Ex $ case x64Parent funLevel of
                     X64Outermost ->
                       X64Frame.externalCall funlab treeParams
                     funParentLevel ->
-                      TreeIR.CALL ( TreeIR.NAME funlab
-                                  , [staticLink
-                                      callerLevel
-                                      funParentLevel]
-                                    ++ treeParams
-                                  , escapes)
+                      let sl = if funParentLevel == callerParentLevel then
+                                 X64Frame.staticLinkExp $ x64Frame callerLevel
+                               else
+                                 X64Frame.frameExp $ x64Frame callerLevel
+                      in
+                        TreeIR.CALL ( TreeIR.NAME funlab
+                                    , sl:treeParams
+                                    , escapes)
 
 call :: X64Level -> X64Level -> Temp.Label -> [Exp] -> Temp.Generator
   -> (Exp, Temp.Generator)
@@ -598,19 +601,15 @@ functionDec X64Level{x64Frame=frame} bodyExp gen =
                       , X64Frame.fragFrame=frame }
 functionDec X64Outermost _ _ = error "should not get here"
 
-
-staticLink :: X64Level -> X64Level -> TreeIR.Exp
-staticLink X64Outermost _ = error "outermost can't find static links"
-staticLink _ X64Outermost = error "can't find static links to outermost"
-staticLink baseLevel destLevel =
+chaseStaticLinks :: X64Level -> X64Level -> TreeIR.Exp
+chaseStaticLinks X64Outermost _ = error "outermost can't find static links"
+chaseStaticLinks _ X64Outermost = error "can't find static links to outermost"
+chaseStaticLinks callerLevel funParentLevel =
   let
-    baseFrame = x64Frame baseLevel
+    callerFrame = x64Frame callerLevel
+    sl = X64Frame.staticLinkAccess callerFrame
   in
-    if baseLevel == destLevel then
-      X64Frame.frameExp baseFrame
+    if callerLevel == funParentLevel then
+      X64Frame.frameExp callerFrame
     else
-      case X64Frame.formals baseFrame of
-        [] ->
-          error "expected static link in formals"
-        (sl : _) ->
-          X64Frame.exp sl $ staticLink (x64Parent baseLevel) destLevel
+      X64Frame.exp sl $ chaseStaticLinks (x64Parent callerLevel) funParentLevel
