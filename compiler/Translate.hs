@@ -369,32 +369,8 @@ ifThenElseStm testExpE thenExp elseExp gen =
   in
     (resExp, gen5)
 
-ifThenElseCx :: CxFun -> CxFun -> CxFun -> Temp.Generator -> (Exp, Temp.Generator)
-ifThenElseCx testGen thenGen elseGen gen =
-  let
-    (z, gen') = Temp.newlabel gen
-    (w, gen'') = Temp.newlabel gen'
-    resExp = Cx $ \t f -> TreeIR.makeSeq [ testGen z f
-                                         , TreeIR.LABEL z
-                                         , thenGen w f
-                                         , TreeIR.LABEL w
-                                         , elseGen t f ]
-  in
-    (resExp, gen'')
 
 ifThenElse :: Exp -> Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
-ifThenElse testExpE (Cx thenGen) elseE gen =
-  let
-    testGen = unCx testExpE
-    elseGen = unCx elseE
-  in
-    ifThenElseCx testGen thenGen elseGen gen
-ifThenElse testExpE thenE (Cx elseGen) gen =
-  let
-    testGen = unCx testExpE
-    thenGen = unCx thenE
-  in
-    ifThenElseCx testGen thenGen elseGen gen
 ifThenElse testExpE thenExpE elseExpE gen =
   let
     testGen = unCx testExpE
