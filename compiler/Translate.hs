@@ -371,6 +371,14 @@ ifThenElseStm testExpE thenExp elseExp gen =
 
 
 ifThenElse :: Exp -> Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
+ifThenElse (Cx testGen) (Cx thenGen) (Ex (TreeIR.CONST 0)) gen = -- andExp from Parser.y
+  let
+    (z, gen') = Temp.newlabel gen
+    resExp = Cx $ \t f ->  TreeIR.SEQ ( testGen z f
+                                      , TreeIR.SEQ ( TreeIR.LABEL z
+                                                   , thenGen t f ))
+  in
+    (resExp, gen')
 ifThenElse testExpE thenExpE elseExpE gen =
   let
     testGen = unCx testExpE
