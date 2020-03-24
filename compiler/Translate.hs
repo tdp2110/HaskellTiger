@@ -351,6 +351,7 @@ seqStm seqOrStm (exp:exps) gen =
 -}
 
 ifThenElseStm :: Exp -> Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
+
 ifThenElseStm testExpE thenExp elseExp gen =
   let
     testGen = unCx testExpE
@@ -369,14 +370,21 @@ ifThenElseStm testExpE thenExp elseExp gen =
   in
     (resExp, gen5)
 
-
 ifThenElse :: Exp -> Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
+ifThenElse (Cx testGen) (Ex (TreeIR.CONST 1)) (Cx elseGen) gen = -- orExp from Parser.y
+  let
+    (z, gen') = Temp.newlabel gen
+    resExp = Cx $ \t f -> TreeIR.SEQ ( testGen t z
+                                     , TreeIR.SEQ ( TreeIR.LABEL z
+                                                  , elseGen t f))
+  in
+    (resExp, gen')
 ifThenElse (Cx testGen) (Cx thenGen) (Ex (TreeIR.CONST 0)) gen = -- andExp from Parser.y
   let
     (z, gen') = Temp.newlabel gen
-    resExp = Cx $ \t f ->  TreeIR.SEQ ( testGen z f
-                                      , TreeIR.SEQ ( TreeIR.LABEL z
-                                                   , thenGen t f ))
+    resExp = Cx $ \t f -> TreeIR.SEQ ( testGen z f
+                                     , TreeIR.SEQ ( TreeIR.LABEL z
+                                                  , thenGen t f ))
   in
     (resExp, gen')
 ifThenElse testExpE thenExpE elseExpE gen =
