@@ -38,12 +38,9 @@ plusMinusInt i
 newTemp :: CodeGenerator Int
 newTemp = do
   gen <- get
-  let
-    (t, gen') = Temp.newtemp gen
-    in
-    do
-      put gen'
-      pure t
+  let (t, gen') = Temp.newtemp gen
+  put gen'
+  pure t
 
 emit :: A.Inst -> CodeGenerator ()
 emit inst = do
@@ -189,14 +186,12 @@ munchStm (TreeIR.CJUMP (op, e1, e2, t, f)) = do
 
 munchExp :: TreeIR.Exp -> CodeGenerator Int
 munchExp (TreeIR.CONST c) =
-  result (\r -> let
-                  inst = A.OPER { A.assem="\tmov `d0, " ++ (show c) ++ ""
+  result (\r -> let inst = A.OPER { A.assem="\tmov `d0, " ++ (show c) ++ ""
                                 , A.operDst = [r]
                                 , A.operSrc = []
                                 , A.jump = Nothing }
-                in
-                  do
-                    pure [inst]
+                in do
+                pure [inst]
         )
 munchExp (TreeIR.TEMP t) = do
   pure t
@@ -209,12 +204,13 @@ munchExp (TreeIR.BINOP (op, e1, e2)) =
                     src1 <- munchExp e1
                     src2 <- munchExp e2
                     x64 <- getArch
+                    let divideDests = X64Frame.divideDests x64
                     pure [ A.MOVE { A.assem="\tmov `d0, `s0"
                                   , A.moveDst=X64Frame.dividendRegister x64
                                   , A.moveSrc=src1 }
                          , A.OPER { A.assem="\tidiv `s0"
-                                  , A.operDst=X64Frame.divideDests x64
-                                  , A.operSrc=src2:(X64Frame.divideDests x64)
+                                  , A.operDst=divideDests
+                                  , A.operSrc=src2:divideDests
                                   , A.jump=Nothing }
                          , A.MOVE { A.assem="\tmov `d0, `s0"
                                   , A.moveDst=r
@@ -225,12 +221,13 @@ munchExp (TreeIR.BINOP (op, e1, e2)) =
                     src1 <- munchExp e1
                     src2 <- munchExp e2
                     x64 <- getArch
+                    let multiplyDests = X64Frame.multiplyDests x64
                     pure [ A.MOVE { A.assem="\tmov `d0, `s0"
                                   , A.moveDst=X64Frame.multiplicandRegister x64
                                   , A.moveSrc=src1 }
                          , A.OPER { A.assem="\t" ++ (convertOp op) ++ " `d0, `s0"
-                                  , A.operDst=X64Frame.multiplyDests x64
-                                  , A.operSrc=src2:(X64Frame.multiplyDests x64)
+                                  , A.operDst=multiplyDests
+                                  , A.operSrc=src2:multiplyDests
                                   , A.jump=Nothing }
                          , A.MOVE { A.assem="\tmov `d0, `s0"
                                   , A.moveDst=r
@@ -324,24 +321,21 @@ doCall :: A.Inst -> A.Inst -> [Int] -> [Frame.EscapesOrNot] -> ReturnsOrNot
                              -> CodeGenerator [A.Inst]
 doCall callStm moveStm callArgs escapes returnsOrNot = do
   x64 <- getArch
+  let callerSaves = X64Frame.callerSaves x64
+  callerSaveDests <- mapM (\_ -> newTemp) callerSaves
   let
-    callerSaves = X64Frame.callerSaves x64
+    saves = fmap save $ zip callerSaves callerSaveDests
+    restores = fmap restore $ zip callerSaves callerSaveDests
+    (argMap, argSetup) = setupArgs x64 $ zip callArgs escapes
+    callStm' = rewriteCall argMap callStm
     in
-    do
-      callerSaveDests <- mapM (\_ -> newTemp) callerSaves
-      let
-        saves = fmap save $ zip callerSaves callerSaveDests
-        restores = fmap restore $ zip callerSaves callerSaveDests
-        (argMap, argSetup) = setupArgs x64 $ zip callArgs escapes
-        callStm' = rewriteCall argMap callStm
-        in
-        case returnsOrNot of
-          IsReturn ->
-            pure $ saves ++ argSetup
-                         ++ [callStm', moveStm]
-                         ++ restores
-          NoReturn ->
-            pure $ argSetup ++ [callStm']
+    case returnsOrNot of
+      IsReturn ->
+        pure $ saves ++ argSetup
+                     ++ [callStm', moveStm]
+                     ++ restores
+      NoReturn ->
+        pure $ argSetup ++ [callStm']
   where
     rewriteCall :: [(Int, Int)] -> A.Inst -> A.Inst
     rewriteCall argMap i@(A.OPER { A.operSrc=operSrc }) =

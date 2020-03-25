@@ -71,11 +71,9 @@ interferenceGraph flowGraph =
     buildGraph :: Map Flow.NodeId (Set TempId) -> IGraphBuilder ()
     buildGraph liveMap = do
       tempsAndNodes <- allocNodes nodeIds
-      let
-        tempToNode = Map.fromList tempsAndNodes -- `debug` ("tempsAndNodes: " ++ (show $ fmap fst  tempsAndNodes))
-        in do
-        (lift . tell) tempsAndNodes
-        mapM_ (processNode tempToNode) $ Map.toList liveMap
+      let tempToNode = Map.fromList tempsAndNodes
+      (lift . tell) tempsAndNodes
+      mapM_ (processNode tempToNode) $ Map.toList liveMap
 
     allocNodes :: Set TempId -> IGraphBuilder [(TempId, Node)]
     allocNodes tempIds =
@@ -103,25 +101,23 @@ interferenceGraph flowGraph =
     processNode :: Map TempId Node ->
                    (Flow.NodeId, Set TempId) ->
                    IGraphBuilder()
-    processNode tempToNode (flowNode, liveSet) =
-      let
-        defs = (Flow.def flowGraph) `getItem` flowNode
-        isMove = (Flow.ismove flowGraph) `getItem` flowNode
-      in do
-        mapM_ (addInterferenceEdges liveSet tempToNode isMove) defs
-        case isMove of
-          Just (dst, src) -> let dstNode = case Map.lookup dst tempToNode of
-                                             Just v -> v
-                                             Nothing -> error $ "couldn't find " ++ (show dst) ++ " in " ++
-                                                                (show tempToNode)
-                                 srcNode = case Map.lookup src tempToNode of
-                                             Just v -> v
-                                             Nothing -> error $ "couldn't find " ++ (show src) ++ " in " ++
-                                                                (show tempToNode)
-                             in do
-                                tell [(dstNode, srcNode)]
-                                pure ()
-          _               -> pure ()
+    processNode tempToNode (flowNode, liveSet) = do
+      let defs = (Flow.def flowGraph) `getItem` flowNode
+      let isMove = (Flow.ismove flowGraph) `getItem` flowNode
+      mapM_ (addInterferenceEdges liveSet tempToNode isMove) defs
+      case isMove of
+        Just (dst, src) -> do
+                           let dstNode = case Map.lookup dst tempToNode of
+                                           Just v -> v
+                                           Nothing -> error $ "couldn't find " ++ (show dst) ++ " in " ++
+                                                              (show tempToNode)
+                           let srcNode = case Map.lookup src tempToNode of
+                                           Just v -> v
+                                           Nothing -> error $ "couldn't find " ++ (show src) ++ " in " ++
+                                                              (show tempToNode)
+                           tell [(dstNode, srcNode)]
+                           pure ()
+        _               -> pure ()
 
     addInterferenceEdges :: Set TempId ->
                             Map TempId Node ->

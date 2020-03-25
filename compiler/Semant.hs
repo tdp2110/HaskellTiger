@@ -154,23 +154,19 @@ translate :: (Temp.Generator -> (Translate.Exp, Temp.Generator))
                 -> Translator ExpTy
 translate transFn typ = do
   st@SemantState{generator=gen} <- get
-  let
-    (resExp, gen') = transFn gen
-    in do
-    put st{generator=gen'}
-    pure ExpTy{exp=resExp, ty=typ}
+  let (resExp, gen') = transFn gen
+  put st{generator=gen'}
+  pure ExpTy{exp=resExp, ty=typ}
 
 translateWithFrag :: (Temp.Generator -> (Translate.Exp, Frag, Temp.Generator))
                      -> Types.Ty
                      -> Translator ExpTy
 translateWithFrag transFn typ = do
   st@SemantState{generator=gen} <- get
-  let
-    (resExp, frag, gen') = transFn gen
-    in do
-    pushFrag frag
-    put st{generator=gen'}
-    pure ExpTy{exp=resExp, ty=typ}
+  let (resExp, frag, gen') = transFn gen
+  pushFrag frag
+  put st{generator=gen'}
+  pure ExpTy{exp=resExp, ty=typ}
 
 evalTransT :: SemantState -> SemantEnv -> Translator a
   -> Either SemantError (a, FragList)
@@ -186,11 +182,9 @@ nextId = do
 nextLabel :: Translator Temp.Label
 nextLabel = do
   st@SemantState{generator=gen} <- get
-  let
-    (lab, gen') = Temp.newlabel gen
-    in do
-    put st{generator=gen'}
-    pure lab
+  let (lab, gen') = Temp.newlabel gen
+  put st{generator=gen'}
+  pure lab
 
 newLevel :: [Frame.EscapesOrNot] -> Maybe (Symbol.Symbol, A.Pos) -> Translator Level
 newLevel escapes debugInfo = do

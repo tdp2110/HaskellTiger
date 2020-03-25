@@ -113,9 +113,8 @@ rewriteProgram insts frame spills gen =
                                                       gen'
                                                       frame'
                                                       Frame.Escapes
-                       in do
-                       put (frame'', gen'')
-                       pure access
+                     put (frame'', gen'')
+                     pure access
 
     spillTemp :: X64Frame.X64Frame ->
                  ([Assem.Inst], [TempId], Temp.Generator) ->
@@ -127,22 +126,18 @@ rewriteProgram insts frame spills gen =
 
         storeCodeFn tempId' = do
           g <- get
-          let
-            storeStm = TreeIR.MOVE ( accessExp
+          let storeStm = TreeIR.MOVE ( accessExp
                                    , TreeIR.TEMP tempId' )
-            (code, g') = Codegen.codegen (X64Frame.x64 frame') g storeStm
-            in do
-            put g'
-            pure code
+          let (code, g') = Codegen.codegen (X64Frame.x64 frame') g storeStm
+          put g'
+          pure code
         loadCodeFn tempId' = do
           g <- get
-          let
-            loadStm = TreeIR.MOVE ( TreeIR.TEMP tempId'
+          let loadStm = TreeIR.MOVE ( TreeIR.TEMP tempId'
                                   , accessExp )
-            (code, g') = Codegen.codegen (X64Frame.x64 frame') g loadStm
-            in do
-            put g'
-            pure code
+          let (code, g') = Codegen.codegen (X64Frame.x64 frame') g loadStm
+          put g'
+          pure code
 
         readsTemp :: Assem.Inst -> Bool
         readsTemp (Assem.OPER { Assem.operSrc=operSrc }) = elem tempId operSrc
@@ -156,12 +151,9 @@ rewriteProgram insts frame spills gen =
 
         newTemp = do
           g <- get
-          let
-            (t, g') = Temp.newtemp g
-            in
-            do
-              put g'
-              pure t
+          let (t, g') = Temp.newtemp g
+          put g'
+          pure t
 
         replace :: Eq a => a -> a -> a -> a
         replace toReplace replacer query = if query == toReplace then replacer
@@ -184,23 +176,20 @@ rewriteProgram insts frame spills gen =
                                                pure (storeCode, [writeTemp])
                                           else
                                             pure ([], [])
-          let
-            inst' = case inst of
-                      i@Assem.OPER { Assem.operSrc=operSrc } ->
-                        i { Assem.operSrc=replaceAll tempId readTemp operSrc }
-                      i@Assem.LABEL {} -> i
-                      i@Assem.MOVE { Assem.moveSrc=moveSrc } ->
-                        i { Assem.moveSrc=replace tempId readTemp moveSrc }
-
-            inst'' = case inst' of
-                       i@Assem.OPER { Assem.operDst=operDst } ->
-                         i { Assem.operDst=replaceAll tempId writeTemp operDst }
-                       i@Assem.LABEL {} -> i
-                       i@Assem.MOVE { Assem.moveDst=moveDst } ->
-                         i { Assem.moveDst = replace tempId writeTemp moveDst }
-            in do
-            pure ( maybeLoad ++ [inst''] ++ maybeStore
-                 , maybeLoadTemp ++ maybeStoreTemp)
+          let inst' = case inst of
+                        i@Assem.OPER { Assem.operSrc=operSrc } ->
+                          i { Assem.operSrc=replaceAll tempId readTemp operSrc }
+                        i@Assem.LABEL {} -> i
+                        i@Assem.MOVE { Assem.moveSrc=moveSrc } ->
+                          i { Assem.moveSrc=replace tempId readTemp moveSrc }
+          let inst'' = case inst' of
+                         i@Assem.OPER { Assem.operDst=operDst } ->
+                           i { Assem.operDst=replaceAll tempId writeTemp operDst }
+                         i@Assem.LABEL {} -> i
+                         i@Assem.MOVE { Assem.moveDst=moveDst } ->
+                           i { Assem.moveDst = replace tempId writeTemp moveDst }
+          pure ( maybeLoad ++ [inst''] ++ maybeStore
+               , maybeLoadTemp ++ maybeStoreTemp)
 
         (toJoin, gen'') = runState (mapM rewriteInst insts') gen'
         insts'' = join $ fmap fst toJoin

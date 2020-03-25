@@ -32,22 +32,16 @@ nop = T.EXP $ T.CONST 0
 newTemp :: State Temp.Generator Int
 newTemp = do
   gen <- get
-  let
-    (t, gen') = Temp.newtemp gen
-    in
-    do
-      put gen'
-      pure t
+  let (t, gen') = Temp.newtemp gen
+  put gen'
+  pure t
 
 newLabel :: State Temp.Generator Temp.Label
 newLabel = do
   gen <- get
-  let
-    (lab, gen') = Temp.newlabel gen
-    in
-    do
-      put gen'
-      pure lab
+  let (lab, gen') = Temp.newlabel gen
+  put gen'
+  pure lab
 
 reorder :: [T.Exp] -> State Temp.Generator (T.Stm, [T.Exp])
 reorder (c@(T.CALL _):rest) = do

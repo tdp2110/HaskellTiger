@@ -113,26 +113,20 @@ type GraphBuilder a = State (Graph a)
 allocNode :: NodeId a => GraphBuilder a (Node a)
 allocNode = do
   g <- get
-  let
-    (node, g') = newNode g
-    in do
-    put g'
-    pure node
+  let (node, g') = newNode g
+  put g'
+  pure node
 
 addEdge :: NodeId a => Node a -> Node a -> GraphBuilder a ()
 addEdge n1 n2 = do
   g <- get
-  let
-    g' = mkEdge g (nodeId n1) (nodeId n2)
-    in do
-    put g'
-    pure ()
+  let g' = mkEdge g (nodeId n1) (nodeId n2)
+  put g'
+  pure ()
 
 delEdge :: NodeId a => Node a -> Node a -> GraphBuilder a ()
 delEdge n1 n2 = do
   g <- get
-  let
-    g' = rmEdge g (nodeId n1) (nodeId n2)
-    in do
-    put g'
-    pure ()
+  let g' = rmEdge g (nodeId n1) (nodeId n2)
+  put g'
+  pure ()
