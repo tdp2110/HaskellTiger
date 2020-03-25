@@ -12,9 +12,10 @@ Linux System V x86_86 wouldn't be much of a change, nor would 64 bit Windows.
 
 1. ~~Implement register allocation~~ (started Dec 2019, finished Feb 2020)
 2. ~~Hook everything up~~
-3. Test for real, and fix the bugs! ☜(⌒▽⌒)☞ (started Feb, 2020)
-4. Implement real GC.
-5. Abstract frame to different OS: AMD64 Linux, 64-bit Windows (why not), ARM something ʘ‿ʘ
+3. Test for real, and fix the bugs! ☜(⌒▽⌒)☞ (started Feb, 2020, good progress at end of March 2020)
+4. Optimizer!
+5. Implement real GC.
+6. Abstract frame to different OS: AMD64 Linux, 64-bit Windows (why not), ARM something ʘ‿ʘ
 
 ## Building
 
