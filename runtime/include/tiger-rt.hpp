@@ -26,6 +26,8 @@ uint8_t *tiger_alloc(int64_t numBytes);
 void *tiger_initArray(int64_t size, int64_t initVal);
 int64_t tiger_getItem(void const *arr, int64_t index);
 void tiger_setItem(void *arr, int64_t index, int64_t value);
+TgString *tiger_chr(int64_t);
+int64_t tiger_strCmp(TgString const *s1, TgString const *s2);
 
 } // extern "C"
 

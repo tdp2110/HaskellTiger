@@ -178,8 +178,8 @@ stringCmp s1 s2 op gen =
     (str1, gen') = unEx s1 gen
     (str2, gen'') = unEx s2 gen'
     cmpExp = X64Frame.externalCall
-             (Temp.Label $ Symbol.Symbol "tiger_strCmp")
-             [str1, str2]
+               (Temp.Label $ Symbol.Symbol "tiger_strCmp")
+               [str1, str2]
     treeOp = transRelOp op
     resExp = Cx $ \t f ->
       TreeIR.CJUMP ( treeOp

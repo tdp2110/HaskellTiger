@@ -1,6 +1,7 @@
 #include "tiger-rt.hpp"
 
 #include <cstdio>
+#include <cstring>
 #include <iostream>
 #include <new>
 #include <string>
@@ -181,4 +182,22 @@ void tiger_setItem(void *const arr, int64_t const index, int64_t const value) {
   vec[index] = value;
 }
 
+TgString *tiger_chr(int64_t const a) {
+  if (a < 0 || a > 255) {
+    std::cerr << "FATAL TIGER ERROR: value passed to `chr' is out of range: "
+              << a << " is not in [0,255)\n";
+    std::terminate();
+  }
+  char const c = a;
+  TgString *const res = new (std::nothrow) TgString(std::string(1, c));
+  AssertNotNull(res, __FUNCTION__);
+  return res;
+}
+
+int64_t tiger_strCmp(TgString const *s1, TgString const *s2) {
+  AssertNotNull(s1, __FUNCTION__);
+  AssertNotNull(s2, __FUNCTION__);
+
+  return std::strcmp(s1->impl.c_str(), s1->impl.c_str());
+}
 } // extern "C"
