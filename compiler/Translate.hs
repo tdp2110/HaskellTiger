@@ -202,9 +202,9 @@ record exps gen =
                                 (Temp.Label $ Symbol.Symbol "tiger_alloc")
                                 [TreeIR.CONST $ numExps * wordSize] )
     (initStm, gen'') = foldl'
-                       step
-                       (passStm, gen')
-                       $ zip exps [0 :: Int ..]
+                         step
+                         (passStm, gen')
+                         $ zip exps [0 :: Int ..]
     step :: (TreeIR.Stm, Temp.Generator) -> (Exp, Int) -> (TreeIR.Stm, Temp.Generator)
     step (stm, g) (exp, idx) =
       let
@@ -464,6 +464,17 @@ field recordExpE fieldNumber gen =
       TreeIR.CJUMP (TreeIR.NE, recordExp, zero, happyLab, sadLab)
   in
     ifThenElse jumpExp happyPath sadPath gen'
+
+setField :: Exp -> Int -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
+setField recordExpE fieldNumber rhsExpE gen =
+  let
+    (recordExp, gen') = unEx recordExpE gen
+    (rhsExp, gen'') = unEx rhsExpE gen'
+    wordSize = X64Frame.wordSize
+    memExpr = TreeIR.MEM $ TreeIR.BINOP (TreeIR.PLUS, recordExp, TreeIR.CONST $ fieldNumber * wordSize)
+    resExp = Nx $ TreeIR.MOVE (memExpr, rhsExp)
+  in
+    (resExp, gen'')
 
 subscript :: Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
 subscript arrExpE indexExpE gen =

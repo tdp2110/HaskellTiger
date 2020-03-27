@@ -272,17 +272,13 @@ transVar (A.FieldVar var sym pos) = do
   ExpTy{exp=recordExp, ty=varTy} <- transVar var
   case varTy of
     r@(Types.RECORD(sym2ty, _)) ->
-      let
-        symTyIxList =
-          fmap (\((s,t),ix) -> (s,(t,ix))) $ zip sym2ty [0 :: Int ..]
-      in
-        case lookup sym symTyIxList  of
-          Just (t, fieldNumber) ->
-            translate (Translate.field recordExp fieldNumber) t
-          Nothing -> throwT pos $
-                     "in field expr, record type " ++
-                     (show r) ++ " has no " ++ (show sym) ++
-                     " field"
+      case fieldOffset sym2ty sym of
+        Just (t, fieldNumber) ->
+          translate (Translate.field recordExp fieldNumber) t
+        Nothing -> throwT pos $
+                   "in field expr, record type " ++
+                   (show r) ++ " has no " ++ (show sym) ++
+                   " field"
     t@(_) -> throwT pos $
              "in field expr, only record types have fields. type=" ++
              (show t)
@@ -449,13 +445,33 @@ transExp (A.AssignExp (A.SubscriptVar var subscriptExpr subscriptPos) expr pos) 
     else
     case varTy of
       Types.ARRAY (arrayEltTy,_) ->
-        if arrayEltTy /= exprTy then
+        if not $ typesAreCompatible arrayEltTy exprTy then
           throwT pos $ "in subscript expr, attempting to set a value of type " ++ (show exprTy) ++
                        " in an array of type " ++ (show varTy)
           else
           translate (Translate.setitem varExp subscriptExp rhs) Types.UNIT
       _ ->
         throwT pos $ "in subscript expr, can only index into arrays. Got " ++ (show varTy)
+transExp (A.AssignExp (A.FieldVar var sym fieldPos) expr assignPos) = do
+  ExpTy{exp=recordExp, ty=varTy} <- transVar var
+  ExpTy{exp=rhsExp, ty=rhsTy} <- transExp expr
+  case varTy of
+    Types.RECORD (sym2ty, _) ->
+      case fieldOffset sym2ty sym of
+        Just (t, fieldNumber) ->
+          if not $ typesAreCompatible t rhsTy then
+            throwT assignPos $ "attempting to set field " ++ (show sym) ++ " in var " ++
+                         (show var) ++ " of type " ++ (show rhsTy) ++ " to a value of type " ++
+                         (show rhsTy) ++ " when type " ++ (show t) ++ " is needed."
+          else
+            translate (Translate.setField recordExp fieldNumber rhsExp) Types.UNIT
+        Nothing -> throwT fieldPos $
+                   "in field expr, record type " ++
+                   (show varTy) ++ " has no " ++ (show sym) ++
+                   " field"
+    _ -> throwT fieldPos $ "in a field expression, can only access fields in records. " ++
+                           "Attempted to access field in variable " ++ (show var) ++ " of type " ++
+                           (show varTy)
 transExp (A.AssignExp var expr pos) = do
   ExpTy{exp=lhs, ty=varTy} <- transVar var
   ExpTy{exp=rhs, ty=exprTy} <- transExp expr
@@ -648,6 +664,14 @@ typesAreCompatible t1 t2 = case (t1, t2) of
                              (Types.RECORD _, Types.NIL) -> True
                              (Types.NIL, Types.RECORD _) -> True
                              _                           -> t1 == t2
+
+fieldOffset :: [(Symbol.Symbol, Types.Ty)] -> Symbol.Symbol -> Maybe (Types.Ty, Int)
+fieldOffset sym2ty sym =
+  let
+    symTyIxList =
+      fmap (\((s,t),ix) -> (s,(t,ix))) $ zip sym2ty [0 :: Int ..]
+  in
+    lookup sym symTyIxList
 
 transLetDecs decls letPos = do
   env <- askEnv
