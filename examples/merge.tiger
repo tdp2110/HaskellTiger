@@ -2,13 +2,13 @@ let
     type any = {val : int}
     var buffer := getchar()
 
-    function readint(any: any) : int =
+    function readint(a: any) : int =
         let var i := 0
             function isdigit(s : string) : int =
                 ord(buffer) >= ord("0") & ord(buffer) <= ord("9")
         in
-            while buffer=" " | buffer="\n" do buffer := getchar()
-            any.val := isdigit(buffer);
+            while buffer=" " | buffer="\n" do buffer := getchar();
+            a.val := isdigit(buffer);
             while isdigit(buffer)
                 do (i := i*10 + ord(buffer) - ord("0");
                     buffer := getchar());
@@ -18,7 +18,7 @@ let
     type list = {first: int, rest: list}
 
     function readlist() : list =
-        let var any := any{any=0}
+        let var any := any{val=0}
             var i := readint(any)
         in
             if any.val
