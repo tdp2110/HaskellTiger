@@ -389,7 +389,6 @@ transExp (A.OpExp leftExp op rightExp pos) = do
          translate (Translate.ptrCmp expLeft expRight op) Types.INT
        else
          throwT pos "records may only be compared with EQ or NE"
-
 transExp (A.RecordExp fieldSymExpPosns typSym pos) = do
   maybeRecordTy <- lookupT pos tenv2 typSym
   case maybeRecordTy of
@@ -411,10 +410,6 @@ transExp (A.RecordExp fieldSymExpPosns typSym pos) = do
             actualFieldTys = fmap ty actualFieldExpTys
             fieldPosns = fmap (\(_,_,fieldPos) -> fieldPos) fieldSymExpPosns
             exps = fmap exp actualFieldExpTys
-            typesAreCompatible t1 t2 = case (t1, t2) of
-                                         (Types.RECORD _, Types.NIL) -> True
-                                         (Types.NIL, Types.RECORD _) -> True
-                                         _                           -> t1 == t2
             in
             case filter (\(_,expectedTy,actualTy,_) -> not $ typesAreCompatible expectedTy actualTy)
                  (zip4 expectedSyms expectedFieldTys actualFieldTys fieldPosns)
@@ -488,11 +483,9 @@ transExp (A.IfExp testExpr thenExpr maybeElseExpr pos) = do
               translate (Translate.ifThen testExp thenExp) thenTy
         Just elseExpTyM -> do
           ExpTy{exp=elseExp, ty=elseTy} <- elseExpTyM
-          if thenTy /= elseTy then
-            throwT pos $ "in ifExp, thenExp and elseExp must have " ++
-            "the same type: found " ++ (show thenTy) ++
-            " and " ++ (show elseTy) ++
-            ", respectfully"
+          if not $ typesAreCompatible thenTy elseTy then
+            throwT pos $ "incompatible types found in ifExp: thenExp has type " ++
+                         (show thenTy) ++ " but elseExp has type " ++ (show elseTy)
             else
             if thenTy == Types.UNIT then
               translate (Translate.ifThenElseStm testExp thenExp elseExp) thenTy
@@ -649,6 +642,12 @@ transExp (A.LetExp decs bodyExp letPos) = do
                 put st3{generator=gen'}
                 pure ExpTy{exp=Translate.Nx stm, ty=t}
             _ -> pure e
+
+typesAreCompatible :: Types.Ty -> Types.Ty -> Bool
+typesAreCompatible t1 t2 = case (t1, t2) of
+                             (Types.RECORD _, Types.NIL) -> True
+                             (Types.NIL, Types.RECORD _) -> True
+                             _                           -> t1 == t2
 
 transLetDecs decls letPos = do
   env <- askEnv
