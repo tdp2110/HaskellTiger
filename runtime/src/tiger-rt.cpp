@@ -198,6 +198,6 @@ int64_t tiger_strCmp(TgString const *s1, TgString const *s2) {
   AssertNotNull(s1, __FUNCTION__);
   AssertNotNull(s2, __FUNCTION__);
 
-  return std::strcmp(s1->impl.c_str(), s1->impl.c_str());
+  return std::strcmp(s1->impl.c_str(), s2->impl.c_str());
 }
 } // extern "C"
