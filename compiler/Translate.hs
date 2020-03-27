@@ -209,10 +209,9 @@ record exps gen =
     step (stm, g) (exp, idx) =
       let
         (expr, g') = unEx exp g
-        memExpr = TreeIR.MEM $ TreeIR.BINOP (TreeIR.PLUS, rExp,  TreeIR.CONST $ idx * wordSize)
       in
         ( TreeIR.SEQ ( stm
-                     , TreeIR.MOVE (memExpr, expr))
+                     , setRecordField rExp idx expr )
         , g' )
     resExp = Ex $ TreeIR.ESEQ ( TreeIR.SEQ ( mallocStm
                                            , initStm )
@@ -470,11 +469,18 @@ setField recordExpE fieldNumber rhsExpE gen =
   let
     (recordExp, gen') = unEx recordExpE gen
     (rhsExp, gen'') = unEx rhsExpE gen'
-    wordSize = X64Frame.wordSize
-    memExpr = TreeIR.MEM $ TreeIR.BINOP (TreeIR.PLUS, recordExp, TreeIR.CONST $ fieldNumber * wordSize)
-    resExp = Nx $ TreeIR.MOVE (memExpr, rhsExp)
   in
-    (resExp, gen'')
+    (Nx $ setRecordField recordExp fieldNumber rhsExp, gen'')
+
+setRecordField :: TreeIR.Exp -> Int -> TreeIR.Exp -> TreeIR.Stm
+setRecordField recordExp fieldNumber rhsExp =
+  let
+    wordSize = X64Frame.wordSize
+  in
+    TreeIR.MOVE ( TreeIR.MEM $ TreeIR.BINOP ( TreeIR.PLUS
+                                             , recordExp
+                                             , TreeIR.CONST $ fieldNumber * wordSize )
+                 , rhsExp)
 
 subscript :: Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
 subscript arrExpE indexExpE gen =
