@@ -196,17 +196,29 @@ munchExp (TreeIR.ESEQ (s, e)) = do
   _ <- munchStm s
   munchExp e
 munchExp (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP src1, TreeIR.TEMP src2)) =
-  result $ \r -> pure [ A.OPER { A.assem="\t lea `d0, [`s0+`s1]"
+  result $ \r -> pure [ A.OPER { A.assem="\tlea `d0, [`s0+`s1]"
                                , A.operDst=[r]
                                , A.operSrc=[src1, src2]
                                , A.jump=Nothing
                                }]
 munchExp (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s, TreeIR.CONST c)) =
-  result $ \r -> pure [ A.OPER { A.assem="\t lea `d0, [`s0+" ++ (show c) ++ "]"
-                               , A.operDst=[r]
-                               , A.operSrc=[s]
-                               , A.jump=Nothing
-                               }]
+  if c == 0 then
+    result $ \r -> pure [ A.MOVE { A.assem="\tmov `d0, `s0"
+                                 , A.moveDst=r
+                                 , A.moveSrc=s }]
+  else if c > 0 then
+    result $ \r -> pure [ A.OPER { A.assem="\t lea `d0, [`s0+" ++ (show c) ++ "]"
+                                 , A.operDst=[r]
+                                 , A.operSrc=[s]
+                                 , A.jump=Nothing
+                                 }]
+  else result $ \r -> pure [ A.MOVE { A.assem="\tmov `d0, `s0"
+                                    , A.moveDst=r
+                                    , A.moveSrc=s }
+                           , A.OPER { A.assem="\t sub `d0, " ++ (show $ -c)
+                                    , A.operDst=[r]
+                                    , A.operSrc=[]
+                                    , A.jump=Nothing }]
 munchExp (TreeIR.BINOP ( TreeIR.PLUS
                        , TreeIR.TEMP s0
                        , TreeIR.MEM(TreeIR.BINOP(TreeIR.PLUS, TreeIR.TEMP s1, TreeIR.CONST c)))) =
