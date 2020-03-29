@@ -111,6 +111,9 @@ class TestCompiler(unittest.TestCase):
     def test_sumList(self):
         self.check_compiler('examples/sumList.tiger', '45\n')
         
+    def test_sumList2(self):
+        self.check_compiler('examples/sumList2.tiger', '3\n')
+        
     def test_eight_queens(self):
         with open('examples/eight_queens_output.txt', 'r') as f:
             eight_queens_output = f.read()
