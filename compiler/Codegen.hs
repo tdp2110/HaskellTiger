@@ -186,13 +186,10 @@ munchStm (TreeIR.CJUMP (op, e1, e2, t, f)) = do
 
 munchExp :: TreeIR.Exp -> CodeGenerator Int
 munchExp (TreeIR.CONST c) =
-  result (\r -> let inst = A.OPER { A.assem="\tmov `d0, " ++ (show c) ++ ""
-                                , A.operDst = [r]
-                                , A.operSrc = []
-                                , A.jump = Nothing }
-                in do
-                pure [inst]
-        )
+  result $ \r -> pure [ A.OPER { A.assem="\tmov `d0, " ++ (show c) ++ ""
+                               , A.operDst = [r]
+                               , A.operSrc = []
+                               , A.jump = Nothing }]
 munchExp (TreeIR.TEMP t) = do
   pure t
 munchExp (TreeIR.ESEQ (s, e)) = do
@@ -234,43 +231,43 @@ munchExp (TreeIR.BINOP (TreeIR.PLUS, e1, e2)) =
                                  , A.jump=Nothing } ]
 munchExp (TreeIR.BINOP (op, e1, e2)) =
   if op == TreeIR.DIV then
-    result (\r -> do
-                    src1 <- munchExp e1
-                    src2 <- munchExp e2
-                    x64 <- getArch
-                    let divideDests = X64Frame.divideDests x64
-                    pure [ A.MOVE { A.assem="\tmov `d0, `s0"
-                                  , A.moveDst=X64Frame.dividendRegister x64
-                                  , A.moveSrc=src1 }
-                         , A.OPER { A.assem="\tcqo"
-                                  , A.operDst=[X64Frame.rdx x64]
-                                  , A.operSrc=[X64Frame.rax x64]
-                                  , A.jump=Nothing }
-                         , A.OPER { A.assem="\tidiv `s0"
-                                  , A.operDst=divideDests
-                                  , A.operSrc=src2:divideDests
-                                  , A.jump=Nothing }
-                         , A.MOVE { A.assem="\tmov `d0, `s0"
-                                  , A.moveDst=r
-                                  , A.moveSrc=X64Frame.dividendRegister x64
-                                  } ])
+    result $ \r -> do
+                     src1 <- munchExp e1
+                     src2 <- munchExp e2
+                     x64 <- getArch
+                     let divideDests = X64Frame.divideDests x64
+                     pure [ A.MOVE { A.assem="\tmov `d0, `s0"
+                                   , A.moveDst=X64Frame.dividendRegister x64
+                                   , A.moveSrc=src1 }
+                          , A.OPER { A.assem="\tcqo"
+                                   , A.operDst=[X64Frame.rdx x64]
+                                   , A.operSrc=[X64Frame.rax x64]
+                                   , A.jump=Nothing }
+                          , A.OPER { A.assem="\tidiv `s0"
+                                   , A.operDst=divideDests
+                                   , A.operSrc=src2:divideDests
+                                   , A.jump=Nothing }
+                          , A.MOVE { A.assem="\tmov `d0, `s0"
+                                   , A.moveDst=r
+                                   , A.moveSrc=X64Frame.dividendRegister x64
+                                   } ]
   else
-    result (\r -> do
-                    src1 <- munchExp e1
-                    src2 <- munchExp e2
-                    x64 <- getArch
-                    let multiplyDests = X64Frame.multiplyDests x64
-                    pure [ A.MOVE { A.assem="\tmov `d0, `s0"
-                                  , A.moveDst=X64Frame.multiplicandRegister x64
-                                  , A.moveSrc=src1 }
-                         , A.OPER { A.assem="\t" ++ (convertOp op) ++ " `d0, `s0"
-                                  , A.operDst=multiplyDests
-                                  , A.operSrc=src2:multiplyDests
-                                  , A.jump=Nothing }
-                         , A.MOVE { A.assem="\tmov `d0, `s0"
-                                  , A.moveDst=r
-                                  , A.moveSrc=X64Frame.multiplicandRegister x64
-                                  } ])
+    result $ \r -> do
+                     src1 <- munchExp e1
+                     src2 <- munchExp e2
+                     x64 <- getArch
+                     let multiplyDests = X64Frame.multiplyDests x64
+                     pure [ A.MOVE { A.assem="\tmov `d0, `s0"
+                                   , A.moveDst=X64Frame.multiplicandRegister x64
+                                   , A.moveSrc=src1 }
+                          , A.OPER { A.assem="\t" ++ (convertOp op) ++ " `d0, `s0"
+                                   , A.operDst=multiplyDests
+                                   , A.operSrc=src2:multiplyDests
+                                   , A.jump=Nothing }
+                          , A.MOVE { A.assem="\tmov `d0, `s0"
+                                   , A.moveDst=r
+                                   , A.moveSrc=X64Frame.multiplicandRegister x64
+                                   } ]
   where
     convertOp :: TreeIR.Binop -> String
     convertOp oper = case oper of
@@ -285,73 +282,66 @@ munchExp (TreeIR.BINOP (op, e1, e2)) =
                        TreeIR.XOR -> "xor"
                        _ -> error $ "unsupported operator: " ++ (show oper)
 munchExp (TreeIR.CALL (expr, args, escapes)) =
-  result (\r -> do
-                  argRegs <- mapM munchExp args
-                  exprReg <- munchExp expr
-                  x64 <- getArch
-                  doCall
-                    (A.OPER { A.assem="\tcall `s0"
-                            , A.operDst=X64Frame.callDests x64
-                            , A.operSrc=exprReg:(X64Frame.rsp x64):(X64Frame.rbp x64):argRegs
-                            , A.jump=Nothing })
-                    (A.MOVE { A.assem="\tmov `d0, `s0"
-                            , A.moveDst=r
-                            , A.moveSrc=X64Frame.rax x64 })
-                    argRegs
-                    escapes
-                    IsReturn
-         )
+  result $ \r -> do
+                   argRegs <- mapM munchExp args
+                   exprReg <- munchExp expr
+                   x64 <- getArch
+                   doCall
+                     (A.OPER { A.assem="\tcall `s0"
+                             , A.operDst=X64Frame.callDests x64
+                             , A.operSrc=exprReg:(X64Frame.rsp x64):(X64Frame.rbp x64):argRegs
+                             , A.jump=Nothing })
+                     (A.MOVE { A.assem="\tmov `d0, `s0"
+                             , A.moveDst=r
+                             , A.moveSrc=X64Frame.rax x64 })
+                     argRegs
+                     escapes
+                     IsReturn
 munchExp (TreeIR.CALLNORETURN (expr, args, escapes)) =
-  result (\r -> do
-                  argRegs <- mapM munchExp args
-                  exprReg <- munchExp expr
-                  x64 <- getArch
-                  doCall
-                    (A.OPER { A.assem="\tcall `s0"
-                            , A.operDst=X64Frame.callDests x64
-                            , A.operSrc=exprReg:(X64Frame.rsp x64):argRegs
-                            , A.jump=Nothing })
-                    (A.MOVE { A.assem="\tmov `d0, `s0"
-                            , A.moveDst=r
-                            , A.moveSrc=X64Frame.rax x64 })
-                    argRegs
-                    escapes
-                    NoReturn
-         )
+  result $ \r -> do
+                   argRegs <- mapM munchExp args
+                   exprReg <- munchExp expr
+                   x64 <- getArch
+                   doCall
+                     (A.OPER { A.assem="\tcall `s0"
+                             , A.operDst=X64Frame.callDests x64
+                             , A.operSrc=exprReg:(X64Frame.rsp x64):argRegs
+                             , A.jump=Nothing })
+                     (A.MOVE { A.assem="\tmov `d0, `s0"
+                             , A.moveDst=r
+                             , A.moveSrc=X64Frame.rax x64 })
+                     argRegs
+                     escapes
+                     NoReturn
 munchExp (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, e, TreeIR.CONST c))) =
-  result (\r -> do
-                  src <- munchExp e
-                  pure [ A.OPER { A.assem="\tmov `d0, [`s0" ++ (plusMinusInt c) ++ "]"
-                                , A.operDst=[r]
-                                , A.operSrc=[src]
-                                , A.jump=Nothing } ]
-         )
+  result $ \r -> do
+                   src <- munchExp e
+                   pure [ A.OPER { A.assem="\tmov `d0, [`s0" ++ (plusMinusInt c) ++ "]"
+                                 , A.operDst=[r]
+                                 , A.operSrc=[src]
+                                 , A.jump=Nothing } ]
 munchExp (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.CONST c, e))) =
   munchExp (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, e, TreeIR.CONST c)))
 munchExp (TreeIR.MEM (TreeIR.BINOP (TreeIR.MINUS, e, TreeIR.CONST c))) =
   munchExp (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, e, TreeIR.CONST $ -c)))
 munchExp (TreeIR.MEM (TreeIR.CONST c)) =
-  result (\r -> do
-                  pure [ A.OPER { A.assem="\tmov `d0, [" ++ (show c) ++ "]"
-                                , A.operDst=[r]
-                                , A.operSrc=[]
-                                , A.jump=Nothing } ]
-         )
+  result $ \r -> pure [ A.OPER { A.assem="\tmov `d0, [" ++ (show c) ++ "]"
+                               , A.operDst=[r]
+                               , A.operSrc=[]
+                               , A.jump=Nothing } ]
 munchExp (TreeIR.MEM expr) =
-  result (\r -> do
-                  exprReg <- munchExp expr
-                  pure [ A.OPER { A.assem="\tmov `d0, [`s0]"
-                                , A.operDst=[r]
-                                , A.operSrc=[exprReg]
-                                , A.jump=Nothing } ]
-         )
+  result $ \r -> do
+                   exprReg <- munchExp expr
+                   pure [ A.OPER { A.assem="\tmov `d0, [`s0]"
+                                 , A.operDst=[r]
+                                 , A.operSrc=[exprReg]
+                                 , A.jump=Nothing } ]
 munchExp (TreeIR.NAME (Temp.Label (S.Symbol s))) =
-  result (\r -> do
-                  pure [ A.OPER { A.assem="\tlea `d0, [rip + " ++ s ++ "]"
-                                , A.operDst=[r]
-                                , A.operSrc=[]
-                                , A.jump=Nothing } ]
-         )
+  result $ \r -> do
+                   pure [ A.OPER { A.assem="\tlea `d0, [rip + " ++ s ++ "]"
+                                 , A.operDst=[r]
+                                 , A.operSrc=[]
+                                 , A.jump=Nothing } ]
 
 data ReturnsOrNot = IsReturn | NoReturn
 
