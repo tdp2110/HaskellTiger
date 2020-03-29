@@ -201,6 +201,12 @@ munchExp (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP src1, TreeIR.TEMP src2)) =
                                , A.operSrc=[src1, src2]
                                , A.jump=Nothing
                                }]
+munchExp (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s, TreeIR.CONST c)) =
+  result $ \r -> pure [ A.OPER { A.assem="\t lea `d0, [`s0+" ++ (show c) ++ "]"
+                               , A.operDst=[r]
+                               , A.operSrc=[s]
+                               , A.jump=Nothing
+                               }]
 munchExp (TreeIR.BINOP ( TreeIR.PLUS
                        , TreeIR.TEMP s0
                        , TreeIR.MEM(TreeIR.BINOP(TreeIR.PLUS, TreeIR.TEMP s1, TreeIR.CONST c)))) =
