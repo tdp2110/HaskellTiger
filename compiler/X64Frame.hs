@@ -407,11 +407,19 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) =
                               , Assem.jump=Nothing } ]
                 else
                   []
+    raxClearOrNil = if isMain frame then
+                      [ Assem.OPER { Assem.assem="\txor `d0, `s0"
+                                   , Assem.operDst=[rax $ x64 frame]
+                                   , Assem.operSrc=[rax $ x64 frame]
+                                   , Assem.jump=Nothing } ]
+                    else
+                      []
     epilogue2 = [ Assem.OPER { Assem.assem="\tpop `d0"
                              , Assem.operDst=[rbp $ x64 frame]
                              , Assem.operSrc=[]
-                             , Assem.jump=Nothing }
-                , Assem.OPER { Assem.assem="\tret"
+                             , Assem.jump=Nothing } ] ++
+                raxClearOrNil ++
+                [ Assem.OPER { Assem.assem="\tret"
                              , Assem.operDst=[rsp $ x64 frame]
                              , Assem.operSrc=[]
                              , Assem.jump=Nothing } ]

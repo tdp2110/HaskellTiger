@@ -59,7 +59,7 @@ class TestCompiler(unittest.TestCase):
 
             binary_process.wait()
 
-            #self.assertEqual(binary_process.returncode, 0, (out, err))
+            self.assertEqual(binary_process.returncode, 0, (out, err))
 
             self.assertEqual(out.decode('utf-8'), expected_output)
 
