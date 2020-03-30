@@ -62,6 +62,8 @@ class TestCompiler(unittest.TestCase):
             #self.assertEqual(binary_process.returncode, 0, (out, err))
 
             self.assertEqual(out.decode('utf-8'), expected_output)
+
+        return assem
     
     def test_hello_world(self):
         self.check_compiler('examples/hello_world.tiger', 'hello world\n')
@@ -122,6 +124,15 @@ class TestCompiler(unittest.TestCase):
 
     def test_merge(self):
         self.check_compiler('examples/merge.tiger', run=False)
+
+    def test_redzone(self):
+        assem = self.check_compiler('examples/redzone.tiger', '190\n')
+        # if would be better to do this in a more structured way :D
+        assem = assem.decode('utf-8')
+        self.assertIn('_main', assem)
+        _, assem1, *_ = assem.split('_main')
+        self.assertIn('## (f,', assem1)
+        self.assertNotIn('sub rsp', assem1)
         
 if __name__ == '__main__':
     unittest.main()

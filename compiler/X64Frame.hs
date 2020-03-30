@@ -370,7 +370,7 @@ procEntryExit2 frame bodyAsm =
                    , Assem.jump = Just [] }
             ]
 
-newtype MaxCallArgs = MaxCallArgs Int
+newtype MaxCallArgs = MaxCallArgs (Maybe Int)
 
 -- | Creates the procedure prologue and epilogue assembly language. Calculates the size of the
 -- outgoing parameter space in the frame. This is equal to the maximum number of outgoing parameters
@@ -378,10 +378,14 @@ newtype MaxCallArgs = MaxCallArgs Int
 -- for procedure entry, stack pointer adjustment, and procedure exit can be put together;
 -- these are the _prologue_ and _epilogue_.
 procEntryExit3 :: X64Frame -> [Assem.Inst] -> MaxCallArgs -> [Assem.Inst]
-procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgs) =
+procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) =
   let
     (label:bodyAsm') = bodyAsm
-    stackSize = nextMultipleOf16 $ wordSize * (maxCallArgs + numEscapingLocals)
+    stackSize = nextMultipleOf16 $ wordSize *
+      case maxCallArgsOrNothing of
+        Just maxCallArgs -> maxCallArgs + numEscapingLocals
+        Nothing -> -- we're in a leaf function (ie it calls no other function. use the 128-byte redzone)
+          max 0 $ numEscapingLocals - 128 `div` 8
     stackAdjustment = if stackSize /=0 then
                         [ Assem.OPER { Assem.assem="\tsub `d0, " ++ (show stackSize)
                                      , Assem.operDst=[rsp $ x64 frame]

@@ -207,7 +207,7 @@ munchExp (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s, TreeIR.CONST c)) =
                                  , A.moveDst=r
                                  , A.moveSrc=s }]
   else if c > 0 then
-    result $ \r -> pure [ A.OPER { A.assem="\t lea `d0, [`s0+" ++ (show c) ++ "]"
+    result $ \r -> pure [ A.OPER { A.assem="\tlea `d0, [`s0+" ++ (show c) ++ "]"
                                  , A.operDst=[r]
                                  , A.operSrc=[s]
                                  , A.jump=Nothing
@@ -243,7 +243,7 @@ munchExp (TreeIR.BINOP (TreeIR.PLUS, e1, e2)) =
   result $ \r -> do
                    src1 <- munchExp e1
                    src2 <- munchExp e2
-                   pure [ A.OPER { A.assem="\t lea `d0, [`s0+`s1]"
+                   pure [ A.OPER { A.assem="\tlea `d0, [`s0+`s1]"
                                  , A.operDst=[r]
                                  , A.operSrc=[src1, src2]
                                  , A.jump=Nothing } ]

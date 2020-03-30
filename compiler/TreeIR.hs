@@ -226,26 +226,39 @@ relop ULE = do putStrW "ULE"
 relop UGT = do putStrW "UGT"
 relop UGE = do putStrW "UGE"
 
-maxCallArgsStm :: Stm -> Int
-maxCallArgsStm (MOVE (e1, e2)) = max (maxCallArgsExp e1) (maxCallArgsExp e2)
+maxCallArgsStm :: Stm -> Maybe Int
+maxCallArgsStm (MOVE (e1, e2)) =
+  nullableMax (maxCallArgsExp e1) (maxCallArgsExp e2)
 maxCallArgsStm (EXP e) = maxCallArgsExp e
 maxCallArgsStm (JUMP (e, _)) = maxCallArgsExp e
-maxCallArgsStm (CJUMP (_, e1, e2, _, _)) = max (maxCallArgsExp e1) (maxCallArgsExp e2)
-maxCallArgsStm (SEQ (s1, s2)) = max (maxCallArgsStm s1) (maxCallArgsStm s2)
-maxCallArgsStm (LABEL _) = 0
+maxCallArgsStm (CJUMP (_, e1, e2, _, _)) =
+  nullableMax (maxCallArgsExp e1) (maxCallArgsExp e2)
+maxCallArgsStm (SEQ (s1, s2)) =
+  max (maxCallArgsStm s1) (maxCallArgsStm s2)
+maxCallArgsStm (LABEL _) = Nothing
 
-maxCallArgsExp :: Exp -> Int
-maxCallArgsExp (CONST _) = 0
-maxCallArgsExp (NAME _) = 0
-maxCallArgsExp (TEMP _) = 0
-maxCallArgsExp (BINOP (_, e1, e2)) = max (maxCallArgsExp e1) (maxCallArgsExp e2)
+maxCallArgsExp :: Exp -> Maybe Int
+maxCallArgsExp (CONST _) = Nothing
+maxCallArgsExp (NAME _) = Nothing
+maxCallArgsExp (TEMP _) = Nothing
+maxCallArgsExp (BINOP (_, e1, e2)) =
+  nullableMax (maxCallArgsExp e1) (maxCallArgsExp e2)
 maxCallArgsExp (MEM e) = maxCallArgsExp e
 maxCallArgsExp (CALL (funcExp, args, _)) =
-  maximum [maxCallArgsExp funcExp, maximumOrZeroIfEmpty $ fmap maxCallArgsExp args, fromIntegral $ length args]
-maxCallArgsExp (CALLNORETURN (funcExp, args, _)) =
-  maxCallArgsExp (CALL (funcExp, args, undefined))
-maxCallArgsExp (ESEQ (s, e)) = max (maxCallArgsStm s) (maxCallArgsExp e)
+  nullableMaximum [ maxCallArgsExp funcExp
+                  , nullableMaximum $ fmap maxCallArgsExp args
+                  , Just $ fromIntegral $ length args]
+maxCallArgsExp (CALLNORETURN (funcExp, args, esc)) =
+  maxCallArgsExp (CALL (funcExp, args, esc))
+maxCallArgsExp (ESEQ (s, e)) =
+  nullableMax (maxCallArgsStm s) (maxCallArgsExp e)
 
-maximumOrZeroIfEmpty :: [Int] -> Int
-maximumOrZeroIfEmpty [] = 0
-maximumOrZeroIfEmpty xs = maximum xs
+nullableMax :: Maybe Int -> Maybe Int -> Maybe Int
+nullableMax (Just x) (Just y) = Just $ max x y
+nullableMax j@(Just _) Nothing = j
+nullableMax Nothing j@(Just _) = j
+nullableMax _ _ = Nothing
+
+nullableMaximum :: [Maybe Int] -> Maybe Int
+nullableMaximum [] = Nothing
+nullableMaximum (x:xs) = nullableMax x $ nullableMaximum xs
