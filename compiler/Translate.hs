@@ -266,7 +266,7 @@ binOp expLeft expRight op gen =
             Absyn.PlusOp -> TreeIR.PLUS
             Absyn.MinusOp -> TreeIR.MINUS
             Absyn.TimesOp -> TreeIR.MUL
-            Absyn.DivideOp -> TreeIR.DIV -- TODO! check for division by zero!
+            Absyn.DivideOp -> TreeIR.DIV
             _ -> error "shouldn't get here"
     binOpExp = TreeIR.BINOP (op', expLeft', expRight')
     binOpStm = TreeIR.EXP binOpExp

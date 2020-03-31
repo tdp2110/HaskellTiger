@@ -48,9 +48,9 @@ baseVEnv x64 gen =
                  , ("exit", [INT], UNIT)
                  ]
     (builtinList, gen') = foldl'
-                          enterBuiltin
-                          ([], gen)
-                          signatures
+                            enterBuiltin
+                            ([], gen)
+                            signatures
     builtinMap = Map.fromList builtinList
   in
     (builtinMap, gen')

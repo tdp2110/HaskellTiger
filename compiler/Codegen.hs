@@ -273,19 +273,13 @@ munchExp (TreeIR.BINOP (op, e1, e2)) =
     result $ \r -> do
                      src1 <- munchExp e1
                      src2 <- munchExp e2
-                     x64 <- getArch
-                     let multiplyDests = X64Frame.multiplyDests x64
                      pure [ A.MOVE { A.assem="\tmov `d0, `s0"
-                                   , A.moveDst=X64Frame.multiplicandRegister x64
+                                   , A.moveDst=r
                                    , A.moveSrc=src1 }
                           , A.OPER { A.assem="\t" ++ (convertOp op) ++ " `d0, `s0"
-                                   , A.operDst=multiplyDests
-                                   , A.operSrc=src2:multiplyDests
-                                   , A.jump=Nothing }
-                          , A.MOVE { A.assem="\tmov `d0, `s0"
-                                   , A.moveDst=r
-                                   , A.moveSrc=X64Frame.multiplicandRegister x64
-                                   } ]
+                                   , A.operDst=[r]
+                                   , A.operSrc=[src2,r]
+                                   , A.jump=Nothing }]
   where
     convertOp :: TreeIR.Binop -> String
     convertOp oper = case oper of
