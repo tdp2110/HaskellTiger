@@ -1,0 +1,7 @@
+let
+    function f(i:int) =
+         (f(i/9); i/10)
+
+in
+    f(123)
+end

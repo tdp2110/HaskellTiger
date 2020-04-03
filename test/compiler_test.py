@@ -133,6 +133,9 @@ class TestCompiler(unittest.TestCase):
         _, assem1, *_ = assem.split('_main')
         self.assertIn('## (f,', assem1)
         self.assertNotIn('sub rsp', assem1)
+
+    def test_loop_register_allocator(self):
+        self.check_compiler('examples/loopRegAllocator.tiger', run=False)
         
 if __name__ == '__main__':
     unittest.main()
