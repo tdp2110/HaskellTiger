@@ -309,14 +309,14 @@ munchExp (TreeIR.CALL (expr, args, escapes)) =
                              , A.operDst=X64Frame.callDests x64
                              , A.operSrc=exprReg:(X64Frame.rsp x64):(X64Frame.rbp x64):argRegs
                              , A.jump=Nothing })
-                     (A.MOVE { A.assem="\tmov `d0, `s0"
-                             , A.moveDst=r
-                             , A.moveSrc=X64Frame.rax x64 })
+                     (Just $ A.MOVE { A.assem="\tmov `d0, `s0"
+                                    , A.moveDst=r
+                                    , A.moveSrc=X64Frame.rax x64 })
                      argRegs
                      escapes
                      IsReturn
 munchExp (TreeIR.CALLNORETURN (expr, args, escapes)) =
-  result $ \r -> do
+  result $ \_ -> do
                    argRegs <- mapM munchExp args
                    exprReg <- munchExp expr
                    x64 <- getArch
@@ -325,9 +325,7 @@ munchExp (TreeIR.CALLNORETURN (expr, args, escapes)) =
                              , A.operDst=X64Frame.callDests x64
                              , A.operSrc=exprReg:(X64Frame.rsp x64):argRegs
                              , A.jump=Nothing })
-                     (A.MOVE { A.assem="\tmov `d0, `s0"
-                             , A.moveDst=r
-                             , A.moveSrc=X64Frame.rax x64 })
+                     Nothing
                      argRegs
                      escapes
                      NoReturn
@@ -363,9 +361,9 @@ munchExp (TreeIR.NAME (Temp.Label (S.Symbol s))) =
 
 data ReturnsOrNot = IsReturn | NoReturn
 
-doCall :: A.Inst -> A.Inst -> [Int] -> [Frame.EscapesOrNot] -> ReturnsOrNot
+doCall :: A.Inst -> Maybe A.Inst -> [Int] -> [Frame.EscapesOrNot] -> ReturnsOrNot
                              -> CodeGenerator [A.Inst]
-doCall callStm moveStm callArgs escapes returnsOrNot = do
+doCall callStm maybeMoveStm callArgs escapes returnsOrNot = do
   x64 <- getArch
   let callerSaves = X64Frame.callerSaves x64
   callerSaveDests <- mapM (\_ -> newTemp) callerSaves
@@ -378,7 +376,9 @@ doCall callStm moveStm callArgs escapes returnsOrNot = do
     case returnsOrNot of
       IsReturn ->
         pure $ saves ++ argSetup
-                     ++ [callStm', moveStm]
+                     ++ (callStm' : case maybeMoveStm of
+                                        Just moveStm -> [moveStm]
+                                        Nothing -> [])
                      ++ restores
       NoReturn ->
         pure $ argSetup ++ [callStm']
