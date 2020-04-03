@@ -268,24 +268,27 @@ binOp expLeft expRight op gen =
             Absyn.TimesOp -> TreeIR.MUL
             Absyn.DivideOp -> TreeIR.DIV -- TODO! check for division by zero!
             _ -> error "shouldn't get here"
-    binOpExp = Ex $ TreeIR.BINOP (op', expLeft', expRight')
+    binOpExp = TreeIR.BINOP (op', expLeft', expRight')
+    binOpStm = TreeIR.EXP binOpExp
     (resExp, gen3) = case op of
-               Absyn.DivideOp -> let
-                   (testExp, gen''') = relOp
-                                         expRight
-                                         (Ex zero)
-                                         Absyn.NeqOp
-                                         gen''
-                   onDivByZero = Ex $ X64Frame.externalCallNoReturn
-                                        (Temp.Label $ Symbol.Symbol "tiger_divByZero")
-                                        []
-                 in
-                   ifThenElse
-                     testExp
-                     binOpExp
-                     onDivByZero
-                     gen'''
-               _ -> (binOpExp, gen'')
+      Absyn.DivideOp -> let
+          (testExp, gen''') = relOp
+                                expRight
+                                (Ex zero)
+                                Absyn.NeqOp
+                                gen''
+          testExpGen = unCx testExp
+          onDivByZero = TreeIR.EXP $ X64Frame.externalCallNoReturn
+                                       (Temp.Label $ Symbol.Symbol "tiger_divByZero")
+                                       []
+        in
+          ( Cx $ \t f -> TreeIR.makeSeq [ testExpGen t f
+                                        , TreeIR.LABEL f
+                                        , onDivByZero
+                                        , TreeIR.LABEL t
+                                        , binOpStm ]
+          , gen''')
+      _ -> (Ex binOpExp, gen'')
   in
     (resExp, gen3)
 
