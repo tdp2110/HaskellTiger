@@ -327,7 +327,7 @@ transExp (A.CallExp funcSym argExps pos) = do
                 argExpTreeIRs = fmap exp paramExpTys
                 in
                 translate
-                  (Translate.call funLevel thisLevel label argExpTreeIRs)
+                  (Translate.call funLevel thisLevel label argExpTreeIRs$ resultTy /= Types.UNIT)
                   resultTy
             ((formalTy, paramTy, ix):_) ->
               throwT pos $

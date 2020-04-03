@@ -102,11 +102,12 @@ exp (InReg regNum) _ = TreeIR.TEMP regNum
 frameExp :: X64Frame -> TreeIR.Exp
 frameExp frame = TreeIR.TEMP $ Frame.fp frame
 
-externalCall :: Temp.Label -> [TreeIR.Exp] -> TreeIR.Exp
-externalCall (Temp.Label (Symbol.Symbol funname)) params =
+externalCall :: Temp.Label -> [TreeIR.Exp] -> Bool -> TreeIR.Exp
+externalCall (Temp.Label (Symbol.Symbol funname)) params hasRet =
   TreeIR.CALL ( TreeIR.NAME (Temp.Label (Symbol.Symbol $ "_" ++ funname)) -- hack for MacOS
               , params
-              , fmap (\_ -> Frame.DoesNotEscape) params)
+              , fmap (\_ -> Frame.DoesNotEscape) params
+              , hasRet)
 
 externalCallNoReturn :: Temp.Label -> [TreeIR.Exp] -> TreeIR.Exp
 externalCallNoReturn (Temp.Label (Symbol.Symbol funname)) params =

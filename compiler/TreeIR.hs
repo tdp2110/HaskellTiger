@@ -16,7 +16,7 @@ data Exp =
   | TEMP Int
   | BINOP (Binop, Exp, Exp)
   | MEM Exp
-  | CALL (Exp, [Exp], [Frame.EscapesOrNot])
+  | CALL (Exp, [Exp], [Frame.EscapesOrNot],  {- is there a result?-} Bool)
   | CALLNORETURN (Exp, [Exp], [Frame.EscapesOrNot])
   | ESEQ (Stm, Exp)
   deriving (Eq)
@@ -179,7 +179,7 @@ putExp (CONST i) d = do
   indent d
   putStrW "CONST "
   putStrW $ show i
-putExp (CALL (e,el,_)) d = do
+putExp (CALL (e,el,_,_)) d = do
   indent d
   putStrLnW "CALL("
   putExp e $ d + 1
@@ -244,12 +244,12 @@ maxCallArgsExp (TEMP _) = Nothing
 maxCallArgsExp (BINOP (_, e1, e2)) =
   nullableMax (maxCallArgsExp e1) (maxCallArgsExp e2)
 maxCallArgsExp (MEM e) = maxCallArgsExp e
-maxCallArgsExp (CALL (funcExp, args, _)) =
+maxCallArgsExp (CALL (funcExp, args, _, _)) =
   nullableMaximum [ maxCallArgsExp funcExp
                   , nullableMaximum $ fmap maxCallArgsExp args
                   , Just $ fromIntegral $ length args]
 maxCallArgsExp (CALLNORETURN (funcExp, args, esc)) =
-  maxCallArgsExp (CALL (funcExp, args, esc))
+  maxCallArgsExp (CALL (funcExp, args, esc, False))
 maxCallArgsExp (ESEQ (s, e)) =
   nullableMax (maxCallArgsStm s) (maxCallArgsExp e)
 

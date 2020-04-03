@@ -180,6 +180,7 @@ stringCmp s1 s2 op gen =
     cmpExp = X64Frame.externalCall
                (Temp.Label $ Symbol.Symbol "tiger_strCmp")
                [str1, str2]
+               True
     treeOp = transRelOp op
     resExp = Cx $ \t f ->
       TreeIR.CJUMP ( treeOp
@@ -200,7 +201,8 @@ record exps gen =
     mallocStm = TreeIR.MOVE ( rExp
                             , X64Frame.externalCall
                                 (Temp.Label $ Symbol.Symbol "tiger_alloc")
-                                [TreeIR.CONST $ numExps * wordSize] )
+                                [TreeIR.CONST $ numExps * wordSize]
+                                True )
     (initStm, gen'') = foldl'
                          step
                          (passStm, gen')
@@ -228,8 +230,9 @@ array sizeExp initExpr gen =
     rExp = TreeIR.TEMP r
     initStm = TreeIR.MOVE ( rExp
                           , X64Frame.externalCall
-                            (Temp.Label $ Symbol.Symbol "tiger_initArray")
-                            [sizeExpr, initExpr'] )
+                              (Temp.Label $ Symbol.Symbol "tiger_initArray")
+                              [sizeExpr, initExpr']
+                              True )
     resExp = Ex $ TreeIR.ESEQ (initStm, rExp)
   in
     (resExp, gen''')
@@ -493,7 +496,8 @@ subscript arrExpE indexExpE gen =
                     TreeIR.MOVE ( rExp
                                 , X64Frame.externalCall
                                     (Temp.Label $ Symbol.Symbol "tiger_getItem")
-                                    [arrExp, indexExp] )
+                                    [arrExp, indexExp]
+                                    True)
                    , rExp)
   in
     (resExp, gen''')
@@ -510,7 +514,8 @@ setitem arrExpE subscriptE valE gen =
                     TreeIR.MOVE ( rExp
                                 , X64Frame.externalCall
                                     (Temp.Label $ Symbol.Symbol "tiger_setItem")
-                                    [arrExp, subscriptExp, valExp] )
+                                    [arrExp, subscriptExp, valExp]
+                                    True )
                    , rExp)
   in
     (resExp, gen4)
@@ -528,7 +533,8 @@ string str gen =
                     TreeIR.MOVE ( sExp
                                 , X64Frame.externalCall
                                     (Temp.Label $ Symbol.Symbol "tiger_allocString")
-                                    [TreeIR.NAME(label), TreeIR.CONST $ length str])
+                                    [TreeIR.NAME(label), TreeIR.CONST $ length str]
+                                    True)
                   , sExp )
     frag = X64Frame.STRING (label, str)
   in
@@ -553,8 +559,8 @@ unNxM exp = do
     put gen'
     pure treeStm
 
-callM :: X64Level -> X64Level -> Temp.Label -> [Exp] -> State Temp.Generator Exp
-callM funLevel callerLevel funlab params = do
+callM :: X64Level -> X64Level -> Temp.Label -> [Exp] -> Bool -> State Temp.Generator Exp
+callM funLevel callerLevel funlab params hasRetVal = do
   gen <- get
   let
     (treeParams, gen') = runState (mapM unExM params) gen
@@ -564,7 +570,7 @@ callM funLevel callerLevel funlab params = do
     put gen'
     pure $ Ex $ case x64Parent funLevel of
                     X64Outermost ->
-                      X64Frame.externalCall funlab treeParams
+                      X64Frame.externalCall funlab treeParams hasRetVal
                     funParentLevel ->
                       let sl = if funParentLevel == callerParentLevel then
                                  X64Frame.staticLinkExp $ x64Frame callerLevel
@@ -573,12 +579,13 @@ callM funLevel callerLevel funlab params = do
                       in
                         TreeIR.CALL ( TreeIR.NAME funlab
                                     , sl:treeParams
-                                    , escapes)
+                                    , escapes
+                                    , hasRetVal)
 
-call :: X64Level -> X64Level -> Temp.Label -> [Exp] -> Temp.Generator
+call :: X64Level -> X64Level -> Temp.Label -> [Exp] -> Bool -> Temp.Generator
   -> (Exp, Temp.Generator)
-call funLevel callerLevel funlab params gen =
-  runState (callM funLevel callerLevel funlab params) gen
+call funLevel callerLevel funlab params hasRetVal gen =
+  runState (callM funLevel callerLevel funlab params hasRetVal) gen
 
 nilexp :: Exp
 nilexp = Ex $ TreeIR.CONST 0

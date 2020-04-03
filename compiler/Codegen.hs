@@ -215,7 +215,7 @@ munchExp (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s, TreeIR.CONST c)) =
   else result $ \r -> pure [ A.MOVE { A.assem="\tmov `d0, `s0"
                                     , A.moveDst=r
                                     , A.moveSrc=s }
-                           , A.OPER { A.assem="\t sub `d0, " ++ (show $ -c)
+                           , A.OPER { A.assem="\tsub `d0, " ++ (show $ -c)
                                     , A.operDst=[r]
                                     , A.operSrc=[]
                                     , A.jump=Nothing }]
@@ -299,7 +299,7 @@ munchExp (TreeIR.BINOP (op, e1, e2)) =
                        TreeIR.RSHIFT -> "shr"
                        TreeIR.XOR -> "xor"
                        _ -> error $ "unsupported operator: " ++ (show oper)
-munchExp (TreeIR.CALL (expr, args, escapes)) =
+munchExp (TreeIR.CALL (expr, args, escapes, hasRet)) =
   result $ \r -> do
                    argRegs <- mapM munchExp args
                    exprReg <- munchExp expr
@@ -309,9 +309,12 @@ munchExp (TreeIR.CALL (expr, args, escapes)) =
                              , A.operDst=X64Frame.callDests x64
                              , A.operSrc=exprReg:(X64Frame.rsp x64):(X64Frame.rbp x64):argRegs
                              , A.jump=Nothing })
-                     (Just $ A.MOVE { A.assem="\tmov `d0, `s0"
-                                    , A.moveDst=r
-                                    , A.moveSrc=X64Frame.rax x64 })
+                     (if hasRet then
+                        (Just $ A.MOVE { A.assem="\tmov `d0, `s0"
+                                       , A.moveDst=r
+                                       , A.moveSrc=X64Frame.rax x64 })
+                      else
+                        Nothing)
                      argRegs
                      escapes
                      IsReturn
