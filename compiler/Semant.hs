@@ -337,6 +337,14 @@ transExp (A.CallExp funcSym argExps pos) = do
     (Env.VarEntry _ t) -> throwT pos $
                           "only functions are callable: found type " ++
                           (show t)
+transExp (A.OpExp _ A.DivideOp (A.IntExp 0) pos) =
+  throwT pos $ "Integer division by zero detected"
+transExp (A.OpExp leftExp A.DivideOp (A.IntExp d) pos) = do
+  ExpTy{exp=expLeft, ty=tyLeft} <- transExp leftExp
+  case tyLeft of
+    Types.INT ->
+      translate (Translate.divByConst expLeft d) Types.INT
+    _ -> throwT pos $ "invalid operand of type " ++ (show tyLeft) ++ " in division expression"
 transExp (A.OpExp leftExp op rightExp pos) = do
   ExpTy{exp=expLeft, ty=tyleft} <- transExp leftExp
   ExpTy{exp=expRight, ty=tyright} <- transExp rightExp
