@@ -429,6 +429,14 @@ assign lhs rhs gen =
   in
     (resExp, gen'')
 
+assignConst :: Exp -> Int -> Temp.Generator -> (Exp, Temp.Generator)
+assignConst lhs val gen =
+  let
+    (lhsExp, gen') = unEx lhs gen
+    resExp = Nx $ TreeIR.MOVE (lhsExp, TreeIR.CONST val)
+  in
+    (resExp, gen')
+
 letExpM :: [Exp] -> Exp -> State Temp.Generator Exp
 letExpM initializers bodyExp = do
   gen <- get

@@ -480,6 +480,12 @@ transExp (A.AssignExp (A.FieldVar var sym fieldPos) expr assignPos) = do
     _ -> throwT fieldPos $ "in a field expression, can only access fields in records. " ++
                            "Attempted to access field in variable " ++ (show var) ++ " of type " ++
                            (show varTy)
+transExp (A.AssignExp var (A.IntExp i) pos) = do
+  ExpTy{exp=lhs, ty=varTy} <- transVar var
+  case varTy of
+    Types.INT ->
+      translate (Translate.assignConst lhs i) Types.UNIT
+    _ -> throwT pos $ "Invalid operand in assign exp of type " ++ (show varTy)
 transExp (A.AssignExp var expr pos) = do
   ExpTy{exp=lhs, ty=varTy} <- transVar var
   ExpTy{exp=rhs, ty=exprTy} <- transExp expr
