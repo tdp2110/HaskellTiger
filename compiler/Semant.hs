@@ -366,13 +366,25 @@ transExp (A.OpExp (A.IntExp d) A.TimesOp rightExp pos) =
 transExp (A.OpExp _ A.DivideOp (A.IntExp 0) pos) =
   throwT pos $ "Integer division by zero detected"
 transExp (A.OpExp (A.IntExp i1) A.DivideOp (A.IntExp i2) _) =
-  transExp $ A.IntExp $  i1 `div` i2
+  transExp $ A.IntExp $ i1 `div` i2
 transExp (A.OpExp leftExp A.DivideOp (A.IntExp d) pos) = do
   ExpTy{exp=expLeft, ty=tyLeft} <- transExp leftExp
   case tyLeft of
     Types.INT ->
       translate (Translate.divByConst expLeft d) Types.INT
     _ -> throwT pos $ "invalid operand of type " ++ (show tyLeft) ++ " in division expression"
+transExp (A.OpExp (A.IntExp i1) A.EqOp (A.IntExp i2) _) =
+  transExp $ A.IntExp $ fromEnum $ i1 == i2
+transExp (A.OpExp (A.IntExp i1) A.NeqOp (A.IntExp i2) _) =
+  transExp $ A.IntExp $ fromEnum $ i1 /= i2
+transExp (A.OpExp (A.IntExp i1) A.LtOp (A.IntExp i2) _) =
+  transExp $ A.IntExp $ fromEnum $ i1 < i2
+transExp (A.OpExp (A.IntExp i1) A.LeOp (A.IntExp i2) _) =
+  transExp $ A.IntExp $ fromEnum $ i1 <= i2
+transExp (A.OpExp (A.IntExp i1) A.GtOp (A.IntExp i2) _) =
+  transExp $ A.IntExp $ fromEnum $ i1 > i2
+transExp (A.OpExp (A.IntExp i1) A.GeOp (A.IntExp i2) _) =
+  transExp $ A.IntExp $ fromEnum $ i1 >= i2
 transExp (A.OpExp leftExp op rightExp pos) = do
   ExpTy{exp=expLeft, ty=tyleft} <- transExp leftExp
   ExpTy{exp=expRight, ty=tyright} <- transExp rightExp
