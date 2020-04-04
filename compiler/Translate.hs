@@ -302,6 +302,30 @@ divByConst expr d gen = -- we can assume d /= 0 in here, from the usage in Seman
   in
     (Ex divideExpr, gen')
 
+addConst :: Exp -> Int -> Temp.Generator -> (Exp, Temp.Generator)
+addConst expr d gen =
+  let
+    (e, gen') = unEx expr gen
+    opExp = TreeIR.BINOP (TreeIR.PLUS, e, TreeIR.CONST d)
+  in
+    (Ex opExp, gen')
+
+subConst :: Exp -> Int -> Temp.Generator -> (Exp, Temp.Generator)
+subConst expr d gen =
+  let
+    (e, gen') = unEx expr gen
+    opExp = TreeIR.BINOP (TreeIR.MINUS, e, TreeIR.CONST d)
+  in
+    (Ex opExp, gen')
+
+mulConst :: Exp -> Int -> Temp.Generator -> (Exp, Temp.Generator)
+mulConst expr d gen =
+  let
+    (e, gen') = unEx expr gen
+    opExp = TreeIR.BINOP (TreeIR.MUL, e, TreeIR.CONST d)
+  in
+    (Ex opExp, gen')
+
 ifThen :: Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
 ifThen testExpE thenExpE gen =
   let
