@@ -269,25 +269,27 @@ binOp expLeft expRight op gen =
             Absyn.DivideOp -> TreeIR.DIV
             _ -> error "shouldn't get here"
     binOpExp = TreeIR.BINOP (op', expLeft', expRight')
-    binOpStm = TreeIR.EXP binOpExp
     (resExp, gen3) = case op of
-      Absyn.DivideOp -> let
+      Absyn.DivideOp ->
+        let
           (testExp, gen''') = relOp
                                 expRight
-                                (Ex zero)
+                                zeroExp
                                 Absyn.NeqOp
                                 gen''
           testExpGen = unCx testExp
+          (t, gen4) = Temp.newlabel gen'''
+          (f, gen5) = Temp.newlabel gen4
           onDivByZero = TreeIR.EXP $ X64Frame.externalCallNoReturn
                                        (Temp.Label $ Symbol.Symbol "tiger_divByZero")
                                        []
         in
-          ( Cx $ \t f -> TreeIR.makeSeq [ testExpGen t f
-                                        , TreeIR.LABEL f
-                                        , onDivByZero
-                                        , TreeIR.LABEL t
-                                        , binOpStm ]
-          , gen''')
+          ( Ex $ TreeIR.ESEQ ( TreeIR.makeSeq [ testExpGen t f
+                                              , TreeIR.LABEL f
+                                              , onDivByZero
+                                              , TreeIR.LABEL t ]
+                             , binOpExp )
+          , gen5)
       _ -> (Ex binOpExp, gen'')
   in
     (resExp, gen3)
@@ -315,7 +317,7 @@ ifThen testExpE thenExpE gen =
     (resExp, gen''')
 
 seqExp :: [Exp] -> Temp.Generator -> (Exp, Temp.Generator)
-seqExp [] gen = (Ex zero, gen)
+seqExp [] gen = (zeroExp, gen)
 seqExp [exp] gen = (exp, gen)
 seqExp (exp:exps) gen =
   let
@@ -327,7 +329,7 @@ seqExp (exp:exps) gen =
     (resExp, gen''')
 
 seqStm :: [Exp] -> Temp.Generator -> (Exp, Temp.Generator)
-seqStm [] gen = (Ex zero, gen)
+seqStm [] gen = (zeroExp, gen)
 seqStm (exp:exps) gen =
   let
     (headStm, gen') = unNx exp gen
@@ -409,13 +411,13 @@ ifThenElse testExpE thenExpE elseExpE gen =
     (f, gen4) = Temp.newlabel gen'''
     (joinLab, gen5) = Temp.newlabel gen4
     (r, gen6) = Temp.newtemp gen5
-    resExp = Ex $ TreeIR.ESEQ (TreeIR.makeSeq [ testGen t f
-                                              , TreeIR.LABEL t
-                                              , TreeIR.MOVE (TreeIR.TEMP r, thenExp)
-                                              , TreeIR.JUMP (TreeIR.NAME joinLab, [joinLab])
-                                              , TreeIR.LABEL f
-                                              , TreeIR.MOVE (TreeIR.TEMP r, elseExp)
-                                              , TreeIR.LABEL joinLab ]
+    resExp = Ex $ TreeIR.ESEQ ( TreeIR.makeSeq [ testGen t f
+                                               , TreeIR.LABEL t
+                                               , TreeIR.MOVE (TreeIR.TEMP r, thenExp)
+                                               , TreeIR.JUMP (TreeIR.NAME joinLab, [joinLab])
+                                               , TreeIR.LABEL f
+                                               , TreeIR.MOVE (TreeIR.TEMP r, elseExp)
+                                               , TreeIR.LABEL joinLab ]
                               , TreeIR.TEMP r)
   in
     (resExp, gen6)

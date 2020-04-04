@@ -136,6 +136,9 @@ class TestCompiler(unittest.TestCase):
 
     def test_loop_register_allocator(self):
         self.check_compiler('examples/loopRegAllocator.tiger', run=False)
+
+    def test_divs(self):
+        self.check_compiler('examples/divs.tiger', '2\n1\n')
         
 if __name__ == '__main__':
     unittest.main()

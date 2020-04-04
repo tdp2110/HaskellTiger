@@ -1,0 +1,7 @@
+let
+    var x := 4
+    var y := 3
+in
+    println(itoa(x / 2));
+    println(itoa(x / y))
+end
