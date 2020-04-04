@@ -339,18 +339,14 @@ transExp (A.CallExp funcSym argExps pos) = do
                           (show t)
 transExp (A.OpExp (A.IntExp i1) A.PlusOp (A.IntExp i2) _) =
   transExp $ A.IntExp $ i1 + i2
-transExp (A.OpExp (A.IntExp d) A.PlusOp rightExp pos) = do
-  ExpTy{exp=expRight, ty=tyRight} <- transExp rightExp
-  case tyRight of
-    Types.INT ->
-      translate (Translate.addConst expRight d) Types.INT
-    _ -> throwT pos $ "invalid operand of type " ++ (show tyRight) ++ " in add expression"
 transExp (A.OpExp leftExp A.PlusOp (A.IntExp d) pos) = do
   ExpTy{exp=expLeft, ty=tyLeft} <- transExp leftExp
   case tyLeft of
     Types.INT ->
       translate (Translate.addConst expLeft d) Types.INT
     _ -> throwT pos $ "invalid operand of type " ++ (show tyLeft) ++ " in add expression"
+transExp (A.OpExp (A.IntExp d) A.PlusOp rightExp pos) =
+  transExp $ A.OpExp rightExp A.PlusOp (A.IntExp d) pos -- commutativity of addition
 transExp (A.OpExp leftExp A.MinusOp (A.IntExp d) pos) = do
   ExpTy{exp=expLeft, ty=tyLeft} <- transExp leftExp
   case tyLeft of
@@ -359,18 +355,14 @@ transExp (A.OpExp leftExp A.MinusOp (A.IntExp d) pos) = do
     _ -> throwT pos $ "invalid operand of type " ++ (show tyLeft) ++ " in minus expression"
 transExp (A.OpExp (A.IntExp i1) A.TimesOp (A.IntExp i2) _) =
   transExp $ A.IntExp $ i1 * i2
-transExp (A.OpExp (A.IntExp d) A.TimesOp rightExp pos) = do
-  ExpTy{exp=expRight, ty=tyRight} <- transExp rightExp
-  case tyRight of
-    Types.INT ->
-      translate (Translate.mulConst expRight d) Types.INT
-    _ -> throwT pos $ "invalid operand of type " ++ (show tyRight) ++ " in multiply expression"
 transExp (A.OpExp leftExp A.TimesOp (A.IntExp d) pos) = do
   ExpTy{exp=expLeft, ty=tyLeft} <- transExp leftExp
   case tyLeft of
     Types.INT ->
       translate (Translate.mulConst expLeft d) Types.INT
     _ -> throwT pos $ "invalid operand of type " ++ (show tyLeft) ++ " in multiply expression"
+transExp (A.OpExp (A.IntExp d) A.TimesOp rightExp pos) =
+  transExp $ A.OpExp rightExp A.TimesOp (A.IntExp d) pos -- commutativity of multiplication
 transExp (A.OpExp _ A.DivideOp (A.IntExp 0) pos) =
   throwT pos $ "Integer division by zero detected"
 transExp (A.OpExp (A.IntExp i1) A.DivideOp (A.IntExp i2) _) =

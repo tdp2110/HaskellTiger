@@ -294,37 +294,29 @@ binOp expLeft expRight op gen =
   in
     (resExp, gen3)
 
-divByConst :: Exp -> Int -> Temp.Generator -> (Exp, Temp.Generator)
-divByConst expr d gen = -- we can assume d /= 0 in here, from the usage in Semant
+intOpWithConst :: TreeIR.Binop -> Exp -> Int -> Temp.Generator -> (Exp, Temp.Generator)
+intOpWithConst op expr d gen =
   let
-    (divisor, gen') = unEx expr gen
-    divideExpr = TreeIR.BINOP (TreeIR.DIV, divisor, TreeIR.CONST d)
+    (e, gen') = unEx expr gen
+    opExp = TreeIR.BINOP (op, e, TreeIR.CONST d)
   in
-    (Ex divideExpr, gen')
+    (Ex opExp, gen')
+
+divByConst :: Exp -> Int -> Temp.Generator -> (Exp, Temp.Generator)
+divByConst = -- we can assume d /= 0 in here, from the usage in Semant
+  intOpWithConst TreeIR.DIV
 
 addConst :: Exp -> Int -> Temp.Generator -> (Exp, Temp.Generator)
-addConst expr d gen =
-  let
-    (e, gen') = unEx expr gen
-    opExp = TreeIR.BINOP (TreeIR.PLUS, e, TreeIR.CONST d)
-  in
-    (Ex opExp, gen')
+addConst =
+  intOpWithConst TreeIR.PLUS
 
 subConst :: Exp -> Int -> Temp.Generator -> (Exp, Temp.Generator)
-subConst expr d gen =
-  let
-    (e, gen') = unEx expr gen
-    opExp = TreeIR.BINOP (TreeIR.MINUS, e, TreeIR.CONST d)
-  in
-    (Ex opExp, gen')
+subConst =
+  intOpWithConst TreeIR.MINUS
 
 mulConst :: Exp -> Int -> Temp.Generator -> (Exp, Temp.Generator)
-mulConst expr d gen =
-  let
-    (e, gen') = unEx expr gen
-    opExp = TreeIR.BINOP (TreeIR.MUL, e, TreeIR.CONST d)
-  in
-    (Ex opExp, gen')
+mulConst =
+  intOpWithConst TreeIR.MUL
 
 ifThen :: Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
 ifThen testExpE thenExpE gen =
