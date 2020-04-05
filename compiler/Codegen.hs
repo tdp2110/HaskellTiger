@@ -163,6 +163,12 @@ munchStm (TreeIR.JUMP (e, labels)) = do
               , A.operDst = []
               , A.operSrc = [src]
               , A.jump = Just labels }
+munchStm (TreeIR.CJUMP (op, e1, TreeIR.CONST i, t, f)) = do
+  src1 <- munchExp e1
+  emit A.OPER { A.assem="\tcmp `s0, " ++ (show i) ++ "\n\t" ++ (opToJump op) ++ " `j0\n\tjmp `j1"
+              , A.operDst = []
+              , A.operSrc = [src1]
+              , A.jump = Just [t, f] }
 munchStm (TreeIR.CJUMP (op, e1, e2, t, f)) = do
   src1 <- munchExp e1
   src2 <- munchExp e2
@@ -170,19 +176,19 @@ munchStm (TreeIR.CJUMP (op, e1, e2, t, f)) = do
               , A.operDst = []
               , A.operSrc = [src1, src2]
               , A.jump = Just [t, f] }
-  where
-    opToJump :: TreeIR.Relop -> String
-    opToJump oper = case oper of
-                      TreeIR.EQ -> "je"
-                      TreeIR.NE -> "jne"
-                      TreeIR.LT -> "jl"
-                      TreeIR.LE -> "jle"
-                      TreeIR.ULT -> "jl"
-                      TreeIR.ULE -> "jle"
-                      TreeIR.GT -> "jg"
-                      TreeIR.GE -> "jge"
-                      TreeIR.UGT -> "jg"
-                      TreeIR.UGE -> "jge"
+
+opToJump :: TreeIR.Relop -> String
+opToJump oper = case oper of
+                  TreeIR.EQ -> "je"
+                  TreeIR.NE -> "jne"
+                  TreeIR.LT -> "jl"
+                  TreeIR.LE -> "jle"
+                  TreeIR.ULT -> "jl"
+                  TreeIR.ULE -> "jle"
+                  TreeIR.GT -> "jg"
+                  TreeIR.GE -> "jge"
+                  TreeIR.UGT -> "jg"
+                  TreeIR.UGE -> "jge"
 
 munchExp :: TreeIR.Exp -> CodeGenerator Int
 munchExp (TreeIR.CONST c) =
