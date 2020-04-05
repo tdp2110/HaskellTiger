@@ -271,52 +271,43 @@ binOp expLeft expRight op gen =
     binOpExp = TreeIR.BINOP (op', expLeft', expRight')
     (resExp, gen3) = case op of
       Absyn.DivideOp ->
-        let
-          (testExp, gen''') = relOp
-                                expRight
-                                zeroExp
-                                Absyn.NeqOp
-                                gen''
-          testExpGen = unCx testExp
-          (t, gen4) = Temp.newlabel gen'''
-          (f, gen5) = Temp.newlabel gen4
-          onDivByZero = TreeIR.EXP $ X64Frame.externalCallNoReturn
-                                       (Temp.Label $ Symbol.Symbol "tiger_divByZero")
-                                       []
-        in
-          ( Ex $ TreeIR.ESEQ ( TreeIR.makeSeq [ testExpGen t f
-                                              , TreeIR.LABEL f
-                                              , onDivByZero
-                                              , TreeIR.LABEL t ]
-                             , binOpExp )
-          , gen5)
+        case expRight' of
+          c@(TreeIR.CONST _) -> -- semant checked for division by (const) zero
+            let
+              opExp = TreeIR.BINOP (TreeIR.DIV, expLeft', c)
+            in
+              (Ex opExp, gen'')
+          _ ->
+            let
+              (testExp, gen''') = relOp
+                                    expRight
+                                    zeroExp
+                                    Absyn.NeqOp
+                                    gen''
+              testExpGen = unCx testExp
+              (t, gen4) = Temp.newlabel gen'''
+              (f, gen5) = Temp.newlabel gen4
+              onDivByZero = TreeIR.EXP $ X64Frame.externalCallNoReturn
+                                           (Temp.Label $ Symbol.Symbol "tiger_divByZero")
+                                           []
+            in
+              ( Ex $ TreeIR.ESEQ ( TreeIR.makeSeq [ testExpGen t f
+                                                  , TreeIR.LABEL f
+                                                  , onDivByZero
+                                                  , TreeIR.LABEL t ]
+                                 , binOpExp )
+              , gen5)
       _ -> (Ex binOpExp, gen'')
   in
     (resExp, gen3)
 
-intOpWithConst :: TreeIR.Binop -> Exp -> Int -> Temp.Generator -> (Exp, Temp.Generator)
-intOpWithConst op expr d gen =
+divByConst :: Exp -> Int -> Temp.Generator -> (Exp, Temp.Generator)
+divByConst expr d gen = -- we can assume d /= 0 in here, from the usage in Semant
   let
     (e, gen') = unEx expr gen
-    opExp = TreeIR.BINOP (op, e, TreeIR.CONST d)
+    opExp = TreeIR.BINOP (TreeIR.DIV, e, TreeIR.CONST d)
   in
     (Ex opExp, gen')
-
-divByConst :: Exp -> Int -> Temp.Generator -> (Exp, Temp.Generator)
-divByConst = -- we can assume d /= 0 in here, from the usage in Semant
-  intOpWithConst TreeIR.DIV
-
-addConst :: Exp -> Int -> Temp.Generator -> (Exp, Temp.Generator)
-addConst =
-  intOpWithConst TreeIR.PLUS
-
-subConst :: Exp -> Int -> Temp.Generator -> (Exp, Temp.Generator)
-subConst =
-  intOpWithConst TreeIR.MINUS
-
-mulConst :: Exp -> Int -> Temp.Generator -> (Exp, Temp.Generator)
-mulConst =
-  intOpWithConst TreeIR.MUL
 
 ifThen :: Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
 ifThen testExpE thenExpE gen =
