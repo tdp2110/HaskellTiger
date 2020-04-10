@@ -42,9 +42,7 @@ intArith1 = TestCase (
     (Right (Semant.ExpTy{Semant.exp=(Translate.Ex exp), Semant.ty=ty}, _, _, _)) = parseToSema text
  in do
     assertEqual "int arith 1" Types.INT ty
-    assertEqual "arith" exp $ TreeIR.BINOP ( TreeIR.PLUS
-                                         , TreeIR.CONST 42
-                                         , TreeIR.CONST 1337 )
+    assertEqual "arith" exp $ TreeIR.CONST $ 42 + 1337
   )
 
 intArith2 :: Test
@@ -80,7 +78,8 @@ strLiteral = TestCase (
            TreeIR.NAME (Temp.Label (Symbol.Symbol "_tiger_allocString")),
            [TreeIR.NAME lab1,
            TreeIR.CONST strlen],
-           [Frame.DoesNotEscape, Frame.DoesNotEscape])),
+           [Frame.DoesNotEscape, Frame.DoesNotEscape],
+           True)),
        TreeIR.TEMP t2))) = expr
 
     [ X64Frame.STRING (lab2, str2) ] = DList.toList frags
@@ -472,7 +471,7 @@ ifExp4 = TestCase (
     (Left(Semant.SemantError err _)) = parseToSema text
   in do
     assertBool "if then else types don't match" $ isInfixOf
-      "in ifExp, thenExp and elseExp must have the same type" err
+      "incompatible types found in ifExp" err
   )
 
 while1 :: Test
