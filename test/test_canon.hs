@@ -1,10 +1,11 @@
-import Test.QuickCheck
-
 import qualified Canon as C
 import qualified Frame
 import Symbol
 import qualified Temp
 import qualified TreeIR as T
+
+import Test.QuickCheck
+import Test.Hspec
 
 
 instance Arbitrary Temp.Label where
@@ -204,6 +205,10 @@ prop_parentOfCallIsOk stm =
     callOk _ = error "shouldn't get here"
 
 main :: IO ()
-main = do
-  quickCheck prop_canonHasNoSeq
-  quickCheck prop_parentOfCallIsOk
+main = hspec $ do
+  describe "linearize" $
+    it "has no SEQ nor ESEQ" $ do
+      property prop_canonHasNoSeq
+  describe "linearize" $
+    it "parent of every CALL is an EXP(..) or a MOVE(TEMP t,..)" $ do
+      property prop_parentOfCallIsOk

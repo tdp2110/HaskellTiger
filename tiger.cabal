@@ -32,7 +32,8 @@ test-suite test_canon
   main-is:             test_canon.hs
   build-depends:       base ^>=4.12.0.0,
                        containers >= 0.6.0.1, array >= 0.5.3.0,
-                       transformers >= 0.5.6.0, dlist >= 0.8.0.0, QuickCheck
+                       transformers >= 0.5.6.0, dlist >= 0.8.0.0, QuickCheck,
+                       hspec >= 2.7.1
   other-modules:       Semant, Types, Symbol, Env, Absyn, Translate, Parser, Lexer,
                        FindEscape, X64Frame, Frame, Temp, TreeIR, Canon, Assem
   ghc-options:         -Wall -fwarn-incomplete-patterns -fno-warn-orphans
