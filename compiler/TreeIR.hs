@@ -134,7 +134,7 @@ putStm (CJUMP (r,a,b,Temp.Label(Symbol.Symbol t),Temp.Label (Symbol.Symbol f))) 
   putCharW ')'
 putStm (MOVE (a,b)) d = do
   indent d
-  putStrLnW "MOVE"
+  putStrLnW "MOVE("
   putExp a $ d + 1
   putStrLnW ","
   putExp b $ d + 1

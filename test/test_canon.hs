@@ -15,6 +15,17 @@ instance Arbitrary Temp.Label where
 instance Arbitrary T.Exp where
   arbitrary = sized arbExp
 
+arbTemp :: Gen T.Exp
+arbTemp = do
+  i <- arbitrary
+  pure $ T.TEMP i
+
+arbMem :: Gen T.Exp
+arbMem = do
+  n <- choose (0, 8) :: Gen Int
+  e <- arbExp n
+  pure $ T.MEM e
+
 arbExp :: Int -> Gen T.Exp
 arbExp 0 = do
   n <- choose (0, 4) :: Gen Int
@@ -25,9 +36,7 @@ arbExp 0 = do
     1 -> do
       lab <- arbitrary
       pure $ T.NAME lab
-    _ -> do
-      i <- arbitrary
-      pure $ T.TEMP i
+    _ -> arbTemp
 arbExp sz =
   let
     sz' = sz `div` 2
@@ -50,9 +59,7 @@ arbExp sz =
         e1 <- expGen
         e2 <- expGen
         pure $ T.BINOP (op, e1, e2)
-      4 -> do
-        e <- expGen
-        pure $ T.MEM e
+      4 -> arbMem
       5 -> do
         funcExp <- expGen
         argSize <- choose (0, 2) :: Gen Int
@@ -67,6 +74,13 @@ arbExp sz =
 instance Arbitrary T.Stm where
   arbitrary = sized arbStm
 
+tempOrMem :: Gen T.Exp
+tempOrMem = do
+  n <- choose (0, 1) :: Gen Int
+  case n of
+    0 -> arbTemp
+    _ -> arbMem
+
 arbStm :: Int -> Gen T.Stm
 arbStm 0 = do
   lab <- arbitrary
@@ -80,7 +94,7 @@ arbStm sz =
     n <- choose (0, 6) :: Gen Int
     case n of
       0 -> do
-        e1 <- expGen
+        e1 <- tempOrMem
         e2 <- expGen
         pure $ T.MOVE (e1, e2)
       1 -> do
@@ -154,7 +168,7 @@ prop_canonHasNoSeq stm =
     expHasNoSeq (T.BINOP (_, e1, e2)) = expHasNoSeq e1 && expHasNoSeq e2
     expHasNoSeq (T.MEM e) = expHasNoSeq e
     expHasNoSeq (T.CALL (e, es, _, _)) = expHasNoSeq e && (all expHasNoSeq es)
-    expHasNoSeq (T.ESEQ (s, e)) = stmHasNoSeq s && expHasNoSeq e
+    expHasNoSeq (T.ESEQ (_, _)) = False
     expHasNoSeq _ = True
 
 prop_parentOfCallIsOk :: T.Stm -> Bool
