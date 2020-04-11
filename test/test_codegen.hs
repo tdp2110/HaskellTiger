@@ -7,6 +7,7 @@ import qualified Temp
 import qualified TreeIR
 import qualified X64Frame
 
+
 main :: IO ()
 main = hspec $ do
   describe "regAlloc spill codegen" $
@@ -32,8 +33,8 @@ main = hspec $ do
         (length storeCode) `shouldBe` 1
         (length loadCode) `shouldBe` 1
         let
-          [Assem.OPER { Assem.operDst=[storeDst]
-                      , Assem.operSrc=[storeSrc] }] = storeCode
+          [Assem.OPER { Assem.operDst=[]
+                      , Assem.operSrc=[storeDst,storeSrc] }] = storeCode
           [Assem.OPER { Assem.operDst=[loadDst]
                       , Assem.operSrc=[loadSrc] }] = loadCode
 
