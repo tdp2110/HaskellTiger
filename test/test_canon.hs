@@ -23,7 +23,7 @@ arbTemp = do
 
 arbMem :: Gen T.Exp
 arbMem = do
-  n <- choose (0, 8) :: Gen Int
+  n <- choose (0, 32) :: Gen Int
   e <- arbExp n
   pure $ T.MEM e
 
@@ -92,7 +92,7 @@ arbStm sz =
     expGen = arbExp sz'
     stmGen = arbStm sz'
   in do
-    n <- choose (0, 6) :: Gen Int
+    n <- choose (0, 5) :: Gen Int
     case n of
       0 -> do
         e1 <- tempOrMem
@@ -117,9 +117,10 @@ arbStm sz =
         s1 <- stmGen
         s2 <- stmGen
         pure $ T.SEQ (s1, s2)
-      _ -> do
+      5 -> do
         lab <- arbitrary
         pure $ T.LABEL lab
+      _ -> error "shouldn't get here"
 
 instance Arbitrary T.Binop where
   arbitrary = elements [ T.PLUS
