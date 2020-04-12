@@ -43,10 +43,16 @@ newLabel = do
   put gen'
   pure lab
 
+rewriteCall :: T.Exp -> State Temp.Generator T.Exp
+rewriteCall c@(T.CALL _) = do
+  t <- newTemp
+  pure $ (T.ESEQ (T.MOVE (T.TEMP t, c), T.TEMP t))
+rewriteCall e = error $ "invalid argument passed to rewriteCall: " ++ (show e)
+
 reorder :: [T.Exp] -> State Temp.Generator (T.Stm, [T.Exp])
 reorder (c@(T.CALL _):rest) = do
-  t <- newTemp
-  reorder $ (T.ESEQ (T.MOVE (T.TEMP t, c), T.TEMP t)) : rest
+  c' <- rewriteCall c
+  reorder $ c' : rest
 reorder (a:rest) = do
   (stms,e) <- doExp a
   (stms',el) <- reorder rest
@@ -98,12 +104,15 @@ doExp (T.BINOP (p,a,b)) =
   reorderExp [a,b] $ \[a',b'] -> T.BINOP (p,a',b')
 doExp (T.MEM a) =
   reorderExp [a] $ \[a'] -> T.MEM a'
+doExp (T.ESEQ (s, c@(T.CALL _))) = do
+  call' <- rewriteCall c
+  doExp (T.ESEQ (s, call'))
 doExp (T.ESEQ (s,e)) = do
   stms <- doStm s
   (stms',e') <- doExp e
   pure (stms % stms',e')
 doExp (T.CALL (e,el,escapes,hasRet)) =
-  reorderExp (e:el) (\(e':el') -> T.CALL (e', el', escapes, hasRet))
+  reorderExp (e:el) $ \(e':el') -> T.CALL (e', el', escapes, hasRet)
 doExp e =
   reorderExp [] $ \[] -> e
 
