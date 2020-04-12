@@ -181,29 +181,38 @@ prop_parentOfCallIsOk stm =
     all callParentOkStm stms
   where
     callParentOkExp :: T.Exp -> Bool
+    callParentOkExp (T.CONST _) = True
+    callParentOkExp (T.NAME _) = True
+    callParentOkExp (T.TEMP _) = True
     callParentOkExp (T.BINOP (_, T.CALL _, _)) = False
     callParentOkExp (T.BINOP (_, _, T.CALL _)) = False
+    callParentOkExp (T.BINOP (_, e1, e2)) = callParentOkExp e1 && callParentOkExp e2
     callParentOkExp (T.MEM (T.CALL _)) = False
-    callParentOkExp c@(T.CALL _) = callOk c
-    callParentOkExp (T.ESEQ (s, e)) =
-      callParentOkStm s && callParentOkExp e
-    callParentOkExp _ = True
+    callParentOkExp (T.MEM e) = callParentOkExp e
+    callParentOkExp (T.CALL (f, args, _, _)) = callArgsOk f args
+    callParentOkExp (T.CALLNORETURN (f, args, _)) = callArgsOk f args
+    callParentOkExp (T.ESEQ (_, T.CALL _)) = False
+    callParentOkExp (T.ESEQ (s, e)) = callParentOkStm s && callParentOkExp e
 
     callParentOkStm :: T.Stm -> Bool
-    callParentOkStm (T.MOVE (T.TEMP _, c@(T.CALL _))) = callOk c
+    callParentOkStm (T.MOVE (T.TEMP _, e)) = callParentOkExp e
     callParentOkStm (T.MOVE (_, T.CALL _)) = False
-    callParentOkStm (T.MOVE (T.CALL _, _)) = False
-    callParentOkStm (T.EXP c@(T.CALL _)) = callOk c
+    callParentOkStm (T.MOVE (e1, e2)) = callParentOkExp e1 && callParentOkExp e2
+    callParentOkStm (T.EXP e) = callParentOkExp e
     callParentOkStm (T.JUMP (T.CALL _, _)) = False
+    callParentOkStm (T.JUMP (e, _)) = callParentOkExp e
     callParentOkStm (T.CJUMP (_, (T.CALL _), _, _, _)) = False
     callParentOkStm (T.CJUMP (_, _, (T.CALL _), _, _)) = False
+    callParentOkStm (T.CJUMP (_, e1, e2, _, _)) = callParentOkExp e1 && callParentOkExp e2
     callParentOkStm (T.SEQ (s1, s2)) = callParentOkStm s1 && callParentOkStm s2
-    callParentOkStm _ = True
+    callParentOkStm (T.LABEL _) = True
 
-    callOk :: T.Exp -> Bool
-    callOk (T.CALL (f, args, _, _)) =
-      callParentOkExp f && all callParentOkExp args
-    callOk _ = error "shouldn't get here"
+    callArgsOk f args =
+      if any isCall (f:args) then False
+      else all callParentOkExp (f:args)
+
+    isCall (T.CALL _) = True
+    isCall _ = False
 
 main :: IO ()
 main = hspec $ do
