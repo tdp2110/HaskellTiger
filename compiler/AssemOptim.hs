@@ -8,11 +8,14 @@ import Data.Foldable (foldl')
 import qualified Data.Map as Map
 
 
-pruneDefdButNotUsed :: [A.Inst] -> (F.FlowGraph, [F.Node]) -> ([A.Inst], (F.FlowGraph, [F.Node]))
-pruneDefdButNotUsed insts ( F.FlowGraph { F.control=control
-                                        , F.use=use }
-                          , _) =
+type Pass = ([A.Inst], (F.FlowGraph, [F.Node])) -> ([A.Inst], (F.FlowGraph, [F.Node]))
+
+pruneDefdButNotUsed :: Pass
+pruneDefdButNotUsed (insts, ( F.FlowGraph { F.control=control
+                                          , F.use=use }
+                            , _)) =
   let
+    getDefaultZero = Map.findWithDefault (0 :: Int)
     useCounts = foldl'
                   (\acc nodeId ->
                     let
@@ -20,7 +23,7 @@ pruneDefdButNotUsed insts ( F.FlowGraph { F.control=control
                       acc2 = foldl'
                                (\acc3 usedId ->
                                  let
-                                   ct = Map.findWithDefault (0 :: Int) usedId acc3
+                                   ct = getDefaultZero usedId acc3
                                    acc4 = Map.insert usedId (ct + 1) acc3
                                  in
                                    acc4)
@@ -34,7 +37,7 @@ pruneDefdButNotUsed insts ( F.FlowGraph { F.control=control
                  (\inst ->
                    case inst of
                      A.MOVE { A.moveDst=defdId } ->
-                       useCounts Map.! defdId /= 0
+                       getDefaultZero defdId useCounts  /= 0
                      _ -> True)
                  insts
   in

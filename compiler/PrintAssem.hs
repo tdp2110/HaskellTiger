@@ -1,8 +1,10 @@
 module Main where
 
 import qualified Assem
+import qualified AssemOptim
 import qualified Canon
 import qualified Codegen
+import qualified Flow
 import qualified Parser
 import qualified RegAlloc
 import qualified Semant
@@ -89,24 +91,33 @@ compileToAsm text performRegAlloc =
                 insts' = X64Frame.procEntryExit2 frame insts
                 maxCallArgs = TreeIR.maxCallArgsStm bodyStm
                 tempMap = X64Frame.tempMap x64
-                (insts'', alloc, frame', gen6) =
+                (insts'', (flowGraph, _)) = optimize insts'
+                (insts''', alloc, frame', gen6) =
                   if performRegAlloc then
                     RegAlloc.alloc
-                      insts'
+                      insts''
+                      flowGraph
                       frame
                       gen5
                       []
                   else
-                    (insts', tempMap, frame, gen5)
-                insts''' = X64Frame.procEntryExit3
-                             frame'
-                             insts''
-                             (X64Frame.MaxCallArgs maxCallArgs)
-                insts4 = filter notEmptyInst insts''' -- an empty instr is appended to function bodies
-                                                      -- in order to communicate some liveness info to regalloc
+                    (insts'', tempMap, frame, gen5)
+                insts4 = X64Frame.procEntryExit3
+                           frame'
+                           insts'''
+                           (X64Frame.MaxCallArgs maxCallArgs)
+                insts5 = filter notEmptyInst insts4 -- an empty instr is appended to function bodies
+                                                    -- in order to communicate some liveness info to regalloc
               in
-                ((intercalate "\n" (fmap (formatAsm (alloc `Map.union` tempMap)) insts4) ++ "\n"), gen6)
+                ((intercalate "\n" (fmap (formatAsm (alloc `Map.union` tempMap)) insts5) ++ "\n"), gen6)
               where
+                optimize :: [Assem.Inst] -> ([Assem.Inst], (Flow.FlowGraph, [Flow.Node]))
+                optimize instrs =
+                  let
+                    (flowGraph, nodes) = Flow.instrsToGraph instrs
+                  in
+                    AssemOptim.pruneDefdButNotUsed (instrs, (flowGraph, nodes))
+
                 notEmptyInst :: Assem.Inst -> Bool
                 notEmptyInst (Assem.OPER { Assem.assem=assem } ) = assem /= ""
                 notEmptyInst _ = True

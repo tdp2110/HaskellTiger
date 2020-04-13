@@ -1,7 +1,6 @@
 module RegAlloc where
 
 import qualified Assem
-import qualified AssemOptim
 import qualified Codegen
 import qualified Color
 import qualified Flow
@@ -21,6 +20,7 @@ type TempId = Color.TempId
 
 
 alloc :: [Assem.Inst]
+      -> Flow.FlowGraph
       -> X64Frame.X64Frame
       -> Temp.Generator
       -> [Int]
@@ -28,9 +28,8 @@ alloc :: [Assem.Inst]
          , Color.Allocation
          , X64Frame.X64Frame
          , Temp.Generator )
-alloc insts frame gen previousSpillTemps =
+alloc insts flowGraph frame gen previousSpillTemps =
   let
-    (flowGraph, _) = Flow.instrsToGraph insts
     (igraph, _) = Liveness.interferenceGraph flowGraph
     x64 = X64Frame.x64 frame
     initialAllocs = X64Frame.tempMap x64
@@ -54,8 +53,10 @@ alloc insts frame gen previousSpillTemps =
                                              frame
                                              spills
                                              gen
+        (flowGraph', _) = Flow.instrsToGraph insts'
+
       in
-        alloc insts' frame' gen' newTemps
+        alloc insts' flowGraph' frame' gen' newTemps
   where
     isRedundant :: Color.Allocation -> Assem.Inst -> Bool
     isRedundant allocation inst =

@@ -314,10 +314,7 @@ munchExp (TreeIR.CALL (expr, args, escapes, hasRet)) =
                                        , A.moveDst=r
                                        , A.moveSrc=X64Frame.rax x64 })
                       else
-                        (Just $ A.OPER { A.assem="\tmov `d0, 0xDEADBEEF"
-                                       , A.operDst=[r]
-                                       , A.operSrc=[]
-                                       , A.jump=Nothing }))
+                        Nothing)
                      argRegs
                      escapes
                      IsReturn
