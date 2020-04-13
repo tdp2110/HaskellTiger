@@ -1,6 +1,7 @@
 module RegAlloc where
 
 import qualified Assem
+import qualified AssemOptim
 import qualified Codegen
 import qualified Color
 import qualified Flow
@@ -84,7 +85,7 @@ alloc insts frame gen previousSpillTemps =
                            in
                              acc + (f defs temp) + (f uses temp))
                         0
-                        (Map.keys $ Graph.nodes control)
+                        $ Map.keys $ Graph.nodes control
         nodeDegree :: Float
         nodeDegree = let
                        node = tnode Map.! temp
