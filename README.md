@@ -52,3 +52,19 @@ cc hello_world.s runtime/build/libtiger_rt.a -lc++ -o hello_world
 ```
 
 NB: I'm still working through the bugs :)
+
+## Running tests
+
+There are two sets of tests, first are unit test written in Haskell:
+
+```
+cabal new-test
+```
+
+and an integration test written in Python:
+
+```
+python3 test/compiler_test.py
+```
+
+(I should probably unify those to run from a single command :D)
