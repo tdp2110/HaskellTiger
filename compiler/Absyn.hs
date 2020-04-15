@@ -8,7 +8,7 @@ data Pos = Pos { absChrOffset :: !Int
   deriving (Eq)
 
 instance Show Pos where
-  show (Pos _ lineNo colNo) = "line " ++ (show lineNo) ++ ", col " ++ (show colNo)
+  show (Pos _ lineNo colNo) = "line " ++ (show lineNo ++ ", col " ++ show colNo)
 
 data Var = SimpleVar Symbol Pos
          | FieldVar Var Symbol Pos
@@ -18,7 +18,7 @@ data Var = SimpleVar Symbol Pos
 data Exp = VarExp Var
          | NilExp
          | IntExp Int
-         | StringExp [Char]
+         | StringExp String
          | CallExp { func :: Symbol
                    , args :: [Exp]
                    , pos :: Pos }

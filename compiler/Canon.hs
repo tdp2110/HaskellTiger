@@ -46,8 +46,8 @@ newLabel = do
 rewriteCall :: T.Exp -> State Temp.Generator T.Exp
 rewriteCall c@(T.CALL _) = do
   t <- newTemp
-  pure $ (T.ESEQ (T.MOVE (T.TEMP t, c), T.TEMP t))
-rewriteCall e = error $ "invalid argument passed to rewriteCall: " ++ (show e)
+  pure $ T.ESEQ (T.MOVE (T.TEMP t, c), T.TEMP t)
+rewriteCall e = error $ "invalid argument passed to rewriteCall: " ++ show e
 
 reorder :: [T.Exp] -> State Temp.Generator (T.Stm, [T.Exp])
 reorder (c@(T.CALL _):rest) = do
@@ -61,9 +61,8 @@ reorder (a:rest) = do
     else
     do
       t <- newTemp
-      pure (stms % (T.MOVE (T.TEMP t, e)) % stms', (T.TEMP t) : el)
-reorder [] = do
-  pure (nop,[])
+      pure (stms % T.MOVE (T.TEMP t, e) % stms', T.TEMP t : el)
+reorder [] = pure (nop,[])
 
 reorderExp :: [T.Exp] -> ([T.Exp] -> T.Exp) -> State Temp.Generator (T.Stm, T.Exp)
 reorderExp el build = do
@@ -120,8 +119,7 @@ linear :: T.Stm -> [T.Stm] -> State Temp.Generator [T.Stm]
 linear (T.SEQ (a,b)) l = do
   stms <- linear b l
   linear a stms
-linear s l = do
-  pure $ s:l
+linear s l = pure $ s:l
 
 linearizeM :: T.Stm -> State Temp.Generator [T.Stm]
 linearizeM s = do
@@ -134,8 +132,7 @@ From an arbitrary TreeIR statement, produce a list of cleaned satisfying the fol
   2.  The parent of every CALL is an EXP(..) or a MOVE(TEMP t,..)
 -}
 linearize :: T.Stm -> Temp.Generator -> ([T.Stm], Temp.Generator)
-linearize s gen =
-  runState (linearizeM s) gen
+linearize s = runState (linearizeM s)
 
 type Block = [T.Stm]
 
@@ -163,7 +160,7 @@ basicBlocks stms = do
         next (s@(T.CJUMP _) : rest) thisBlock =
           endBlock rest (s : thisBlock)
         next stms''@(T.LABEL lab : _) thisBlock =
-          next ((T.JUMP (T.NAME lab, [lab])) : stms'') thisBlock
+          next (T.JUMP (T.NAME lab, [lab]) : stms'') thisBlock
         next (s : rest) thisBlock =
           next rest (s : thisBlock)
         next [] thisBlock =
@@ -174,11 +171,11 @@ basicBlocks stms = do
           blocks stms'' $ reverse thisBlock : blist
       in
         next stms' [labStm]
-    blocks [] blist = do
+    blocks [] blist =
       pure $ reverse blist
     blocks stms' blist = do
       t <- newLabel
-      blocks ((T.LABEL t) : stms') blist
+      blocks (T.LABEL t : stms') blist
     in
     do
       res <- blocks stms []
@@ -190,7 +187,7 @@ impossible = error "shouldn't get here"
 type Table = Map Temp.Label Block
 
 enterBlock :: Block -> Table -> Table
-enterBlock b@(T.LABEL(s) : _) table =
+enterBlock b@(T.LABEL s : _) table =
     Map.insert s b table
 enterBlock _ table = table
 
@@ -207,14 +204,14 @@ trace :: Map Temp.Label [T.Stm]
                       -> [T.Stm]
                       -> [[T.Stm]]
                       -> State Temp.Generator Block
-trace table' (b@(T.LABEL lab : _)) rest =
+trace table' b@(T.LABEL lab : _) rest =
   let
     table = Map.insert lab [] table'
   in
     case splitLast b of
       (most, T.JUMP (T.NAME lab', _)) ->
         case Map.lookup lab' table of
-          Just (b'@(_:_)) -> do
+          Just b'@(_:_) -> do
             tl <- trace table b' rest
             pure $ most ++ tl
           _ -> do
@@ -222,10 +219,10 @@ trace table' (b@(T.LABEL lab : _)) rest =
             pure $ b ++ next
       (most, T.CJUMP (op,x,y,t,f)) ->
         case (Map.lookup t table, Map.lookup f table) of
-          (_, Just (b'@(_:_))) -> do
+          (_, Just b'@(_:_)) -> do
             tl <- trace table b' rest
             pure $ b ++ tl
-          (Just (b'@(_:_)), _) -> do
+          (Just b'@(_:_), _) -> do
             tl <- trace table b' rest
             pure $ most ++ [T.CJUMP (T.notRel op,x,y,f,t)]
                  ++ tl
@@ -249,8 +246,7 @@ getNext table (b@((T.LABEL lab):_) : rest) =
   case Map.lookup lab table of
     Just (_:_) -> trace table b rest
     _ -> getNext table rest
-getNext _ [] = do
-  pure []
+getNext _ [] =  pure []
 getNext _ _ = impossible
 
 {-
