@@ -23,13 +23,13 @@ parseToExp text =
             Right (Semant.ExpTy{Semant.exp=expr}, frags, _, _) -> (expr, frags)
 
 showFrag :: X64Frame.Frag -> IO ()
-showFrag (X64Frame.PROC{X64Frame.body=body}) = do
+showFrag X64Frame.PROC{X64Frame.body=body} = do
   putStrLn ";; FRAG PROC:"
-  putStrLn $ show body
+  print body
   putStrLn ";; END FRAG"
 showFrag (X64Frame.STRING (lab, str)) = do
   putStrLn ";; FRAG STRING:\n"
-  putStrLn $ show (lab, str)
+  print (lab, str)
   putStrLn ";; END FRAG"
 
 main :: IO ()
@@ -41,13 +41,13 @@ main = do
       mapM_
         showFrag
         frags
-      putStrLn $ show treeExp
+      print treeExp
       pure ()
     (Translate.Nx treeStm, frags) -> do
       mapM_
         showFrag
         frags
-      putStrLn $ show treeStm
+      print treeStm
       pure ()
     (Translate.Cx _, frags) -> do
       mapM_

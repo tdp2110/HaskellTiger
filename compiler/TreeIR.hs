@@ -6,6 +6,7 @@ import qualified Temp
 
 import Control.Monad.Trans.Writer (Writer, tell, execWriter)
 import Data.DList (DList, singleton, toList, fromList)
+import Data.List (foldr)
 
 import Prelude hiding (GT, LT, EQ)
 
@@ -95,7 +96,7 @@ putCharW c = tell $ singleton c
 
 indent :: Int -> StmWriter
 indent i
-  | i == 0    = do pure ()
+  | i == 0    = pure ()
   | otherwise = do
                   putStrW "  "
                   indent $ i - 1
@@ -203,28 +204,28 @@ putExp (CALLNORETURN (e,el,_)) d = do
   putStrW ")"
 
 binop :: Binop -> StmWriter
-binop PLUS = do putStrW "PLUS"
-binop MINUS = do putStrW "MINUS"
-binop MUL = do putStrW "MUL"
-binop DIV = do putStrW "DIV"
-binop AND = do putStrW "AND"
-binop OR = do putStrW "OR"
-binop LSHIFT = do putStrW "LSHIFT"
-binop RSHIFT = do putStrW "RSHIFT"
-binop ARSHIFT = do putStrW "ARSHIFT"
-binop XOR = do putStrW "XOR"
+binop PLUS = putStrW "PLUS"
+binop MINUS = putStrW "MINUS"
+binop MUL = putStrW "MUL"
+binop DIV = putStrW "DIV"
+binop AND = putStrW "AND"
+binop OR = putStrW "OR"
+binop LSHIFT = putStrW "LSHIFT"
+binop RSHIFT = putStrW "RSHIFT"
+binop ARSHIFT = putStrW "ARSHIFT"
+binop XOR = putStrW "XOR"
 
 relop :: Relop -> StmWriter
-relop EQ = do putStrW "EQ"
-relop NE = do putStrW "NE"
-relop LT = do putStrW "LT"
-relop GT = do putStrW "GT"
-relop LE = do putStrW "LE"
-relop GE = do putStrW "GE"
-relop ULT = do putStrW "ULT"
-relop ULE = do putStrW "ULE"
-relop UGT = do putStrW "UGT"
-relop UGE = do putStrW "UGE"
+relop EQ = putStrW "EQ"
+relop NE = putStrW "NE"
+relop LT = putStrW "LT"
+relop GT = putStrW "GT"
+relop LE = putStrW "LE"
+relop GE = putStrW "GE"
+relop ULT = putStrW "ULT"
+relop ULE = putStrW "ULE"
+relop UGT = putStrW "UGT"
+relop UGE = putStrW "UGE"
 
 maxCallArgsStm :: Stm -> Maybe Int
 maxCallArgsStm (MOVE (e1, e2)) =
@@ -260,5 +261,4 @@ nullableMax Nothing j@(Just _) = j
 nullableMax _ _ = Nothing
 
 nullableMaximum :: [Maybe Int] -> Maybe Int
-nullableMaximum [] = Nothing
-nullableMaximum (x:xs) = nullableMax x $ nullableMaximum xs
+nullableMaximum = foldr nullableMax Nothing

@@ -6,6 +6,6 @@ import Lexer
 
 main :: IO()
 main = do args <- getArgs
-          case (scanner $ head args) of
+          case scanner $ head args of
             Left st -> error st
-            Right ls -> putStrLn (show ls)
+            Right ls -> print ls

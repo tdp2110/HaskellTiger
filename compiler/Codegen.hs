@@ -369,7 +369,7 @@ doCall :: A.Inst -> Maybe A.Inst -> [Int] -> [Frame.EscapesOrNot] -> ReturnsOrNo
 doCall callStm maybeMoveStm callArgs escapes returnsOrNot = do
   x64 <- getArch
   let callerSaves = X64Frame.callerSaves x64
-  callerSaveDests <- mapM (\_ -> newTemp) callerSaves
+  callerSaveDests <- mapM (const newTemp) callerSaves
   let
     saves = save <$> zip callerSaves callerSaveDests
     restores = restore <$> zip callerSaves callerSaveDests

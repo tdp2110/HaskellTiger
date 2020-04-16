@@ -40,19 +40,19 @@ toDot g =
     tell $ fmtNode nId
     fmtSuccs nId succs
 
-  dotId n = "node_" ++ (show n)
+  dotId n = "node_" ++ show n
   indent = "    "
-  fmtNode n = indent ++ (dotId n) ++ " [label=\"" ++ (show n) ++ "\"];\n"
-  fmtSuccs n succs = mapM_ (fmtEdge n) succs
-  fmtEdge n1 n2 = do
-    tell $ indent ++ (dotId n1) ++ " -- " ++ (dotId n2) ++ ";\n"
+  fmtNode n = indent ++ dotId n ++ " [label=\"" ++ show n ++ "\"];\n"
+  fmtSuccs n = mapM_ (fmtEdge n)
+  fmtEdge n1 n2 =
+    tell $ indent ++ dotId n1 ++ " -- " ++ dotId n2 ++ ";\n"
 
 newGraph :: a -> Graph a
 newGraph firstId = Graph { nodes=Map.empty
                          , nextId=firstId }
 
 newNode :: NodeId a => Graph a -> (Node a, Graph a)
-newNode g@(Graph{nextId=nId}) =
+newNode g@Graph{nextId=nId} =
   let
     node = freshNode nId
   in
@@ -66,8 +66,8 @@ mkEdge g id1 id2 =
     nodes_g = nodes g
     n1 = nodes_g Map.! id1
     n2 = nodes_g Map.! id2
-    n1' = n1{succ=[id2] ++ succ n1}
-    n2' = n2{pred=[id1] ++ pred n2}
+    n1' = n1{succ=id2 : succ n1}
+    n2' = n2{pred=id1 : pred n2}
     nodes_g' = Map.insert id1 n1' nodes_g
     nodes_g'' = Map.insert id2 n2' nodes_g'
   in
@@ -79,7 +79,7 @@ mkEdge g id1 id2 =
 hasEdge :: NodeId a => Graph a -> a -> a -> Bool
 hasEdge g id1 id2 =
   let
-    n1 = (nodes g) Map.! id1
+    n1 = nodes g Map.! id1
   in
     elem id2 $ succ n1
 

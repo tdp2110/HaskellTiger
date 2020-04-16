@@ -1,23 +1,24 @@
 module Semant where
 
 import qualified Absyn as A
-import qualified Env as Env
+import qualified Env
 import qualified Frame
 import qualified X64Frame
-import qualified Translate as Translate
-import qualified Types as Types
+import qualified Translate
+import qualified Types
 import qualified Symbol
 import FindEscape (escapeExp)
 import qualified Temp
 
 import Control.Monad.Trans.Class (lift)
-import Control.Monad (join, foldM)
+import Control.Monad
 import Control.Monad.Trans.Except (ExceptT, throwE, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, ask, asks, runReaderT)
 import Control.Monad.Trans.State (StateT, get, put, evalStateT, runStateT)
 import Control.Monad.Trans.Writer (WriterT, runWriterT, tell)
 import Data.Functor.Identity
 import qualified Data.Map as Map
+import Data.Maybe (fromMaybe)
 import qualified Data.DList as DList
 import Data.Either
 import Data.List
@@ -27,7 +28,7 @@ import Prelude hiding (exp)
 
 data SemantError = SemantError{what :: String, at :: A.Pos} deriving (Eq)
 instance Show SemantError where
-  show (SemantError err pos) = "semantic issue at " ++ (show pos) ++ ": " ++ (show err)
+  show (SemantError err pos) = "semantic issue at " ++ show pos ++ ": " ++ show err
 
 data ExpTy = ExpTy {exp :: Translate.Exp, ty :: Types.Ty } deriving (Show)
 
@@ -99,7 +100,7 @@ newLevelFn :: X64Frame.X64
               -> (Level, Temp.Label, [Frame.EscapesOrNot])
               -> Temp.Generator
               -> (Temp.Generator, Level)
-newLevelFn x64' debugInfo = Translate.x64NewLevel x64' debugInfo
+newLevelFn = Translate.x64NewLevel
 allocLocalFn :: Level -> Temp.Generator -> Frame.EscapesOrNot
   -> (Temp.Generator, Level, Access)
 allocLocalFn = Translate.x64AllocLocal
@@ -141,7 +142,7 @@ lookupT :: A.Pos -> (SemantEnv -> Map.Map Symbol.Symbol a) -> Symbol.Symbol -> T
 lookupT posn f sym = do
   env <- (lift . lift) $ asks f
   case Map.lookup sym env of
-    Nothing -> throwT posn $ "unbound variable " ++ (show sym)
+    Nothing -> throwT posn $ "unbound variable " ++ show sym
     Just x -> pure x
 
 runTransT :: SemantState -> SemantEnv -> Translator a
@@ -188,7 +189,7 @@ nextLabel = do
 
 newLevel :: [Frame.EscapesOrNot] -> Maybe (Symbol.Symbol, A.Pos) -> Translator Level
 newLevel escapes debugInfo = do
-  st@(SemantState { level=parentLev, generator=gen}) <- get
+  st@SemantState { level=parentLev, generator=gen} <- get
   env <- askEnv
   let
     (nextLab, gen') = Temp.newlabel gen
@@ -203,7 +204,7 @@ newLevel escapes debugInfo = do
 
 allocLocalT :: Bool -> Translator Access
 allocLocalT escape = do
-  st@(SemantState{level=lev, generator=gen}) <- get
+  st@SemantState{level=lev, generator=gen} <- get
   let
     (gen', lev', access) = allocLocalFn lev gen $ toEscape escape
     in do
@@ -216,9 +217,8 @@ allocLocal escape st env =
     Left err -> error $ "unexpected error: " ++ show err
     Right ((access, st'), _) -> (access, st')
 
-transTy (A.NameTy(sym, posn)) = do
-  typ <- lookupT posn tenv2 sym
-  pure typ
+transTy (A.NameTy(sym, posn)) =
+  lookupT posn tenv2 sym
 transTy (A.RecordTy fields) =  do
   symAndTys <- mapM mapFunc fields
   typeId <- nextId
@@ -253,7 +253,7 @@ isCmp _ = False
 checkInt :: Types.Ty -> Maybe String-> Either String ()
 checkInt Types.INT _ = Right ()
 checkInt nonIntTy maybeCtx =
-  Left $ (convertCtx maybeCtx) ++
+  Left $ convertCtx maybeCtx ++
     "expected type Ty.INT, but found " ++ show nonIntTy
   where
     convertCtx Nothing = ""
@@ -265,9 +265,9 @@ transVar (A.SimpleVar sym pos) = do
   case val of
     (Env.VarEntry access t) -> pure ExpTy{ exp=Translate.simpleVar access lev
                                          , ty=t}
-    (Env.FunEntry _ _ _ _) -> throwT pos $
-                              "variable " ++ (show sym) ++
-                              " has no non-function bindings."
+    Env.FunEntry {} -> throwT pos $
+                         "variable " ++ show sym ++
+                         " has no non-function bindings."
 transVar (A.FieldVar var sym pos) = do
   ExpTy{exp=recordExp, ty=varTy} <- transVar var
   case varTy of
@@ -277,11 +277,11 @@ transVar (A.FieldVar var sym pos) = do
           translate (Translate.field recordExp fieldNumber) t
         Nothing -> throwT pos $
                    "in field expr, record type " ++
-                   (show r) ++ " has no " ++ (show sym) ++
+                   show r ++ " has no " ++ show sym ++
                    " field"
-    t@(_) -> throwT pos $
-             "in field expr, only record types have fields. type=" ++
-             (show t)
+    t -> throwT pos $
+           "in field expr, only record types have fields. type=" ++
+           show t
 transVar (A.SubscriptVar var expr pos) = do
   ExpTy{exp=varExp, ty=varTy} <- transVar var
   ExpTy{exp=indexExp, ty=expTy} <- transExp expr
@@ -291,13 +291,13 @@ transVar (A.SubscriptVar var expr pos) = do
         Types.INT ->
           {- In the case of a constexpr access, we could optimize -}
           translate (Translate.subscript varExp indexExp) varEltTy
-        nonIntTy@(_) -> throwT pos $
-                        "in subscript expr, subscript type " ++
-                        "is not an INT, is an " ++ (show nonIntTy)
-    nonArrayTy@(_) -> throwT pos $
-                      "in subscript expr, only arrays may " ++
-                      "be subscripted -- attempting to subscript type=" ++
-                      (show nonArrayTy)
+        nonIntTy -> throwT pos $
+                      "in subscript expr, subscript type " ++
+                      "is not an INT, is an " ++ show nonIntTy
+    nonArrayTy -> throwT pos $
+                    "in subscript expr, only arrays may " ++
+                    "be subscripted -- attempting to subscript type=" ++
+                    show nonArrayTy
 
 transExp (A.VarExp var) =
   transVar var
@@ -313,11 +313,11 @@ transExp (A.CallExp funcSym argExps pos) = do
     (Env.FunEntry funLevel label formalsTys resultTy) -> do
       paramExpTys <- mapM transExp argExps
       let paramTys = fmap ty paramExpTys in
-        if (length formalsTys) /= (length paramTys)
+        if length formalsTys /= length paramTys
         then
-          throwT pos $ "function " ++ (show funcSym) ++
-          " expects " ++ (show $ length formalsTys) ++
-          " parameters but was passed " ++ (show $ length paramTys)
+          throwT pos $ "function " ++ show funcSym ++
+          " expects " ++ show (length formalsTys) ++
+          " parameters but was passed " ++ show (length paramTys)
         else
           case filter (\(ty1, ty2, _) -> ty1 /= ty2)
                (zip3 formalsTys paramTys [0 :: Integer ..]) of
@@ -331,18 +331,18 @@ transExp (A.CallExp funcSym argExps pos) = do
                   resultTy
             ((formalTy, paramTy, ix):_) ->
               throwT pos $
-              "parameter " ++ (show ix) ++ " of func " ++ (show funcSym) ++
-              " requires type " ++ (show formalTy) ++
-              " but was passed a value of type " ++ (show paramTy)
+              "parameter " ++ show ix ++ " of func " ++ show funcSym ++
+              " requires type " ++ show formalTy ++
+              " but was passed a value of type " ++ show paramTy
     (Env.VarEntry _ t) -> throwT pos $
                           "only functions are callable: found type " ++
-                          (show t)
+                          show t
 transExp (A.OpExp (A.IntExp i1) A.PlusOp (A.IntExp i2) _) =
   transExp $ A.IntExp $ i1 + i2
 transExp (A.OpExp (A.IntExp i1) A.TimesOp (A.IntExp i2) _) =
   transExp $ A.IntExp $ i1 * i2
 transExp (A.OpExp _ A.DivideOp (A.IntExp 0) pos) =
-  throwT pos $ "Integer division by zero detected"
+  throwT pos "Integer division by zero detected"
 transExp (A.OpExp (A.IntExp i1) A.DivideOp (A.IntExp i2) _) =
   transExp $ A.IntExp $ i1 `div` i2
 transExp (A.OpExp (A.IntExp i1) A.EqOp (A.IntExp i2) _) =
@@ -380,8 +380,8 @@ transExp (A.OpExp leftExp op rightExp pos) = do
           if r1 == r2 then ptrCmp expLeft expRight
           else
             throwT pos "only identical record types may be compared"
-        ((Types.RECORD _), Types.NIL) -> ptrCmp expLeft expRight
-        (Types.NIL, (Types.RECORD _)) -> ptrCmp expLeft expRight
+        (Types.RECORD _, Types.NIL) -> ptrCmp expLeft expRight
+        (Types.NIL, Types.RECORD _) -> ptrCmp expLeft expRight
         (arr1@(Types.ARRAY _), arr2@(Types.ARRAY _)) ->
           if arr1 == arr2 then
             if isEqOrNe then
@@ -391,8 +391,8 @@ transExp (A.OpExp leftExp op rightExp pos) = do
           else
             throwT pos "only identical array types may be compared"
         _ -> throwT pos $
-             "incomparable types " ++ (show tyleft) ++
-             " and " ++ (show tyright)
+             "incomparable types " ++ show tyleft ++
+             " and " ++ show tyright
     else error $ show op
   where
     isEqOrNe :: Bool
@@ -417,8 +417,8 @@ transExp (A.RecordExp fieldSymExpPosns typSym pos) = do
         then
           throwT pos $
           "incompatible field names: expected " ++
-          (show expectedSyms) ++ " but record expression has " ++
-          (show actualSyms)
+          show expectedSyms ++ " but record expression has " ++
+          show actualSyms
         else do
           actualFieldExpTys <- mapM (\(_,expr,_) -> transExp expr) fieldSymExpPosns
           let
@@ -434,14 +434,14 @@ transExp (A.RecordExp fieldSymExpPosns typSym pos) = do
                 translate (Translate.record exps) recordTy
               ((sym,expectedTy,actualTy,fieldPos):_) ->
                 throwT fieldPos $
-                "in record exp, field " ++ (show sym) ++
-                " should have type " ++ (show expectedTy) ++
-                " but has type " ++ (show actualTy)
-    t@(_) ->
-          throwT pos $
-          "only record types may appear as the symbol in a " ++
-          "record instance " ++
-          "definition. Found type=" ++ (show t)
+                "in record exp, field " ++ show sym ++
+                " should have type " ++ show expectedTy ++
+                " but has type " ++ show actualTy
+    t ->
+      throwT pos $
+      "only record types may appear as the symbol in a " ++
+      "record instance " ++
+      "definition. Found type=" ++ show t
 transExp (A.SeqExp expAndPosns) = do
   expTys <- mapM
     (\(expr,_) -> transExp expr)
@@ -461,17 +461,17 @@ transExp (A.AssignExp (A.SubscriptVar var subscriptExpr subscriptPos) expr pos) 
   ExpTy{exp=subscriptExp, ty=subscriptTy} <- transExp subscriptExpr
   ExpTy{exp=rhs, ty=exprTy} <- transExp expr
   if subscriptTy /= Types.INT then
-    throwT subscriptPos $ "in subscript expr, subscript type is not an INT, is " ++ (show subscriptTy)
+    throwT subscriptPos $ "in subscript expr, subscript type is not an INT, is " ++ show subscriptTy
     else
     case varTy of
       Types.ARRAY (arrayEltTy,_) ->
         if not $ typesAreCompatible arrayEltTy exprTy then
-          throwT pos $ "in subscript expr, attempting to set a value of type " ++ (show exprTy) ++
-                       " in an array of type " ++ (show varTy)
+          throwT pos $ "in subscript expr, attempting to set a value of type " ++ show exprTy ++
+                       " in an array of type " ++ show varTy
           else
           translate (Translate.setitem varExp subscriptExp rhs) Types.UNIT
       _ ->
-        throwT pos $ "in subscript expr, can only index into arrays. Got " ++ (show varTy)
+        throwT pos $ "in subscript expr, can only index into arrays. Got " ++ show varTy
 transExp (A.AssignExp (A.FieldVar var sym fieldPos) expr assignPos) = do
   ExpTy{exp=recordExp, ty=varTy} <- transVar var
   ExpTy{exp=rhsExp, ty=rhsTy} <- transExp expr
@@ -480,24 +480,24 @@ transExp (A.AssignExp (A.FieldVar var sym fieldPos) expr assignPos) = do
       case fieldOffset sym2ty sym of
         Just (t, fieldNumber) ->
           if not $ typesAreCompatible t rhsTy then
-            throwT assignPos $ "attempting to set field " ++ (show sym) ++ " in var " ++
-                         (show var) ++ " of type " ++ (show rhsTy) ++ " to a value of type " ++
-                         (show rhsTy) ++ " when type " ++ (show t) ++ " is needed."
+            throwT assignPos $ "attempting to set field " ++ show sym ++ " in var " ++
+                         show var ++ " of type " ++ show rhsTy ++ " to a value of type " ++
+                         show rhsTy ++ " when type " ++ show t ++ " is needed."
           else
             translate (Translate.setField recordExp fieldNumber rhsExp) Types.UNIT
         Nothing -> throwT fieldPos $
                    "in field expr, record type " ++
-                   (show varTy) ++ " has no " ++ (show sym) ++
+                   show varTy ++ " has no " ++ show sym ++
                    " field"
     _ -> throwT fieldPos $ "in a field expression, can only access fields in records. " ++
-                           "Attempted to access field in variable " ++ (show var) ++ " of type " ++
-                           (show varTy)
+                           "Attempted to access field in variable " ++ show var ++ " of type " ++
+                           show varTy
 transExp (A.AssignExp var (A.IntExp i) pos) = do
   ExpTy{exp=lhs, ty=varTy} <- transVar var
   case varTy of
     Types.INT ->
       translate (Translate.assignConst lhs i) Types.UNIT
-    _ -> throwT pos $ "Invalid operand in assign exp of type " ++ (show varTy)
+    _ -> throwT pos $ "Invalid operand in assign exp of type " ++ show varTy
 transExp (A.AssignExp var expr pos) = do
   ExpTy{exp=lhs, ty=varTy} <- transVar var
   ExpTy{exp=rhs, ty=exprTy} <- transExp expr
@@ -505,8 +505,8 @@ transExp (A.AssignExp var expr pos) = do
     translate (Translate.assign lhs rhs) Types.UNIT
     else
     throwT pos $
-    "in assignExp, variable has type " ++ (show varTy) ++
-    " but assign target has type " ++ (show exprTy)
+    "in assignExp, variable has type " ++ show varTy ++
+    " but assign target has type " ++ show exprTy
 transExp (A.IfExp testExpr thenExpr maybeElseExpr pos) = do
   ExpTy{exp=testExp, ty=testTy} <- transExp testExpr
   ExpTy{exp=thenExp, ty=thenTy} <- transExp thenExpr
@@ -514,7 +514,7 @@ transExp (A.IfExp testExpr thenExpr maybeElseExpr pos) = do
     maybeElseExpTy = fmap transExp maybeElseExpr in
     if testTy /= Types.INT then
       throwT pos $ "in ifExp, the test expression must be integral: " ++
-      "found type=" ++ (show testTy)
+      "found type=" ++ show testTy
     else
       case maybeElseExpTy of
         Nothing ->
@@ -527,7 +527,7 @@ transExp (A.IfExp testExpr thenExpr maybeElseExpr pos) = do
           ExpTy{exp=elseExp, ty=elseTy} <- elseExpTyM
           if not $ typesAreCompatible thenTy elseTy then
             throwT pos $ "incompatible types found in ifExp: thenExp has type " ++
-                         (show thenTy) ++ " but elseExp has type " ++ (show elseTy)
+                         show thenTy ++ " but elseExp has type " ++ show elseTy
             else
             if thenTy == Types.UNIT then
               translate (Translate.ifThenElseStm testExp thenExp elseExp) thenTy
@@ -543,10 +543,10 @@ transExp (A.WhileExp testExp bodyExp pos) = do
   put st'{breakTarget=originalBreakTarget}
   if testTy /= Types.INT then
     throwT pos $ "in whileExp, the test expression must be integral: " ++
-    "found type=" ++ (show testTy)
+    "found type=" ++ show testTy
     else if bodyTy /= Types.UNIT then
     throwT pos $ "in a whileExp, the body expression must yield no value: " ++
-    "found type=" ++ (show bodyTy)
+    "found type=" ++ show bodyTy
     else
     translate (Translate.while testE bodyE nextBreakTarget) Types.UNIT
 transExp (A.BreakExp pos) = do
@@ -563,17 +563,17 @@ transExp (A.ArrayExp arrayTySym sizeExp initExp pos) = do
       ExpTy{exp=initExpr, ty=initTy} <- transExp initExp
       if sizeTy /= Types.INT then
         throwT pos $"in ArrayExp, sizeExp must be an integer. " ++
-        "Found type=" ++ (show sizeTy)
+        "Found type=" ++ show sizeTy
         else if initTy /= arrayEltTy then
         throwT pos $ "in ArrayExp, initExp has actual type " ++
-        (show initTy) ++ ", when it must have " ++
-        (show arrayEltTy)
+        show initTy ++ ", when it must have " ++
+        show arrayEltTy
         else
         translate (Translate.array sizeExpr initExpr) arrayTy
-    t@(_) ->
-          throwT pos $ "only array types may appear as the symbol in an " ++
-          "array instance " ++
-          "definition. Found type=" ++ (show t)
+    t ->
+      throwT pos $ "only array types may appear as the symbol in an " ++
+      "array instance " ++
+      "definition. Found type=" ++ show t
 {-
 In converting ForExps, the naive approach is to rewrite the AST
 
@@ -695,7 +695,7 @@ fieldOffset :: [(Symbol.Symbol, Types.Ty)] -> Symbol.Symbol -> Maybe (Types.Ty, 
 fieldOffset sym2ty sym =
   let
     symTyIxList =
-      fmap (\((s,t),ix) -> (s,(t,ix))) $ zip sym2ty [0 :: Int ..]
+      (\((s,t),ix) -> (s,(t,ix))) <$> zip sym2ty [0 :: Int ..]
   in
     lookup sym symTyIxList
 
@@ -727,11 +727,11 @@ checkDeclNamesDistinctInLet decls letPos =
           case Map.lookup name tySyms of
             Nothing -> Right (funAndVarSyms, Map.insert name decPos tySyms)
             Just decPos' -> Left SemantError{
-              what="multiple type declarations with name " ++ (show name) ++
-                   " in letExp declarations at " ++ (show decPos') ++
-                   " and " ++ (show decPos),
+              what="multiple type declarations with name " ++ show name ++
+                   " in letExp declarations at " ++ show decPos' ++
+                   " and " ++ show decPos,
               at=letPos}
-        step (Right (funAndVarSyms, tySyms)) decl@_ =
+        step (Right (funAndVarSyms, tySyms)) decl =
           let
             name = declName decl
             decPos = declPos decl
@@ -740,8 +740,8 @@ checkDeclNamesDistinctInLet decls letPos =
               Nothing -> Right (Map.insert name decPos funAndVarSyms, tySyms)
               Just decPos' -> Left SemantError{
                 what="multiple function or value declarations of symbol " ++
-                     (show name) ++ " in letExp declarations at " ++ (show decPos') ++
-                     " and " ++ (show decPos),
+                     show name ++ " in letExp declarations at " ++ show decPos' ++
+                     " and " ++ show decPos,
                 at=letPos}
 
 data DeclElt =
@@ -759,18 +759,18 @@ flattenDecls decls = do
 
 checkForVarNotAssigned :: Symbol.Symbol -> A.Exp -> Either SemantError ()
 checkForVarNotAssigned forVar (A.CallExp _ exps _) =
-  case sequence $ fmap (\e -> checkForVarNotAssigned forVar e) exps of
+  case mapM (checkForVarNotAssigned forVar) exps of
     Left err -> Left err
     Right _ -> Right ()
 checkForVarNotAssigned forVar (A.OpExp leftExp _ rightExp _) = do
   checkForVarNotAssigned forVar leftExp
   checkForVarNotAssigned forVar rightExp
 checkForVarNotAssigned forVar (A.RecordExp fields _ _) =
-  case sequence $ fmap (\(_,e,_) -> checkForVarNotAssigned forVar e) fields of
+  case mapM (\(_,e,_) -> checkForVarNotAssigned forVar e) fields of
     Left err -> Left err
     Right _ -> Right ()
 checkForVarNotAssigned forVar (A.SeqExp seqElts) =
-  case sequence $ fmap (\(e,_) -> checkForVarNotAssigned forVar e) seqElts of
+  case mapM (\(e,_) -> checkForVarNotAssigned forVar e) seqElts of
     Left err -> Left err
     Right _ -> Right ()
 checkForVarNotAssigned forVar (A.AssignExp (A.SimpleVar var _) e pos) =
@@ -783,7 +783,7 @@ checkForVarNotAssigned forVar (A.AssignExp (A.SimpleVar var _) e pos) =
 checkForVarNotAssigned forVar (A.IfExp testExp thenExp maybeElseExp _) = do
   checkForVarNotAssigned forVar testExp
   checkForVarNotAssigned forVar thenExp
-  case fmap (\e -> checkForVarNotAssigned forVar e) maybeElseExp of
+  case checkForVarNotAssigned forVar <$> maybeElseExp of
     Just (Left err) -> Left err
     _ -> Right ()
 checkForVarNotAssigned forVar (A.WhileExp testExp bodyExp _) = do
@@ -830,7 +830,7 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
                         name (Env.VarEntry access recTy)
                         (venv' env)
             valenv'' = updateLevelInEnv (level st') valenv'
-            in do
+            in
             pure (env{ venv'= valenv''}, [initTreeIR])
       _ -> throwT posn $ "nil expression declarations must be " ++
            "constrained by a RECORD type"
@@ -851,7 +851,7 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
                           (Env.VarEntry access actualInitTy)
                           (venv' env)
               valenv'' = updateLevelInEnv (level st') valenv'
-              in do
+              in
               pure (env { venv'=valenv'' }, [initTreeIR])
     in
       case maybeTypeAnnotation of
@@ -859,15 +859,15 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
           if typeAnnotation /= actualInitTy then
             throwT posn $ "mismatch in type annotation and computed " ++
             "type in varDecl: " ++
-            "type annotation " ++ (show typeAnnotation) ++
-            ", computed type " ++ (show actualInitTy)
+            "type annotation " ++ show typeAnnotation ++
+            ", computed type " ++ show actualInitTy
           else result
         Nothing -> result
   where
     updateLevelInEnv :: Level ->
                         Map.Map Symbol.Symbol Env.EnvEntry ->
                         Map.Map Symbol.Symbol Env.EnvEntry
-    updateLevelInEnv newLev valenv  = Map.map (updateLevelInEntry newLev) valenv
+    updateLevelInEnv newLev = Map.map $ updateLevelInEntry newLev
 
     updateLevelInEntry :: Level -> Env.EnvEntry -> Env.EnvEntry
     updateLevelInEntry newLev entry = case entry of
@@ -881,27 +881,21 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
 
     updateLevel :: Level -> Level -> Level
     updateLevel oldLev newLev =
-      if (Translate.identifier oldLev) == (Translate.identifier newLev) then newLev
-                                                                        else oldLev
+      if Translate.identifier oldLev == Translate.identifier newLev then newLev
+                                                                    else oldLev
 
 transDec (A.FunctionDec fundecs) = do
   st <- get
   env <- askEnv
   let
     resultMaybeTys =
-      fmap (\fundec ->
-              (join $ fmap (\(typename,_) ->
-                              Map.lookup
-                              typename
-                              $ tenv2 env)
-                $ A.result fundec))
+      ((\ (typename, _) -> Map.lookup typename $ tenv2 env) <=< A.result) <$>
       fundecs
     maybeFormalsTys =
-      sequence $ fmap (\fundec -> sequence $
-                                    fmap
-                                      (computeFormalTy env)
-                                      (A.params fundec)
-                      ) fundecs
+      mapM (mapM
+              (computeFormalTy env)
+              . A.params
+           ) fundecs
     in
     case maybeFormalsTys of
       Left err -> throwErr err
@@ -909,10 +903,8 @@ transDec (A.FunctionDec fundecs) = do
         let
           resultTys = fmap resultTyFun resultMaybeTys
         in
-          case (runTransT
-               st
-               env
-               $ extractHeaderM (venv' env) fundecs formalsTys resultTys)
+          case runTransT st env
+                 $ extractHeaderM (venv' env) fundecs formalsTys resultTys
           of
             Left err -> throwErr err
             Right ((headerVEnv, newState), frags) -> do
@@ -925,14 +917,12 @@ transDec (A.FunctionDec fundecs) = do
   where
     computeFormalTy env (A.Field fieldName esc fieldTyp fieldPos) =
       case Map.lookup fieldTyp (tenv2 env) of
-        Nothing -> Left SemantError{what="at parameter " ++ (show fieldName) ++
+        Nothing -> Left SemantError{what="at parameter " ++ show fieldName ++
                                          " in function declaration, unbound type " ++
-                                         "variable " ++ (show fieldTyp),
+                                         "variable " ++ show fieldTyp,
                                     at=fieldPos}
         Just typeTy -> Right (fieldName, typeTy, toEscape esc)
-    resultTyFun maybeResultTy = case maybeResultTy of
-                                  Nothing -> Types.UNIT
-                                  Just typ -> typ
+    resultTyFun = fromMaybe Types.UNIT
     transBody :: (SemantEnv, b)
               -> (A.FunDec, [(Symbol.Symbol, Types.Ty, c)], Types.Ty)
               -> Translator (SemantEnv, b)
@@ -954,14 +944,14 @@ transDec (A.FunctionDec fundecs) = do
         formalAccess :: Symbol.Symbol -> Access
         formalAccess sym = case
           Map.lookup funName venv of
-            Just (Env.FunEntry{Env.level=funLev}) -> case
+            Just Env.FunEntry{Env.level=funLev} -> case
               lookup sym $ zip
                 (fmap A.fieldName funParams)
                 (tail $ formalAccesses funLev) -- drop first access, the static link
               of
                 Just acc -> acc
-                _ -> error $ "must not get here " ++ (show $ formalAccesses $ level st)
-            wtf@_ -> error $ "WTF: " ++ show wtf
+                _ -> error $ "must not get here " ++ show (formalAccesses $ level st)
+            wtf -> error $ "WTF: " ++ show wtf
         in
         case
           runTransT st{level=funLevel} bodyEnv (transExp funBody)
@@ -971,8 +961,8 @@ transDec (A.FunctionDec fundecs) = do
             if resultTy /= Types.UNIT && resultTy /= bodyTy
             then
               throwT funPos $ "computed type of function body " ++
-              (show bodyTy) ++ " and annotated type " ++
-              (show resultTy) ++ " do not match"
+              show bodyTy ++ " and annotated type " ++
+              show resultTy ++ " do not match"
             else do
               put st { generator=generator state'
                      , counter'=counter' state' }
@@ -1131,7 +1121,7 @@ checkForIllegalCycles tydecs stronglyConnectedComponents =
           Left SemantError{
           what="found illegal type declaration cycle (each set of mutually " ++
                "recursive type declarations must pass through a record or array " ++
-               "type). Cycle: " ++ (show syms),
+               "type). Cycle: " ++ show syms,
           at=posn}
       _ -> error "shouldn't get here: we filtered on isCyclciSCC"
 
@@ -1155,11 +1145,11 @@ lookupTypeSym sym tydecs = case filter (\tydec -> A.tydecName tydec == sym) tyde
 isNameTy :: [A.TyDec] -> Symbol.Symbol -> Bool
 isNameTy tydecs sym =
   case lookupTypeSym sym tydecs of
-    (A.TyDec _ (A.NameTy _) _) -> True
-    (A.TyDec _ _ _) -> False
+    A.TyDec _ (A.NameTy _) _ -> True
+    A.TyDec {} -> False
 
 calcTypeGraph :: [A.TyDec] -> [(Symbol.Symbol, A.Pos, [Symbol.Symbol])]
-calcTypeGraph tydecs = fmap calcNeighbors tydecs
+calcTypeGraph = fmap calcNeighbors
   where
     calcNeighbors (A.TyDec name (A.NameTy(name',_)) posn) =
       (name, posn, [name'])

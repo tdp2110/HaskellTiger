@@ -1,7 +1,7 @@
 module Liveness where
 
 import qualified Graph as G
-import qualified Flow as Flow
+import qualified Flow
 
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Writer (WriterT, runWriterT, tell)
@@ -18,7 +18,7 @@ type TempId = Flow.TempId
 newtype NodeId = NodeId Int
 
 instance Show NodeId where
-  show (NodeId i) = "NodeId_" ++ (show i)
+  show (NodeId i) = "NodeId_" ++ show i
 
 instance Eq NodeId where
   (NodeId n1) == (NodeId n2) = n1 == n2
@@ -32,7 +32,7 @@ instance G.NodeId NodeId where
 getItem :: (Show a, Show k, Ord k) => Map k a -> k -> a
 getItem m key = case Map.lookup key m of
                     Just v -> v
-                    Nothing -> error $ "couldn't find key " ++ (show key) ++ " in " ++ (show m)
+                    Nothing -> error $ "couldn't find key " ++ show key ++ " in " ++ show m
 
 type Graph = G.Graph NodeId
 type GraphBuilder = G.GraphBuilder NodeId
@@ -102,19 +102,19 @@ interferenceGraph flowGraph =
                    (Flow.NodeId, Set TempId) ->
                    IGraphBuilder()
     processNode tempToNode (flowNode, liveSet) = do
-      let defs = (Flow.def flowGraph) `getItem` flowNode
-      let isMove = (Flow.ismove flowGraph) `getItem` flowNode
+      let defs = Flow.def flowGraph `getItem` flowNode
+      let isMove = Flow.ismove flowGraph `getItem` flowNode
       mapM_ (addInterferenceEdges liveSet tempToNode isMove) defs
       case isMove of
         Just (dst, src) -> do
                            let dstNode = case Map.lookup dst tempToNode of
                                            Just v -> v
-                                           Nothing -> error $ "couldn't find " ++ (show dst) ++ " in " ++
-                                                              (show tempToNode)
+                                           Nothing -> error $ "couldn't find " ++ show dst ++ " in " ++
+                                                              show tempToNode
                            let srcNode = case Map.lookup src tempToNode of
                                            Just v -> v
-                                           Nothing -> error $ "couldn't find " ++ (show src) ++ " in " ++
-                                                              (show tempToNode)
+                                           Nothing -> error $ "couldn't find " ++ show src ++ " in " ++
+                                                              show tempToNode
                            tell [(dstNode, srcNode)]
                            pure ()
         _               -> pure ()
@@ -128,7 +128,7 @@ interferenceGraph flowGraph =
       mapM_
         (\liveId -> let defdNode = tempToNode `getItem` defdId
                         liveNode = (tempToNode `getItem` liveId)
-                        addEdgeAction = do
+                        addEdgeAction =
                           lift . lift $ G.addEdge defdNode liveNode
                     in case isMove of
                          Just (_, src) -> if liveId /= src then
@@ -157,9 +157,9 @@ buildLiveMap g =
     buildImpl flowKeys liveIn liveOut
   where
     buildImpl :: [Flow.NodeId]
-                 -> (Map Flow.NodeId (Set TempId))
-                 -> (Map Flow.NodeId (Set TempId))
-                 -> (Map Flow.NodeId (Set TempId))
+                 -> Map Flow.NodeId (Set TempId)
+                 -> Map Flow.NodeId (Set TempId)
+                 -> Map Flow.NodeId (Set TempId)
     buildImpl flowKeys liveIn liveOut =
       let
         liveIn'  = Map.fromList $
@@ -179,10 +179,10 @@ buildLiveMap g =
     updateIn liveOut nodeId =
       -- in[n] = use[n] \union (out[n]-def[n])
       let
-        usesList = (Flow.use g) `getItem` nodeId
+        usesList = Flow.use g `getItem` nodeId
         usesSet = Set.fromList usesList
         out = liveOut `getItem` nodeId
-        defList = (Flow.def g) `getItem` nodeId
+        defList = Flow.def g `getItem` nodeId
         defSet = Set.fromList defList
       in
         ( nodeId
@@ -194,9 +194,9 @@ buildLiveMap g =
     updateOut liveIn nodeId =
       -- out[n] = \Union_{s \in succ[n]} in[s]
       let
-        succs = G.succ $ (G.nodes (Flow.control g)) `getItem` nodeId
+        succs = G.succ $ G.nodes (Flow.control g) `getItem` nodeId
         inOfSuccs = fmap
-                      (\succId -> liveIn `getItem` succId)
+                      (liveIn `getItem`)
                       succs
         out' = foldl'
                  Set.union

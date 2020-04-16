@@ -68,10 +68,10 @@ data X64Frame = X64Frame { name :: Temp.Label
                          , viewShift :: [TreeIR.Stm] }
 
 instance Show X64Frame where
-  show f = "frame { name=" ++ (show $ name f) ++
-                  ", formals=" ++ (show $ formals f) ++
-                  ", locals=" ++ (show $ locals f) ++
-                  ", debug=" ++ (show $ frameDebug f) ++ " }"
+  show f = "frame { name=" ++ show (name f) ++
+                  ", formals=" ++ show (formals f) ++
+                  ", locals=" ++ show (locals f) ++
+                  ", debug=" ++ show (frameDebug f) ++ " }"
 
 staticLinkAccess :: X64Frame -> X64Access
 staticLinkAccess f = case formals f of
@@ -106,14 +106,14 @@ externalCall :: Temp.Label -> [TreeIR.Exp] -> Bool -> TreeIR.Exp
 externalCall (Temp.Label (Symbol.Symbol funname)) params hasRet =
   TreeIR.CALL ( TreeIR.NAME (Temp.Label (Symbol.Symbol $ "_" ++ funname)) -- hack for MacOS
               , params
-              , fmap (\_ -> Frame.DoesNotEscape) params
+              , fmap (const Frame.DoesNotEscape) params
               , hasRet)
 
 externalCallNoReturn :: Temp.Label -> [TreeIR.Exp] -> TreeIR.Exp
 externalCallNoReturn (Temp.Label (Symbol.Symbol funname)) params =
   TreeIR.CALLNORETURN ( TreeIR.NAME (Temp.Label (Symbol.Symbol $ "_" ++ funname)) -- hack for MacOS
                       , params
-                      , fmap (\_ -> Frame.DoesNotEscape) params)
+                      , fmap (const Frame.DoesNotEscape) params)
 
 accessExp :: X64Frame -> X64Access -> TreeIR.Exp
 accessExp frame acc = exp acc $ frameExp frame
@@ -258,15 +258,15 @@ newFrame x64Inst frameName maybeDebug gen escapes =
                 move = TreeIR.MOVE (TreeIR.TEMP t, TreeIR.TEMP paramReg)
               in
                 ( gen''
-                , frame{ formals=(formals frame) ++ [InReg t]
-                       , viewShift=(viewShift frame) ++ [move] }
+                , frame{ formals=formals frame ++ [InReg t]
+                       , viewShift=viewShift frame ++ [move] }
                 , numEscapesSeen
                 , paramRegsRemaining' )
             [] ->
               step (gen', frame, numEscapesSeen, paramRegsRemaining) Frame.Escapes
         Frame.Escapes ->
           ( gen'
-          , frame{formals=(formals frame) ++ [InFrame $ numEscapesSeen + 2]} -- +2 to bypass pushed rbp on
+          , frame{formals=formals frame ++ [InFrame $ numEscapesSeen + 2]} -- +2 to bypass pushed rbp on
                                                                              -- on function entry and
                                                                              -- implicitly-pushed rip from
                                                                              -- call instr.
@@ -281,20 +281,20 @@ allocLocal gen frame escapesOrNot = case escapesOrNot of
       numLocals = length $ filter isInFrame $ locals frame
       access = InFrame $ -1 - numLocals
     in
-      (gen, frame{locals=(locals frame) ++ [access]}, access)
+      (gen, frame{locals=locals frame ++ [access]}, access)
   Frame.DoesNotEscape ->
     let
       (regLabel, gen') = Temp.newtemp gen
       access = InReg regLabel
     in
-      (gen', frame{locals=(locals frame) ++ [access]}, access)
+      (gen', frame{locals=locals frame ++ [access]}, access)
 
 isInFrame :: X64Access -> Bool
 isInFrame (InFrame _) = True
 isInFrame _ = False
 
 isMain :: X64Frame -> Bool
-isMain frame = name frame == (Temp.Label $ mainName)
+isMain frame = name frame == Temp.Label mainName
 
 -- | (From Appel, p 261) For each incoming register parameter, move it to the place
 -- from which it is seen within the function (aka the "view shift"). This could be a frame location (for
@@ -329,7 +329,7 @@ procEntryExit1 frame bodyExp gen =
     getSaveRestores :: Temp.Generator -> (TreeIR.Stm, TreeIR.Stm, Temp.Generator)
     getSaveRestores g =
       let
-        calleeSavesRegs = (calleeSaves $ x64 frame) \\ [rbp $ x64 frame] -- rbp is pushed at function entry
+        calleeSavesRegs = calleeSaves (x64 frame) \\ [rbp $ x64 frame] -- rbp is pushed at function entry
         (calleeSavesTemps, g') = foldl'
                                    step
                                    ([], g)
@@ -387,34 +387,28 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) =
         Just maxCallArgs -> maxCallArgs + numEscapingLocals
         Nothing -> -- we're in a leaf function (ie it calls no other function. use the 128-byte redzone)
           max 0 $ numEscapingLocals - 128 `div` 8
-    stackAdjustment = if stackSize /=0 then
-                        [ Assem.OPER { Assem.assem="\tsub `d0, " ++ (show stackSize)
+    stackAdjustment = [ Assem.OPER { Assem.assem="\tsub `d0, " ++ show stackSize
                                      , Assem.operDst=[rsp $ x64 frame]
                                      , Assem.operSrc=[]
-                                     , Assem.jump=Nothing } ]
-                      else
-                        []
-    prologue = [ Assem.OPER { Assem.assem="\tpush `d0" ++ (fmtDebug frame)
+                                     , Assem.jump=Nothing }
+                      | stackSize /=0]
+    prologue = [ Assem.OPER { Assem.assem="\tpush `d0" ++ fmtDebug frame
                             , Assem.operDst=[rbp $ x64 frame]
                             , Assem.operSrc=[rsp $ x64 frame]
                             , Assem.jump=Nothing }
                , Assem.MOVE { Assem.assem="\tmov `d0, `s0"
                             , Assem.moveDst=rbp $ x64 frame
                             , Assem.moveSrc=rsp $ x64 frame } ] ++ stackAdjustment
-    epilogue1 = if stackSize /= 0 then
-                 [ Assem.OPER { Assem.assem="\tadd `d0, " ++ (show stackSize)
-                              , Assem.operDst=[rsp $ x64 frame]
-                              , Assem.operSrc=[]
-                              , Assem.jump=Nothing } ]
-                else
-                  []
-    raxClearOrNil = if isMain frame then
-                      [ Assem.OPER { Assem.assem="\txor `d0, `s0"
-                                   , Assem.operDst=[rax $ x64 frame]
-                                   , Assem.operSrc=[rax $ x64 frame]
-                                   , Assem.jump=Nothing } ]
-                    else
-                      []
+    epilogue1 = [ Assem.OPER { Assem.assem="\tadd `d0, " ++ show stackSize
+                             , Assem.operDst=[rsp $ x64 frame]
+                             , Assem.operSrc=[]
+                             , Assem.jump=Nothing }
+                | stackSize /= 0 ]
+    raxClearOrNil = [ Assem.OPER { Assem.assem="\txor `d0, `s0"
+                                  , Assem.operDst=[rax $ x64 frame]
+                                  , Assem.operSrc=[rax $ x64 frame]
+                                  , Assem.jump=Nothing }
+                    | isMain frame]
     epilogue2 = [ Assem.OPER { Assem.assem="\tpop `d0"
                              , Assem.operDst=[rbp $ x64 frame]
                              , Assem.operSrc=[]
@@ -432,7 +426,7 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) =
     nextMultipleOf16 n = 16 * ((n + 15) `div` 16)
 
     fmtDebug :: X64Frame -> String
-    fmtDebug (X64Frame { frameDebug=Just dbg }) = "\t\t ## " ++ show dbg
+    fmtDebug X64Frame { frameDebug=Just dbg } = "\t\t ## " ++ show dbg
     fmtDebug _ = ""
 
     numEscapingLocals :: Int

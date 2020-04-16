@@ -28,11 +28,11 @@ instance Eq Ty where
 instance Show Ty where
   show INT = "INT"
   show STRING = "STRING"
-  show (RECORD(fieldMap,_)) = "RECORD{" ++ (showFieldTys fieldMap) ++ "}"
-  show (ARRAY(typ,_)) = "ARRAY [" ++ (shortTyName typ) ++ "]"
+  show (RECORD(fieldMap,_)) = "RECORD{" ++ showFieldTys fieldMap ++ "}"
+  show (ARRAY(typ,_)) = "ARRAY [" ++ shortTyName typ ++ "]"
   show NIL = "NIL"
   show UNIT = "UNIT"
-  show (NAME(sym,_)) = "NAME(" ++ (show sym) ++ ")"
+  show (NAME(sym,_)) = "NAME(" ++ show sym ++ ")"
 
 shortTyName :: Ty -> String
 shortTyName (RECORD _) = "RECORD{ ... }"

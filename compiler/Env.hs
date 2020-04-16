@@ -62,7 +62,7 @@ baseVEnv x64 gen =
       let
         sym = Symbol nm
         lab = Temp.Label $ Symbol $ "tiger_" ++ nm
-        escapes = fmap (\_ -> Frame.DoesNotEscape) formalTys
+        escapes = fmap (const Frame.DoesNotEscape) formalTys
         (gen'', lev) = Translate.x64NewLevel
                          x64
                          Nothing

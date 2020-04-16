@@ -13,6 +13,7 @@ import qualified TreeIR
 import qualified X64Frame
 
 import Control.Monad.Trans.State (runState)
+import Data.Char (digitToInt)
 import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -31,15 +32,13 @@ formatAsm alloc asm =
     formatImpl :: String -> [Int] -> [Int] -> Maybe [Assem.Label] -> String
     formatImpl assem dsts srcs jmps =
       let
-        readInt :: Char -> Int
-        readInt c = read $ c : [] :: Int
         getJmp :: Maybe [Assem.Label] -> Int -> String
         getJmp (Just labs) idx =
           Temp.name $ labs !! idx
         getJmp _ _ = error "shouldn't get here"
-        go ('`':'d':i:rest) = (printTemp alloc $ dsts !! readInt i) ++ go rest
-        go ('`':'s':i:rest) = (printTemp alloc $ srcs !! readInt i) ++ go rest
-        go ('`':'j':i:rest) = (getJmp jmps $ readInt i) ++ go rest
+        go ('`':'d':i:rest) = printTemp alloc (dsts !! digitToInt i) ++ go rest
+        go ('`':'s':i:rest) = printTemp alloc (srcs !! digitToInt i) ++ go rest
+        go ('`':'j':i:rest) = getJmp jmps (digitToInt i) ++ go rest
         go (c:rest) = c : go rest
         go [] = []
       in
@@ -78,8 +77,8 @@ compileToAsm text performRegAlloc =
                      "\t.intel_syntax noprefix\n"
 
             emit :: X64Frame.Frag -> Temp.Generator -> (String, Temp.Generator)
-            emit (X64Frame.PROC { X64Frame.body=bodyStm
-                                , X64Frame.fragFrame=frame }) gen' =
+            emit X64Frame.PROC { X64Frame.body=bodyStm
+                               , X64Frame.fragFrame=frame } gen' =
               let
                 (stmts, gen'') = Canon.linearize bodyStm gen'
                 ((blocks, lab), gen3) = runState (Canon.basicBlocks stmts) gen''
@@ -109,7 +108,10 @@ compileToAsm text performRegAlloc =
                 insts5 = filter notEmptyInst insts4 -- an empty instr is appended to function bodies
                                                     -- in order to communicate some liveness info to regalloc
               in
-                ((intercalate "\n" (fmap (formatAsm (alloc `Map.union` tempMap)) insts5) ++ "\n"), gen6)
+                ( intercalate
+                   "\n" (fmap (formatAsm (alloc `Map.union` tempMap)) insts5)
+                   ++ "\n"
+                , gen6)
               where
                 optimize :: [Assem.Inst] -> ([Assem.Inst], (Flow.FlowGraph, [Flow.Node]))
                 optimize instrs =
@@ -119,7 +121,7 @@ compileToAsm text performRegAlloc =
                     AssemOptim.pruneDefdButNotUsed (instrs, (flowGraph, nodes))
 
                 notEmptyInst :: Assem.Inst -> Bool
-                notEmptyInst (Assem.OPER { Assem.assem=assem } ) = assem /= ""
+                notEmptyInst Assem.OPER { Assem.assem=assem } = assem /= ""
                 notEmptyInst _ = True
 
                 step1 :: ([Assem.Inst], Temp.Generator) -> TreeIR.Stm -> ([Assem.Inst], Temp.Generator)
@@ -129,7 +131,7 @@ compileToAsm text performRegAlloc =
                   in
                     (insts ++ insts', g')
             emit (X64Frame.STRING (lab, str)) g =
-              ((Temp.name lab) ++ ":\n\t.asciz\t\"" ++ str ++ "\"\n", g)
+              (Temp.name lab ++ ":\n\t.asciz\t\"" ++ str ++ "\"\n", g)
             step2 :: (String, Temp.Generator) -> X64Frame.Frag -> (String, Temp.Generator)
             step2 (s, g) f =
               let
@@ -137,10 +139,10 @@ compileToAsm text performRegAlloc =
               in
                 (s ++ s', g')
           in
-            header ++ (fst $ foldl' step2 ([], gen) frags)
+            header ++ fst (foldl' step2 ([], gen) frags)
 
 main :: IO ()
 main = do
   args <- getArgs
   str <- readFile $ head args
-  putStrLn $ compileToAsm str (not $ elem "noreg" args)
+  putStrLn $ compileToAsm str $ notElem "noreg" args

@@ -28,7 +28,7 @@ class Translate t where
   allocLocal :: t -> Level t -> Temp.Generator -> Frame.EscapesOrNot
     -> (Temp.Generator, Level t, Access t)
 
-data X64Translate = X64Translate { x64 :: X64Frame.X64 }
+newtype X64Translate = X64Translate { x64 :: X64Frame.X64 }
   deriving (Show)
 data X64Level = X64Level { x64Parent :: X64Level
                          , x64Name :: Temp.Label
@@ -51,7 +51,7 @@ instance Translate X64Translate where
   type (Access X64Translate) = X64Access
   outermost _ = X64Outermost
   newLevel translate = x64NewLevel $ x64 translate
-  formals _ lev = x64TranslateFormals lev
+  formals _  = x64TranslateFormals
   allocLocal _ = x64AllocLocal
 
 x64NewLevel :: X64Frame.X64
@@ -65,7 +65,7 @@ x64AllocLocal :: X64Level -> Temp.Generator -> Frame.EscapesOrNot ->
 
 x64NewLevel x64Inst maybeDebug (parent, label, escapes) gen =
   let
-    escapes' = [Frame.Escapes] ++ escapes -- initial escape for static link
+    escapes' = Frame.Escapes : escapes -- initial escape for static link
     (frameLabel, gen') = getLabel
     (gen'', frame') = X64Frame.newFrame
                         x64Inst
@@ -90,8 +90,8 @@ x64NewLevel x64Inst maybeDebug (parent, label, escapes) gen =
 x64TranslateFormals lev =
   let
     frameAccesses = Frame.formals (x64Frame lev)
-    toTranslateAccess = \frameAccess -> X64Access{ level=lev
-                                                 , access=frameAccess }
+    toTranslateAccess frameAccess = X64Access { level=lev
+                                              , access=frameAccess }
   in
     fmap toTranslateAccess frameAccesses
 
@@ -457,8 +457,8 @@ letExpM initializers bodyExp = do
     pure $ Ex $ TreeIR.ESEQ (TreeIR.makeSeq initializerStms, body)
 
 letExp :: [Exp] -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
-letExp initializers body gen =
-  runState (letExpM initializers body) gen
+letExp initializers body =
+  runState (letExpM initializers body)
 
 while :: Exp -> Exp -> Temp.Label -> Temp.Generator -> (Exp, Temp.Generator)
 while testExpE bodyExpE doneLab gen =
@@ -561,7 +561,7 @@ string str gen =
                     TreeIR.MOVE ( sExp
                                 , X64Frame.externalCall
                                     (Temp.Label $ Symbol.Symbol "tiger_allocString")
-                                    [TreeIR.NAME(label), TreeIR.CONST $ length str]
+                                    [TreeIR.NAME label, TreeIR.CONST $ length str]
                                     True)
                   , sExp )
     frag = X64Frame.STRING (label, str)
@@ -612,8 +612,8 @@ callM funLevel callerLevel funlab params hasRetVal = do
 
 call :: X64Level -> X64Level -> Temp.Label -> [Exp] -> Bool -> Temp.Generator
   -> (Exp, Temp.Generator)
-call funLevel callerLevel funlab params hasRetVal gen =
-  runState (callM funLevel callerLevel funlab params hasRetVal) gen
+call funLevel callerLevel funlab params hasRetVal =
+  runState (callM funLevel callerLevel funlab params hasRetVal)
 
 nilexp :: Exp
 nilexp = Ex $ TreeIR.CONST 0
@@ -623,8 +623,8 @@ intexp i = Ex $ TreeIR.CONST i
 
 initExp :: X64Access -> X64Level -> Exp -> Temp.Generator
            -> (Exp, Temp.Generator)
-initExp acc lev exp gen =
-  assign (simpleVar acc lev) exp gen
+initExp acc lev  =
+  assign $ simpleVar acc lev
 
 functionDec :: X64Level -> Exp -> Temp.Generator -> (Frag, Temp.Generator)
 functionDec X64Level{x64Frame=frame} bodyExp gen =

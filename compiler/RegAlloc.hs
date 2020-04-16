@@ -11,7 +11,6 @@ import qualified Temp
 import qualified TreeIR
 import qualified X64Frame
 
-import Control.Monad (join)
 import Control.Monad.Trans.State (State, runState, put, get)
 import Data.Foldable (foldl')
 import qualified Data.Map as Map
@@ -42,7 +41,7 @@ alloc insts flowGraph frame gen previousSpillTemps =
                               previousSpillTemps
   in
     if null spills then
-      ( filter (\i -> not $ isRedundant allocations i) insts
+      ( filter (not . isRedundant allocations) insts
       , allocations
       , frame
       , gen)
@@ -70,21 +69,21 @@ alloc insts flowGraph frame gen previousSpillTemps =
         _                      -> False
 
     spillCost :: Flow.FlowGraph -> Liveness.IGraph -> Int -> Float
-    spillCost (Flow.FlowGraph { Flow.control=control
-                              , Flow.def=def
-                              , Flow.use=use })
-              (Liveness.IGraph { Liveness.tnode=tnode })
+    spillCost Flow.FlowGraph { Flow.control=control
+                             , Flow.def=def
+                             , Flow.use=use }
+              Liveness.IGraph { Liveness.tnode=tnode }
               temp =
       let
         useDefCount :: Float
         useDefCount = fromIntegral $ foldl'
                         (\acc nodeId ->
                            let
-                             f = \s t -> fromEnum $ elem t s
+                             f s t = fromEnum $ elem t s
                              defs = def Map.! nodeId
                              uses = use Map.! nodeId
                            in
-                             acc + (f defs temp) + (f uses temp))
+                             acc + f defs temp + f uses temp)
                         0
                         $ Map.keys $ Graph.nodes control
         nodeDegree :: Float
@@ -142,13 +141,13 @@ rewriteProgram insts frame spills gen =
           pure code
 
         readsTemp :: Assem.Inst -> Bool
-        readsTemp (Assem.OPER { Assem.operSrc=operSrc }) = elem tempId operSrc
-        readsTemp (Assem.MOVE { Assem.moveSrc=moveSrc }) = tempId == moveSrc
+        readsTemp Assem.OPER { Assem.operSrc=operSrc } = elem tempId operSrc
+        readsTemp Assem.MOVE { Assem.moveSrc=moveSrc } = tempId == moveSrc
         readsTemp _ = False
 
         writesTemp :: Assem.Inst -> Bool
-        writesTemp (Assem.OPER { Assem.operDst=operDst }) = elem tempId operDst
-        writesTemp (Assem.MOVE { Assem.moveDst=moveDst }) = tempId == moveDst
+        writesTemp Assem.OPER { Assem.operDst=operDst } = elem tempId operDst
+        writesTemp Assem.MOVE { Assem.moveDst=moveDst } = tempId == moveDst
         writesTemp _ = False
 
         newTemp = do
@@ -194,7 +193,7 @@ rewriteProgram insts frame spills gen =
                , maybeLoadTemp ++ maybeStoreTemp)
 
         (toJoin, gen'') = runState (mapM rewriteInst insts') gen'
-        insts'' = join $ fmap fst toJoin
-        newTemps = join $ fmap snd toJoin
+        insts'' = fst =<< toJoin
+        newTemps = snd =<< toJoin
       in
         (insts'', temps ++ newTemps, gen'')

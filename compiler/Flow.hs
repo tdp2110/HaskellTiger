@@ -14,7 +14,7 @@ type TempId = Int
 newtype NodeId = NodeId Int
 
 instance Show NodeId where
-  show (NodeId i) = "NodeId_" ++ (show i)
+  show (NodeId i) = "NodeId_" ++ show i
 
 instance Eq NodeId where
   (NodeId n1) == (NodeId n2) = n1 == n2
@@ -93,7 +93,7 @@ instrsToGraph insts =
       mapM_
         (\((i1, n1), (_, n2)) ->
            case i1 of
-             A.OPER { A.jump=Just _ } -> do pure ()
+             A.OPER { A.jump=Just _ } -> pure ()
              _                        -> G.addEdge n1 n2
          )
         $ zip nodes $ tail nodes
@@ -115,11 +115,11 @@ instrsToGraph insts =
                  jumpTargetNodes' = case sequence jumpTargetNodes of
                                       Just targets -> fmap snd targets
                                       _            -> error "invalid instruction list"
-               in do
+               in
                  mapM_
                    (G.addEdge n)
                    jumpTargetNodes'
-             _ -> do pure ()
+             _ -> pure ()
          )
          nodes
 
