@@ -31,7 +31,7 @@ intLiteral = TestCase (
   let
     text = "1337"
     (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _, _, _)) = parseToSema text
- in do
+ in
     assertEqual "int literal" Types.INT ty
   )
 
@@ -50,7 +50,7 @@ intArith2 = TestCase (
   let
     text = "42 * 1337"
     (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _, _, _)) = parseToSema text
- in do
+ in
     assertEqual "int arith 2" Types.INT ty
   )
 
@@ -59,7 +59,7 @@ intArith3 = TestCase (
   let
     text = "(1 + 2 - (3 / (4 - 5) - 6 *(7 + 8)))"
     (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _, _, _)) = parseToSema text
- in do
+ in
     assertEqual "int arith 3" Types.INT ty
   )
 
@@ -96,7 +96,7 @@ strPlusIntIsErr = TestCase (
   let
     text = "\"hello world\" + 2"
     semaResult = parseToSema text
-  in do
+  in
     assertBool "can't add strings and ints" $ isLeft semaResult
   )
 
@@ -104,8 +104,8 @@ substringCall1 :: Test
 substringCall1 = TestCase (
   let
     text = "substring(\"hello world\", 0, 1)"
-    (Right ((Semant.ExpTy _ ty), _, _, _)) = parseToSema text
-  in do
+    (Right (Semant.ExpTy _ ty, _, _, _)) = parseToSema text
+  in
     assertEqual "substring returns string" Types.STRING ty
   )
 
@@ -114,7 +114,7 @@ substringCall2 = TestCase (
   let
     text = "substring(\"hello world\", nil, 1337)"
     (Left(Semant.SemantError err _)) = parseToSema text
-  in do
+  in
     assertBool "wrongly typed param" $ isInfixOf "parameter 1" err
   )
 
@@ -123,7 +123,7 @@ substringCall3 = TestCase (
   let
     text = "substring(\"hello world\", 42, 1337, nil)"
     (Left(Semant.SemantError err _)) = parseToSema text
-  in do
+  in
     assertBool "wrong number of arguments" $ isInfixOf "expects 2 parameters but was passed 3" err
   )
 
@@ -140,7 +140,7 @@ letExp1 = TestCase (
            "  end\n" ++
            "end"
     (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _, _, _)) = parseToSema text
-  in do
+  in
     assertEqual "letExp example1" Types.INT ty
   )
 
@@ -149,7 +149,7 @@ intUncallable = TestCase (
   let
     text = "let var x := 2 in x(3) end"
     (Left(Semant.SemantError err _)) = parseToSema text
-  in do
+  in
     assertEqual "integers are not callable" "only functions are callable: found type INT" err
   )
 
@@ -158,7 +158,7 @@ forVar1 = TestCase (
   let
     text = "for j:=0 to 10 do j:=j+1"
     (Left(Semant.SemantError err _)) = parseToSema text
-  in do
+  in
     assertEqual "can't assign to forVar" "forVar assigned in forBody" err
   )
 
@@ -167,7 +167,7 @@ forVar2 = TestCase (
   let
     text = "for j:=0 to 10 do (let var k := 2 in j := j + k end)"
     (Left(Semant.SemantError err _)) = parseToSema text
-  in do
+  in
     assertEqual "can't assign to forVar" "forVar assigned in forBody" err
   )
 
@@ -176,7 +176,7 @@ break1 = TestCase (
   let
     text = "for j:=0 to 10 do if j = 5 then break"
     (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _, _, _)) = parseToSema text
-  in do
+  in
     assertEqual "break in forExp is ok" Types.UNIT ty
   )
 
@@ -188,7 +188,7 @@ nilRecord = TestCase (
            "  var nilPair : intPair := nil\n" ++
            "in nilPair end"
     (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _, _, _)) = parseToSema text
-  in do
+  in
     assertBool "nil record has record type" $ isRecord ty
   )
 
@@ -205,7 +205,7 @@ listTy1 = TestCase (
            "  var xs := intList{head = 0, tail = nilIntList}\n" ++
            "in xs end"
     (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _, _, _)) = parseToSema text
-  in do
+  in
     assertBool "instance of mutrec record has record ty" $ isRecord ty
   )
 
@@ -219,7 +219,7 @@ similarRecordDecs = TestCase (
            "  var p2:= pair2{ fst=3, snd=4 }\n" ++
            "in p1.fst + p2.snd end"
     (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _, _, _)) = parseToSema text
-  in do
+  in
     assertEqual "similar records" Types.INT ty
   )
 
@@ -233,7 +233,7 @@ arrayOfTypeAlias = TestCase (
            "  var xs := intArray [N] of 0\n" ++
            "in xs[8] end"
     (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty},_,_,_)) = parseToSema text
-  in do
+  in
     assertEqual "similar records" Types.INT ty
   )
 
@@ -242,7 +242,7 @@ break2 = TestCase (
   let
     text = "if 1 then break"
     (Left(Semant.SemantError err _)) = parseToSema text
-  in do
+  in
     assertEqual "can't assign to forVar" "break expression not enclosed in a while or for" err
   )
 
@@ -254,7 +254,7 @@ illegalDecls1 = TestCase (
            "  function N() = nil \n" ++
            "in N() end"
     (Left(Semant.SemantError err _)) = parseToSema text
-  in do
+  in
     assertBool "multiple declarations 1" $
       isInfixOf "multiple function or value declarations of symbol N in letExp declarations" err
   )
@@ -267,7 +267,7 @@ illegalDecls2 = TestCase (
            "  var N := 42 \n" ++
            "in N + 1 end"
     (Left(Semant.SemantError err _)) = parseToSema text
-  in do
+  in
     assertBool "multiple declarations 1" $
       isInfixOf "multiple function or value declarations of symbol N in letExp declarations" err
   )
@@ -279,7 +279,7 @@ illegalDecls3 = TestCase (
            "  var N: string:= 0 \n" ++
            "in N + 1 end"
     (Left(Semant.SemantError err _)) = parseToSema text
-  in do
+  in
     assertEqual "annotation error" "mismatch in type annotation and computed type in varDecl: type annotation STRING, computed type INT" err
   )
 
@@ -290,7 +290,7 @@ illegalDecls4 = TestCase (
            "  var x:= nil \n" ++
            "in x end"
     (Left(Semant.SemantError err _)) = parseToSema text
-  in do
+  in
     assertEqual "nil decls need record annotation 1" "nil expression declarations must be constrained by a RECORD type" err
   )
 
@@ -301,7 +301,7 @@ illegalDecls5 = TestCase (
            "  var x:int:= nil \n" ++
            "in x end"
     (Left(Semant.SemantError err _)) = parseToSema text
-  in do
+  in
     assertEqual "nil decls need record annotation 2" "nil expression declarations must be constrained by a RECORD type" err
   )
 
@@ -314,7 +314,7 @@ illegalDecls6 = TestCase (
            "  var arr := notAnArrayTy [ N ] of 0" ++
            " in arr[0] end"
     (Left(Semant.SemantError err _)) = parseToSema text
-  in do
+  in
     assertEqual "array decls must have an array type" "only array types may appear as the symbol in an array instance definition. Found type=INT" err
   )
 
@@ -327,7 +327,7 @@ illegalDecls7 = TestCase (
            "  var arr := intArray [ N ] of \"hello\"" ++
            " in arr[0] end"
     (Left(Semant.SemantError err _)) = parseToSema text
-  in do
+  in
     assertEqual "array init expr must have array elt type" "in ArrayExp, initExp has actual type STRING, when it must have INT" err
   )
 
@@ -341,7 +341,7 @@ illegalDecls8 = TestCase (
            "  type d = a\n" ++
            "in 0 end"
     (Left(Semant.SemantError err _)) = parseToSema text
-  in do
+  in
     assertBool "illegal cyclic type decl" $
       isInfixOf "found illegal type declaration cycle" err
   )
@@ -424,7 +424,7 @@ frags3 = TestCase (
     assertEqual
       "string values"
       ["dog", "cat"]
-      $ fmap (\(X64Frame.STRING(_,s)) -> s) $ filter isString frags
+      $ (\(X64Frame.STRING(_,s)) -> s) <$> filter isString frags
   )
 
 ifExp1 :: Test
@@ -434,7 +434,7 @@ ifExp1 = TestCase (
            "  var x := 0\n" ++
            "in if x = 1 then x := 2\n end"
     (Right (Semant.ExpTy{Semant.exp=(Translate.Nx _), Semant.ty=ty}, _, _, _)) = parseToSema text
-  in do
+  in
     assertEqual "well-formed if then exp has UNIT ty" Types.UNIT ty
   )
 
@@ -445,7 +445,7 @@ ifExp2 = TestCase (
            "  var x := 0\n" ++
            "in if x = 1 then 2\n end"
     (Left(Semant.SemantError err _)) = parseToSema text
-  in do
+  in
     assertBool "if then no else" $ isInfixOf
       "in if-then exp (without else), the if body" err
   )
@@ -457,7 +457,7 @@ ifExp3 = TestCase (
            "  var x := 0\n" ++
            "in if x = 1 then 2 else 3\n end"
     (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _, _, _)) = parseToSema text
-  in do
+  in
     assertEqual "well-formed if then else types match"
       Types.INT ty
   )
@@ -469,7 +469,7 @@ ifExp4 = TestCase (
            "  var x := 0\n" ++
            "in if x = 1 then 2 else \"cat\"\n end"
     (Left(Semant.SemantError err _)) = parseToSema text
-  in do
+  in
     assertBool "if then else types don't match" $ isInfixOf
       "incompatible types found in ifExp" err
   )
@@ -484,7 +484,7 @@ while1 = TestCase (
            "    x := x + 1\n" ++
            "end"
     (Right (Semant.ExpTy{Semant.exp=(Translate.Nx _), Semant.ty=ty}, _, _, _)) = parseToSema text
-  in do
+  in
     assertEqual "well-formed while has UNIT ty" Types.UNIT ty
   )
 
@@ -499,7 +499,7 @@ while2 = TestCase (
            "    if x = 5 then break)\n" ++
            "end"
     (Right (Semant.ExpTy{Semant.exp=(Translate.Nx _), Semant.ty=ty}, _, _, _)) = parseToSema text
-  in do
+  in
     assertEqual "well-formed while has UNIT ty" Types.UNIT ty
   )
 
@@ -514,7 +514,7 @@ while3 = TestCase (
            "    2)\n" ++
            "end"
     (Left(Semant.SemantError err _)) = parseToSema text
-  in do
+  in
     assertBool
       "ill-formed while-body"
       $ isInfixOf
@@ -529,7 +529,7 @@ builtinFuncs = TestCase (
            "  var x := 42" ++
            "in print(chr(x)) end"
     (Right (Semant.ExpTy{Semant.exp=_, Semant.ty=ty}, _, _, _)) = parseToSema text
-  in do
+  in
     assertEqual "" Types.UNIT ty
   )
 
@@ -578,7 +578,7 @@ tests = TestList [ TestLabel "ints" intLiteral
 main :: IO Counts
 main = do
   results <- runTestTT tests
-  if (errors results + failures results == 0)
+  if errors results + failures results == 0
     then
     exitWith ExitSuccess
     else

@@ -9,7 +9,7 @@ import qualified X64Frame
 
 
 main :: IO ()
-main = hspec $ do
+main = hspec $
   describe "regAlloc spill codegen" $
     it "works" $
       let
@@ -30,8 +30,8 @@ main = hspec $ do
         loadStm = TreeIR.MOVE (TreeIR.TEMP tempId, accessExp)
         (loadCode, _) = Codegen.codegen x64 gen6 loadStm
       in do
-        (length storeCode) `shouldBe` 1
-        (length loadCode) `shouldBe` 1
+        length storeCode `shouldBe` 1
+        length loadCode `shouldBe` 1
         let
           [Assem.OPER { Assem.operDst=[]
                       , Assem.operSrc=[storeDst,storeSrc] }] = storeCode

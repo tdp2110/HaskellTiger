@@ -17,9 +17,7 @@ instance Arbitrary T.Exp where
   arbitrary = sized arbExp
 
 arbTemp :: Gen T.Exp
-arbTemp = do
-  i <- arbitrary
-  pure $ T.TEMP i
+arbTemp = T.TEMP <$> arbitrary
 
 arbMem :: Gen T.Exp
 arbMem = do
@@ -31,12 +29,8 @@ arbExp :: Int -> Gen T.Exp
 arbExp 0 = do
   n <- choose (0, 4) :: Gen Int
   case n of
-    0 -> do
-      i <- arbitrary
-      pure $ T.CONST i
-    1 -> do
-      lab <- arbitrary
-      pure $ T.NAME lab
+    0 -> T.CONST <$> arbitrary
+    1 -> T.NAME <$> arbitrary
     _ -> arbTemp
 arbExp sz =
   let
@@ -49,9 +43,7 @@ arbExp sz =
       0 -> do
         i <- choose (0, 500)
         pure $ T.CONST i
-      1 -> do
-        lab <- arbitrary
-        pure $ T.NAME lab
+      1 -> T.NAME <$> arbitrary
       2 -> do
         i <- choose (0, 1000000)
         pure $ T.TEMP i
@@ -66,7 +58,7 @@ arbExp sz =
         argSize <- choose (0, 2) :: Gen Int
         args <- vectorOf argSize expGen
         hasResult <- arbitrary :: Gen Bool
-        pure $ T.CALL (funcExp, args, fmap (\_ -> Frame.DoesNotEscape) args, hasResult)
+        pure $ T.CALL (funcExp, args, fmap (const Frame.DoesNotEscape) args, hasResult)
       _ -> do
         s <- stmGen
         e <- expGen
@@ -83,9 +75,7 @@ tempOrMem = do
     _ -> arbMem
 
 arbStm :: Int -> Gen T.Stm
-arbStm 0 = do
-  lab <- arbitrary
-  pure $ T.LABEL lab
+arbStm 0 = T.LABEL <$> arbitrary
 arbStm sz =
   let
     sz' = sz `div` 2
@@ -98,9 +88,7 @@ arbStm sz =
         e1 <- tempOrMem
         e2 <- expGen
         pure $ T.MOVE (e1, e2)
-      1 -> do
-        e <- expGen
-        pure $ T.EXP e
+      1 -> T.EXP <$> expGen
       2 -> do
         e <- expGen
         labsSize <- choose (0, 10) :: Gen Int
@@ -117,9 +105,7 @@ arbStm sz =
         s1 <- stmGen
         s2 <- stmGen
         pure $ T.SEQ (s1, s2)
-      5 -> do
-        lab <- arbitrary
-        pure $ T.LABEL lab
+      5 -> T.LABEL <$> arbitrary
       _ -> error "shouldn't get here"
 
 instance Arbitrary T.Binop where
@@ -169,7 +155,7 @@ prop_canonHasNoSeq stm =
     expHasNoSeq :: T.Exp -> Bool
     expHasNoSeq (T.BINOP (_, e1, e2)) = expHasNoSeq e1 && expHasNoSeq e2
     expHasNoSeq (T.MEM e) = expHasNoSeq e
-    expHasNoSeq (T.CALL (e, es, _, _)) = expHasNoSeq e && (all expHasNoSeq es)
+    expHasNoSeq (T.CALL (e, es, _, _)) = expHasNoSeq e && all expHasNoSeq es
     expHasNoSeq (T.ESEQ (_, _)) = False
     expHasNoSeq _ = True
 
@@ -201,15 +187,14 @@ prop_parentOfCallIsOk stm =
     callParentOkStm (T.EXP e) = callParentOkExp e
     callParentOkStm (T.JUMP (T.CALL _, _)) = False
     callParentOkStm (T.JUMP (e, _)) = callParentOkExp e
-    callParentOkStm (T.CJUMP (_, (T.CALL _), _, _, _)) = False
-    callParentOkStm (T.CJUMP (_, _, (T.CALL _), _, _)) = False
+    callParentOkStm (T.CJUMP (_, T.CALL _, _, _, _)) = False
+    callParentOkStm (T.CJUMP (_, _, T.CALL _, _, _)) = False
     callParentOkStm (T.CJUMP (_, e1, e2, _, _)) = callParentOkExp e1 && callParentOkExp e2
     callParentOkStm (T.SEQ (s1, s2)) = callParentOkStm s1 && callParentOkStm s2
     callParentOkStm (T.LABEL _) = True
 
     callArgsOk f args =
-      if any isCall (f:args) then False
-      else all callParentOkExp (f:args)
+      not (any isCall (f:args)) && all callParentOkExp (f:args)
 
     isCall (T.CALL _) = True
     isCall _ = False
@@ -217,8 +202,8 @@ prop_parentOfCallIsOk stm =
 main :: IO ()
 main = hspec $ do
   describe "linearize" $
-    it "has no SEQ nor ESEQ" $ do
+    it "has no SEQ nor ESEQ" $
       property prop_canonHasNoSeq
   describe "linearize" $
-    it "parent of every CALL is an EXP(..) or a MOVE(TEMP t,..)" $ do
+    it "parent of every CALL is an EXP(..) or a MOVE(TEMP t,..)" $
       property prop_parentOfCallIsOk

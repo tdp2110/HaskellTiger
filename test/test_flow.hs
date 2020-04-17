@@ -12,7 +12,7 @@ import qualified Data.Set as Set
 
 
 main :: IO ()
-main = hspec $ do
+main = hspec $
   describe "CFG and IGraph" $
     it "works" $
       let
@@ -60,38 +60,38 @@ main = hspec $ do
         -- putStrLn "ControlFlowGraph:"
         -- putStrLn $ G.toDot $ F.control flowGraph
 
-        defs Map.! (F.NodeId 0) `shouldBe` [a]
-        defs Map.! (F.NodeId 1) `shouldBe` []
-        defs Map.! (F.NodeId 2) `shouldBe` [b]
-        defs Map.! (F.NodeId 3) `shouldBe` [c]
-        defs Map.! (F.NodeId 4) `shouldBe` [a]
-        defs Map.! (F.NodeId 5) `shouldBe` []
-        defs Map.! (F.NodeId 6) `shouldBe` []
+        defs Map.! F.NodeId 0 `shouldBe` [a]
+        defs Map.! F.NodeId 1 `shouldBe` []
+        defs Map.! F.NodeId 2 `shouldBe` [b]
+        defs Map.! F.NodeId 3 `shouldBe` [c]
+        defs Map.! F.NodeId 4 `shouldBe` [a]
+        defs Map.! F.NodeId 5 `shouldBe` []
+        defs Map.! F.NodeId 6 `shouldBe` []
 
-        uses Map.! (F.NodeId 0) `shouldBe` []
-        uses Map.! (F.NodeId 1) `shouldBe` []
-        uses Map.! (F.NodeId 2) `shouldBe` [a]
-        uses Map.! (F.NodeId 3) `shouldBe` [c,b]
-        uses Map.! (F.NodeId 4) `shouldBe` [b]
-        uses Map.! (F.NodeId 5) `shouldBe` [a]
-        uses Map.! (F.NodeId 6) `shouldBe` []
+        uses Map.! F.NodeId 0 `shouldBe` []
+        uses Map.! F.NodeId 1 `shouldBe` []
+        uses Map.! F.NodeId 2 `shouldBe` [a]
+        uses Map.! F.NodeId 3 `shouldBe` [c,b]
+        uses Map.! F.NodeId 4 `shouldBe` [b]
+        uses Map.! F.NodeId 5 `shouldBe` [a]
+        uses Map.! F.NodeId 6 `shouldBe` []
 
         -- putStrLn "InterferenceGraph:"
         -- putStrLn $ G.toDot igraphGraph
 
-        (Map.size liveMap) `shouldBe` length nodes
+        Map.size liveMap `shouldBe` length nodes
 
-        liveMap Map.! (F.NodeId 0) `shouldBe` Set.fromList [1, 3]
-        liveMap Map.! (F.NodeId 1) `shouldBe` Set.fromList [1, 3]
-        liveMap Map.! (F.NodeId 2) `shouldBe` Set.fromList [2, 3]
-        liveMap Map.! (F.NodeId 3) `shouldBe` Set.fromList [2, 3]
-        liveMap Map.! (F.NodeId 4) `shouldBe` Set.fromList [1, 3]
-        liveMap Map.! (F.NodeId 5) `shouldBe` Set.fromList [1, 3]
-        liveMap Map.! (F.NodeId 6) `shouldBe` Set.fromList []
+        liveMap Map.! F.NodeId 0 `shouldBe` Set.fromList [1, 3]
+        liveMap Map.! F.NodeId 1 `shouldBe` Set.fromList [1, 3]
+        liveMap Map.! F.NodeId 2 `shouldBe` Set.fromList [2, 3]
+        liveMap Map.! F.NodeId 3 `shouldBe` Set.fromList [2, 3]
+        liveMap Map.! F.NodeId 4 `shouldBe` Set.fromList [1, 3]
+        liveMap Map.! F.NodeId 5 `shouldBe` Set.fromList [1, 3]
+        liveMap Map.! F.NodeId 6 `shouldBe` Set.fromList []
 
-        (G.nodeId $ tnode Map.! a) `shouldBe` L.NodeId 0
-        (G.nodeId $ tnode Map.! b) `shouldBe` L.NodeId 1
-        (G.nodeId $ tnode Map.! c) `shouldBe` L.NodeId 2
+        G.nodeId (tnode Map.! a) `shouldBe` L.NodeId 0
+        G.nodeId (tnode Map.! b) `shouldBe` L.NodeId 1
+        G.nodeId (tnode Map.! c) `shouldBe` L.NodeId 2
 
         gtemp Map.! L.NodeId 0 `shouldBe` a
         gtemp Map.! L.NodeId 1 `shouldBe` b
@@ -102,4 +102,4 @@ main = hspec $ do
         G.hasEdge igraphGraph (L.NodeId 1) (L.NodeId 2) `shouldBe` True
         G.hasEdge igraphGraph (L.NodeId 2) (L.NodeId 1) `shouldBe` True
 
-        (length $ G.edges igraphGraph) `shouldBe` 3
+        length (G.edges igraphGraph) `shouldBe` 3

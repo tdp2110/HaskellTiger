@@ -30,7 +30,7 @@ test_directions1 = TestCase (
   let
     ast = parse text1
     escapes = findEscapes ast
-  in do
+  in
     assertEqual "directions1" [ (Symbol "y", [LetDec 0, FunDec 0])] escapes
   )
 
@@ -70,7 +70,7 @@ test_directions2 = TestCase (
   let
     ast = parse text2
     escapes = findEscapes ast
-  in do
+  in
     assertEqual "directions1" [(Symbol "y", [LetDec 2,FunDec 0]),
                                (Symbol "N",[]),
                                (Symbol "M",[LetDec 2,FunDec 0,FunBody])]
@@ -120,7 +120,7 @@ test_subscript = TestCase (
            "  foo(2)\n" ++
            "end"
     escapes = findEscapes $ parse text
-  in do
+  in
     assertEqual "subscript" [ (Symbol "N", [])
                             , (Symbol "arr", []) ]
         escapes
@@ -140,7 +140,7 @@ test_assign = TestCase (
            "    println(itoa(x))\n" ++
            "end"
     escapes = findEscapes $ parse text
-  in do
+  in
     assertEqual "assign" [(Symbol "x", [])] escapes
   )
 
@@ -162,7 +162,7 @@ test_recursiveTypes = TestCase (
            "    println(itoa(sum(xs)))\n" ++
            "end"
     escapes = findEscapes $ parse text
-  in do
+  in
     assertEqual "recursive" [(Symbol "nilIntList", [])] escapes
   )
 
@@ -179,7 +179,7 @@ tests = TestList [ TestLabel "test_directions1" test_directions1
 main :: IO Counts
 main = do
   results <- runTestTT tests
-  if (errors results + failures results == 0)
+  if errors results + failures results == 0
     then
     exitWith ExitSuccess
     else
