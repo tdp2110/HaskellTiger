@@ -4,11 +4,12 @@ import qualified Graph
 import qualified Liveness as L
 import qualified X64Frame
 
-import Control.Monad (when, forM_)
+import Control.Monad (when, unless, forM_)
 import Control.Monad.Loops (whileM_, untilM_)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State (StateT, runStateT, put, get)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, ask)
+import Data.Bifunctor (bimap)
 import Data.Function (on)
 import Data.Functor.Identity
 import Data.List
@@ -68,10 +69,10 @@ data AllocatorState = AllocatorState {
   deriving (Show)
 
 showAdj :: AllocatorState -> String
-showAdj (AllocatorState { adjSet=adjSet'
-                        , coalescedNodes=coalescedNodes'
-                        , worklistMoves=worklistMoves'
-                        , selectStack=selectStack' }) =
+showAdj AllocatorState { adjSet=adjSet'
+                       , coalescedNodes=coalescedNodes'
+                       , worklistMoves=worklistMoves'
+                       , selectStack=selectStack' } =
   "graph {\n\t" ++ edges ++ "\n\t" ++  moves ++ "\n}"
   where
     edges = intercalate "\n\t" $ fmap showEdge filteredEdges
@@ -79,10 +80,10 @@ showAdj (AllocatorState { adjSet=adjSet'
                                $ filterNodes
                                $ Set.toList worklistMoves'
     showEdge (nodeId1, nodeId2) = show nodeId1 ++ " -- " ++ show nodeId2
-    filterDone = filter (\(a,b) -> (not $ elem a selectStack')
-                                        && (not $ elem a coalescedNodes')
-                                        && (not $ elem b selectStack')
-                                        && (not $ elem b coalescedNodes')
+    filterDone = filter (\(a,b) -> (a `notElem` selectStack')
+                                        && (a `notElem` coalescedNodes')
+                                        && (b `notElem` selectStack')
+                                        && (b `notElem` coalescedNodes')
                                    )
     filterLess = filter (uncurry (<))
     filterNodes = filterDone . filterLess
@@ -126,9 +127,8 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode }
         (\(Just nodeId, reg) -> (nodeId, regToColor Map.! reg))
         $ filter
           (\(maybeNodeId, _) -> isJust maybeNodeId)
-          $ fmap
-              (\(tempId, reg) -> (fmap Graph.nodeId $ Map.lookup tempId tnode, reg))
-              $ Map.toList initAlloc
+          $ (\(tempId, reg) -> (Graph.nodeId <$> Map.lookup tempId tnode, reg))
+              <$> Map.toList initAlloc
 
     ( moveList'
       , worklistMoves'
@@ -212,17 +212,17 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode }
         graph = L.graph igraph
         nodeIds = fmap Graph.nodeId $ Map.elems $ Graph.nodes graph
         tempIds = fmap (\nodeId -> (gtemp Map.! nodeId, nodeId)) nodeIds
-        isNotInital = (\(tempId,_) -> case Map.lookup tempId initAlloc of
-                                    Just _ -> False
-                                    _      -> True)
+        isNotInital (tempId,_) = case Map.lookup tempId initAlloc of
+                                   Just _ -> False
+                                   _      -> True
       in
-        Set.fromList $ fmap snd $ filter isNotInital tempIds
+        Set.fromList $ snd <$> filter isNotInital tempIds
 
     buildGraph :: Allocator ()
     buildGraph =
       let
         graph = L.graph igraph
-      in do
+      in
         mapM_ processNode $ Map.elems $ Graph.nodes graph
 
     processNode :: L.Node -> Allocator ()
@@ -230,7 +230,7 @@ color igraph@L.IGraph { L.gtemp=gtemp, L.tnode=tnode }
       let
         nodeId = Graph.nodeId node
         successors = Graph.succ node
-        in do
+        in
         mapM_ (addEdge nodeId) successors
 
     loop :: Allocator ()
@@ -267,21 +267,20 @@ build :: L.IGraph ->
          , Set L.TempId -- coloredNodes
          , Set L.NodeId -- precolored
          )
-build (L.IGraph { L.graph=graph
-                , L.gtemp=gtemp
-                , L.moves=moves }) initAlloc =
+build L.IGraph { L.graph=graph
+               , L.gtemp=gtemp
+               , L.moves=moves } initAlloc =
   let
     nodeList = Map.elems $ Graph.nodes graph
     lookups = fmap
                 (\n -> let
-                         temp = gtemp Map.! (Graph.nodeId n)
+                         temp = gtemp Map.! Graph.nodeId n
                        in
                          (Set.member temp initAlloc, temp, n)
                 )
                 nodeList
-    nodesInInit = fmap
-                    (\(_,t,n) -> (t,n))
-                    $ filter
+    nodesInInit = (\(_,t,n) -> (t,n))
+                    <$> filter
                         (\(tempIsInitial,_,_) -> tempIsInitial)
                         lookups
     precolored' = Set.fromList $ fmap
@@ -291,7 +290,7 @@ build (L.IGraph { L.graph=graph
                 fst
                 nodesInInit
     movePairs = fmap
-                  (\(n1, n2) -> (Graph.nodeId n1, Graph.nodeId n2))
+                  (bimap Graph.nodeId Graph.nodeId)
                   moves
     notPrecolored = not . flip Set.member precolored'
     movesToAddSrcs = (\m@(src,_) -> (src, m))
@@ -360,7 +359,7 @@ addEdge u v = do
       adjSet'' = adjSet' `Set.union` Set.fromList [ (u,v), (v,u) ]
       in do
       -- TODO: DRY this up
-      when (not (Set.member u precolored')) $
+      unless (Set.member u precolored') $
         let
           adjList'' =
             let adjList_u' = Set.insert v (Map.findWithDefault Set.empty u adjList') in
@@ -371,7 +370,7 @@ addEdge u v = do
           in
           put s1 { degree=degree''
                  , adjList=adjList'' }
-      when (not (Set.member v precolored')) $ do
+      unless (Set.member v precolored') $ do
         AllocatorState { degree=degree_v
                        , adjList=adjList_v } <- get
         let
@@ -393,7 +392,7 @@ adjacent n = do
   AllocatorState { selectStack=selectStack'
                  , coalescedNodes=coalescedNodes'
                  , adjList=adjList' } <- get
-  pure $ (Map.findWithDefault Set.empty n adjList')
+  pure $ Map.findWithDefault Set.empty n adjList'
          `Set.difference`
          (Set.fromList selectStack' `Set.union` coalescedNodes')
 
@@ -562,7 +561,7 @@ addWorkList u = do
                         , precolored=precolored' } <- lift ask
   isMoveRelated <- moveRelated u
   d <- findDegree u
-  when ((not $ Set.member u precolored') &&
+  when (not (Set.member u precolored') &&
         not isMoveRelated &&
         (d < numColors')) $ let
     freezeWorklist'' = Set.delete u freezeWorklist'
