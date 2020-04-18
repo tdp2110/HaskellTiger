@@ -6,7 +6,6 @@ import qualified Temp
 
 import Control.Monad.Trans.Writer (Writer, tell, execWriter)
 import Data.DList (DList, singleton, toList, fromList)
-import Data.List (foldr)
 
 import Prelude hiding (GT, LT, EQ)
 

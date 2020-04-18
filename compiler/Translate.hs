@@ -10,7 +10,6 @@ import qualified TreeIR
 import qualified X64Frame
 
 import Control.Monad.Trans.State (State, get, put, runState)
-import Control.Monad (mapM)
 import Data.List
 import Prelude hiding (exp)
 
