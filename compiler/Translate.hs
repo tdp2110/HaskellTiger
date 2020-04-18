@@ -277,12 +277,6 @@ binOp expLeft expRight op gen =
   in
     (resExp, gen3)
 
-divByConst :: Exp -> Int -> Temp.Generator -> (Exp, Temp.Generator)
-divByConst expr d gen = -- we can assume d /= 0 in here, from the usage in Semant
-  let (e, gen') = unEx expr gen
-      opExp     = TreeIR.BINOP (TreeIR.DIV, e, TreeIR.CONST d)
-  in  (Ex opExp, gen')
-
 ifThen :: Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
 ifThen testExpE thenExpE gen =
   let
