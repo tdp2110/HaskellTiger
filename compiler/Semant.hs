@@ -231,7 +231,7 @@ newLevel escapes debugInfo = do
   env <- askEnv
   let (nextLab, gen') = Temp.newlabel gen
       (gen'', lev') =
-          newLevelFn (x64 env) debugInfo (parentLev, nextLab, escapes) gen'
+        newLevelFn (x64 env) debugInfo (parentLev, nextLab, escapes) gen'
   put st { generator = gen'' }
   pure lev'
 
@@ -448,42 +448,44 @@ transExp (A.RecordExp fieldSymExpPosns typSym pos) = do
   maybeRecordTy <- lookupT pos tenv2 typSym
   case maybeRecordTy of
     recordTy@(Types.RECORD (sym2ty, _)) ->
-      let
-        expectedSyms = fmap fst sym2ty
-        actualSyms   = fmap (\(sym, _, _) -> sym) fieldSymExpPosns
-      in
-        if actualSyms /= expectedSyms
-          then
-            throwT pos
-            $  "incompatible field names: expected "
-            ++ show expectedSyms
-            ++ " but record expression has "
-            ++ show actualSyms
-          else do
-            actualFieldExpTys <- mapM (\(_, expr, _) -> transExp expr)
-                                      fieldSymExpPosns
-            let
-              expectedFieldTys = fmap snd sym2ty
-              actualFieldTys   = fmap ty actualFieldExpTys
-              fieldPosns =
-                fmap (\(_, _, fieldPos) -> fieldPos) fieldSymExpPosns
-              exps = fmap exp actualFieldExpTys
-            case
-              filter
-                (\(_, expectedTy, actualTy, _) ->
-                  not $ typesAreCompatible expectedTy actualTy
-                )
-                (zip4 expectedSyms expectedFieldTys actualFieldTys fieldPosns)
-              of
-                [] -> translate (Translate.record exps) recordTy
-                ((sym, expectedTy, actualTy, fieldPos) : _) ->
-                  throwT fieldPos
-                    $  "in record exp, field "
-                    ++ show sym
-                    ++ " should have type "
-                    ++ show expectedTy
-                    ++ " but has type "
-                    ++ show actualTy
+      let expectedSyms = fmap fst sym2ty
+          actualSyms   = fmap (\(sym, _, _) -> sym) fieldSymExpPosns
+      in  if actualSyms /= expectedSyms
+            then
+              throwT pos
+              $  "incompatible field names: expected "
+              ++ show expectedSyms
+              ++ " but record expression has "
+              ++ show actualSyms
+            else do
+              actualFieldExpTys <- mapM (\(_, expr, _) -> transExp expr)
+                                        fieldSymExpPosns
+              let
+                expectedFieldTys = fmap snd sym2ty
+                actualFieldTys   = fmap ty actualFieldExpTys
+                fieldPosns =
+                  fmap (\(_, _, fieldPos) -> fieldPos) fieldSymExpPosns
+                exps = fmap exp actualFieldExpTys
+              case
+                  filter
+                    (\(_, expectedTy, actualTy, _) ->
+                      not $ typesAreCompatible expectedTy actualTy
+                    )
+                    (zip4 expectedSyms
+                          expectedFieldTys
+                          actualFieldTys
+                          fieldPosns
+                    )
+                of
+                  [] -> translate (Translate.record exps) recordTy
+                  ((sym, expectedTy, actualTy, fieldPos) : _) ->
+                    throwT fieldPos
+                      $  "in record exp, field "
+                      ++ show sym
+                      ++ " should have type "
+                      ++ show expectedTy
+                      ++ " but has type "
+                      ++ show actualTy
     t ->
       throwT pos
         $  "only record types may appear as the symbol in a "
@@ -603,11 +605,9 @@ transExp (A.IfExp testExpr thenExpr maybeElseExpr pos) = do
             ++ " but elseExp has type "
             ++ show elseTy
           else if thenTy == Types.UNIT
-            then translate
-              (Translate.ifThenElseStm testExp thenExp elseExp)
-              thenTy
-            else translate (Translate.ifThenElse testExp thenExp elseExp)
+            then translate (Translate.ifThenElseStm testExp thenExp elseExp)
                            thenTy
+            else translate (Translate.ifThenElse testExp thenExp elseExp) thenTy
 transExp (A.WhileExp testExp bodyExp pos) = do
   ExpTy { exp = testE, ty = testTy } <- transExp testExp
   nextBreakTarget                    <- nextLabel
@@ -919,7 +919,7 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
               put st' { generator = gen' }
               -- the current level has changed! we need to update all entries in the env which use it!!
               let valenv' =
-                      Map.insert name (Env.VarEntry access recTy) (venv' env)
+                    Map.insert name (Env.VarEntry access recTy) (venv' env)
                   valenv'' = updateLevelInEnv (level st') valenv'
               pure (env { venv' = valenv'' }, [initTreeIR])
       _ ->
@@ -928,25 +928,21 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
           ++ "constrained by a RECORD type"
     else
       let
-      result =
-        let
-          (access, st') = allocLocal escape st env
-        in do
-          put st'
-          let
-            (initTreeIR, gen') = Translate.initExp access (level st') initExpr $ generator st'
-            in do
-            put st'{generator=gen'}
-            let
-              valenv' = Map.insert
-                          name
-                          (Env.VarEntry access actualInitTy)
-                          (venv' env)
-              valenv'' = updateLevelInEnv (level st') valenv'
-              in
-              pure (env { venv'=valenv'' }, [initTreeIR])
-      in
-        case maybeTypeAnnotation of
+        result =
+          let (access, st') = allocLocal escape st env
+          in
+            do
+              put st'
+              let (initTreeIR, gen') =
+                    Translate.initExp access (level st') initExpr
+                      $ generator st'
+              put st' { generator = gen' }
+              let
+                valenv' =
+                  Map.insert name (Env.VarEntry access actualInitTy) (venv' env)
+                valenv'' = updateLevelInEnv (level st') valenv'
+              pure (env { venv' = valenv'' }, [initTreeIR])
+      in  case maybeTypeAnnotation of
             Just typeAnnotation -> if typeAnnotation /= actualInitTy
               then
                 throwT posn
@@ -958,7 +954,7 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
                 ++ show actualInitTy
               else result
             Nothing -> result
-   where
+ where
   updateLevelInEnv
     :: Level
     -> Map.Map Symbol.Symbol Env.EnvEntry
@@ -984,8 +980,8 @@ transDec (A.FunctionDec fundecs) = do
   st  <- get
   env <- askEnv
   let resultMaybeTys =
-          ((\(typename, _) -> Map.lookup typename $ tenv2 env) <=< A.result)
-            <$> fundecs
+        ((\(typename, _) -> Map.lookup typename $ tenv2 env) <=< A.result)
+          <$> fundecs
       maybeFormalsTys = mapM (mapM (computeFormalTy env) . A.params) fundecs
   case maybeFormalsTys of
     Left err -> throwErr err
@@ -1059,7 +1055,7 @@ transDec (A.FunctionDec fundecs) = do
               pushFrags frags
               state''@SemantState { generator = gen } <- get
               let (frag, gen') =
-                      Translate.functionDec (level state') bodyExp gen
+                    Translate.functionDec (level state') bodyExp gen
               pushFrag frag
               put state'' { generator = gen' }
               pure (env, initializers)
@@ -1071,9 +1067,9 @@ transDec (A.TypeDec tydecs) =
         Right ()  -> do
           env <- askEnv
           let step (env', initializers) (CyclicSCC syms) =
-                  transCyclicDecls (env', initializers) tydecs syms
+                transCyclicDecls (env', initializers) tydecs syms
               step (env', initializers) (AcyclicSCC sym) =
-                  transAcyclicDecl (env', initializers) tydecs sym
+                transAcyclicDecl (env', initializers) tydecs sym
           foldM step (env, []) stronglyConnComps
 
 extractHeaderM
@@ -1143,8 +1139,7 @@ transCyclicDecls (env, initializers) tydecs syms = do
       pushFrags frags
       pure
         ( env
-          { tenv2 = tieTheKnot tenv'
-                               (Map.fromList $ zip syms translatedBodies)
+          { tenv2 = tieTheKnot tenv' (Map.fromList $ zip syms translatedBodies)
           }
         , initializers
         )
