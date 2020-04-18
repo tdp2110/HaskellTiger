@@ -417,9 +417,8 @@ letExpM initializers bodyExp = do
   gen <- get
   let (body           , gen' ) = unEx bodyExp gen
       (initializerStms, gen'') = runState (mapM unNxM initializers) gen'
-    in  do
-        put gen''
-        pure $ Ex $ TreeIR.ESEQ (TreeIR.makeSeq initializerStms, body)
+  put gen''
+  pure $ Ex $ TreeIR.ESEQ (TreeIR.makeSeq initializerStms, body)
 
 letExp :: [Exp] -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
 letExp initializers body = runState (letExpM initializers body)
@@ -530,18 +529,16 @@ unExM :: Exp -> State Temp.Generator TreeIR.Exp
 unExM exp = do
   gen <- get
   let (treeExp, gen') = unEx exp gen
-    in  do
-        put gen'
-        pure treeExp
+  put gen'
+  pure treeExp
 
 -- TODO: how to dry up unExM and unNxM? C++ templates (with duck-typing) could do it ...
 unNxM :: Exp -> State Temp.Generator TreeIR.Stm
 unNxM exp = do
   gen <- get
   let (treeStm, gen') = unNx exp gen
-    in  do
-        put gen'
-        pure treeStm
+  put gen'
+  pure treeStm
 
 callM
   :: X64Level
@@ -555,16 +552,14 @@ callM funLevel callerLevel funlab params hasRetVal = do
   let (treeParams, gen') = runState (mapM unExM params) gen
       escapes            = x64Formals funLevel
       callerParentLevel  = x64Parent callerLevel
-    in  do
-        put gen'
-        pure $ Ex $ case x64Parent funLevel of
-          X64Outermost -> X64Frame.externalCall funlab treeParams hasRetVal
-          funParentLevel ->
-            let sl = if funParentLevel == callerParentLevel
-                  then X64Frame.staticLinkExp $ x64Frame callerLevel
-                  else X64Frame.frameExp $ x64Frame callerLevel
-            in  TreeIR.CALL
-                  (TreeIR.NAME funlab, sl : treeParams, escapes, hasRetVal)
+  put gen'
+  pure $ Ex $ case x64Parent funLevel of
+    X64Outermost -> X64Frame.externalCall funlab treeParams hasRetVal
+    funParentLevel ->
+      let sl = if funParentLevel == callerParentLevel
+            then X64Frame.staticLinkExp $ x64Frame callerLevel
+            else X64Frame.frameExp $ x64Frame callerLevel
+      in  TreeIR.CALL (TreeIR.NAME funlab, sl : treeParams, escapes, hasRetVal)
 
 call
   :: X64Level

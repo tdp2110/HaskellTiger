@@ -232,17 +232,15 @@ newLevel escapes debugInfo = do
   let (nextLab, gen') = Temp.newlabel gen
       (gen'', lev') =
           newLevelFn (x64 env) debugInfo (parentLev, nextLab, escapes) gen'
-    in do
-      put st { generator = gen'' }
-      pure lev'
+  put st { generator = gen'' }
+  pure lev'
 
 allocLocalT :: Bool -> Translator Access
 allocLocalT escape = do
   st@SemantState { level = lev, generator = gen } <- get
   let (gen', lev', access) = allocLocalFn lev gen $ toEscape escape
-    in do
-      put st { level = lev', generator = gen' }
-      pure access
+  put st { level = lev', generator = gen' }
+  pure access
 
 allocLocal :: Bool -> SemantState -> SemantEnv -> (Access, SemantState)
 allocLocal escape st env = case runTransT st env $ allocLocalT escape of
@@ -347,40 +345,39 @@ transExp (A.CallExp funcSym argExps pos) = do
     (Env.FunEntry funLevel label formalsTys resultTy) -> do
       paramExpTys <- mapM transExp argExps
       let paramTys = fmap ty paramExpTys
-        in
-        if length formalsTys /= length paramTys
-          then
-            throwT pos
-            $  "function "
-            ++ show funcSym
-            ++ " expects "
-            ++ show (length formalsTys)
-            ++ " parameters but was passed "
-            ++ show (length paramTys)
-          else
-            case
-              filter (\(ty1, ty2, _) -> ty1 /= ty2)
-                     (zip3 formalsTys paramTys [0 :: Integer ..])
-            of
-              [] -> do
-                SemantState { level = thisLevel } <- get
-                let argExpTreeIRs = fmap exp paramExpTys
-                  in translate
-                      (  Translate.call funLevel thisLevel label argExpTreeIRs
-                      $  resultTy
-                      /= Types.UNIT
-                      )
-                      resultTy
-              ((formalTy, paramTy, ix) : _) ->
-                throwT pos
-                  $  "parameter "
-                  ++ show ix
-                  ++ " of func "
-                  ++ show funcSym
-                  ++ " requires type "
-                  ++ show formalTy
-                  ++ " but was passed a value of type "
-                  ++ show paramTy
+      if length formalsTys /= length paramTys
+        then
+          throwT pos
+          $  "function "
+          ++ show funcSym
+          ++ " expects "
+          ++ show (length formalsTys)
+          ++ " parameters but was passed "
+          ++ show (length paramTys)
+        else
+          case
+            filter (\(ty1, ty2, _) -> ty1 /= ty2)
+                   (zip3 formalsTys paramTys [0 :: Integer ..])
+          of
+            [] -> do
+              SemantState { level = thisLevel } <- get
+              let argExpTreeIRs = fmap exp paramExpTys
+              translate
+                (  Translate.call funLevel thisLevel label argExpTreeIRs
+                $  resultTy
+                /= Types.UNIT
+                )
+                resultTy
+            ((formalTy, paramTy, ix) : _) ->
+              throwT pos
+                $  "parameter "
+                ++ show ix
+                ++ " of func "
+                ++ show funcSym
+                ++ " requires type "
+                ++ show formalTy
+                ++ " but was passed a value of type "
+                ++ show paramTy
     (Env.VarEntry _ t) ->
       throwT pos $ "only functions are callable: found type " ++ show t
 transExp (A.OpExp (A.IntExp i1) A.PlusOp (A.IntExp i2) _) =
@@ -471,13 +468,12 @@ transExp (A.RecordExp fieldSymExpPosns typSym pos) = do
               fieldPosns =
                 fmap (\(_, _, fieldPos) -> fieldPos) fieldSymExpPosns
               exps = fmap exp actualFieldExpTys
-              in
-              case
-                filter
-                  (\(_, expectedTy, actualTy, _) ->
-                    not $ typesAreCompatible expectedTy actualTy
-                  )
-                  (zip4 expectedSyms expectedFieldTys actualFieldTys fieldPosns)
+            case
+              filter
+                (\(_, expectedTy, actualTy, _) ->
+                  not $ typesAreCompatible expectedTy actualTy
+                )
+                (zip4 expectedSyms expectedFieldTys actualFieldTys fieldPosns)
               of
                 [] -> translate (Translate.record exps) recordTy
                 ((sym, expectedTy, actualTy, fieldPos) : _) ->
@@ -503,7 +499,7 @@ transExp (A.SeqExp expAndPosns) = do
       transFn = case typ of
         Types.UNIT -> Translate.seqStm exps
         _          -> Translate.seqExp exps
-    in translate transFn typ
+  translate transFn typ
 transExp (A.AssignExp (A.SubscriptVar var subscriptExpr subscriptPos) expr pos)
   = do
     ExpTy { exp = varExp, ty = varTy }             <- transVar var
@@ -584,34 +580,34 @@ transExp (A.IfExp testExpr thenExpr maybeElseExpr pos) = do
   ExpTy { exp = testExp, ty = testTy } <- transExp testExpr
   ExpTy { exp = thenExp, ty = thenTy } <- transExp thenExpr
   let maybeElseExpTy = fmap transExp maybeElseExpr
-    in if testTy /= Types.INT
+  if testTy /= Types.INT
+    then
+      throwT pos
+      $  "in ifExp, the test expression must be integral: "
+      ++ "found type="
+      ++ show testTy
+    else case maybeElseExpTy of
+      Nothing -> if thenTy /= Types.UNIT
         then
           throwT pos
-          $  "in ifExp, the test expression must be integral: "
-          ++ "found type="
-          ++ show testTy
-        else case maybeElseExpTy of
-          Nothing -> if thenTy /= Types.UNIT
-            then
-              throwT pos
-              $  "in if-then exp (without else), the if body "
-              ++ "must yield no value"
-            else translate (Translate.ifThen testExp thenExp) thenTy
-          Just elseExpTyM -> do
-            ExpTy { exp = elseExp, ty = elseTy } <- elseExpTyM
-            if not $ typesAreCompatible thenTy elseTy
-              then
-                throwT pos
-                $  "incompatible types found in ifExp: thenExp has type "
-                ++ show thenTy
-                ++ " but elseExp has type "
-                ++ show elseTy
-              else if thenTy == Types.UNIT
-                then translate
-                  (Translate.ifThenElseStm testExp thenExp elseExp)
-                  thenTy
-                else translate (Translate.ifThenElse testExp thenExp elseExp)
-                               thenTy
+          $  "in if-then exp (without else), the if body "
+          ++ "must yield no value"
+        else translate (Translate.ifThen testExp thenExp) thenTy
+      Just elseExpTyM -> do
+        ExpTy { exp = elseExp, ty = elseTy } <- elseExpTyM
+        if not $ typesAreCompatible thenTy elseTy
+          then
+            throwT pos
+            $  "incompatible types found in ifExp: thenExp has type "
+            ++ show thenTy
+            ++ " but elseExp has type "
+            ++ show elseTy
+          else if thenTy == Types.UNIT
+            then translate
+              (Translate.ifThenElseStm testExp thenExp elseExp)
+              thenTy
+            else translate (Translate.ifThenElse testExp thenExp elseExp)
+                           thenTy
 transExp (A.WhileExp testExp bodyExp pos) = do
   ExpTy { exp = testE, ty = testTy } <- transExp testExp
   nextBreakTarget                    <- nextLabel
@@ -780,9 +776,8 @@ transExp (A.LetExp decs bodyExp letPos) = do
             Types.UNIT -> do
               st3@SemantState { generator = gen } <- get
               let (stm, gen') = Translate.unNx expr gen
-                in do
-                    put st3 { generator = gen' }
-                    pure ExpTy { exp = Translate.Nx stm, ty = t }
+              put st3 { generator = gen' }
+              pure ExpTy { exp = Translate.Nx stm, ty = t }
             _ -> pure e
 
 typesAreCompatible :: Types.Ty -> Types.Ty -> Bool
@@ -920,19 +915,19 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
         let (access, st') = allocLocal escape st env
             (initTreeIR, gen') =
                 Translate.initExp access lev initExpr $ generator st'
-        in do
+        in  do
               put st' { generator = gen' }
               -- the current level has changed! we need to update all entries in the env which use it!!
               let valenv' =
                       Map.insert name (Env.VarEntry access recTy) (venv' env)
                   valenv'' = updateLevelInEnv (level st') valenv'
-                in pure (env { venv' = valenv'' }, [initTreeIR])
+              pure (env { venv' = valenv'' }, [initTreeIR])
       _ ->
         throwT posn
           $  "nil expression declarations must be "
           ++ "constrained by a RECORD type"
     else
-    let
+      let
       result =
         let
           (access, st') = allocLocal escape st env
@@ -963,7 +958,7 @@ transDec (A.VarDec name escape maybeTypenameAndPos initExp posn) = do
                 ++ show actualInitTy
               else result
             Nothing -> result
- where
+   where
   updateLevelInEnv
     :: Level
     -> Map.Map Symbol.Symbol Env.EnvEntry
@@ -992,21 +987,21 @@ transDec (A.FunctionDec fundecs) = do
           ((\(typename, _) -> Map.lookup typename $ tenv2 env) <=< A.result)
             <$> fundecs
       maybeFormalsTys = mapM (mapM (computeFormalTy env) . A.params) fundecs
-    in case maybeFormalsTys of
-        Left err -> throwErr err
-        Right formalsTys ->
-          let resultTys = fmap resultTyFun resultMaybeTys
-          in  case
-                  runTransT st env
-                    $ extractHeaderM (venv' env) fundecs formalsTys resultTys
-                of
-                  Left  err                             -> throwErr err
-                  Right ((headerVEnv, newState), frags) -> do
-                    put newState
-                    pushFrags frags
-                    foldM transBody
-                          (env { venv' = headerVEnv }, [])
-                          (zip3 fundecs formalsTys resultTys)
+  case maybeFormalsTys of
+    Left err -> throwErr err
+    Right formalsTys ->
+      let resultTys = fmap resultTyFun resultMaybeTys
+      in  case
+              runTransT st env
+                $ extractHeaderM (venv' env) fundecs formalsTys resultTys
+            of
+              Left  err                             -> throwErr err
+              Right ((headerVEnv, newState), frags) -> do
+                put newState
+                pushFrags frags
+                foldM transBody
+                      (env { venv' = headerVEnv }, [])
+                      (zip3 fundecs formalsTys resultTys)
  where
   computeFormalTy env (A.Field fieldName esc fieldTyp fieldPos) =
     case Map.lookup fieldTyp (tenv2 env) of
@@ -1046,30 +1041,28 @@ transDec (A.FunctionDec fundecs) = do
                 _        -> error $ "must not get here " ++ show
                   (formalAccesses $ level st) -- drop first access, the static link
           wtf -> error $ "WTF: " ++ show wtf
-        in
-        case runTransT st { level = funLevel } bodyEnv (transExp funBody) of
-          Left err -> throwErr err
-          Right ((ExpTy { exp = bodyExp, ty = bodyTy }, state'), frags) ->
-            if resultTy /= Types.UNIT && resultTy /= bodyTy
-              then
-                throwT funPos
-                $  "computed type of function body "
-                ++ show bodyTy
-                ++ " and annotated type "
-                ++ show resultTy
-                ++ " do not match"
-              else do
-                put st { generator = generator state'
-                       , counter'  = counter' state'
-                       }
-                pushFrags frags
-                state''@SemantState { generator = gen } <- get
-                let (frag, gen') =
-                        Translate.functionDec (level state') bodyExp gen
-                  in do
-                      pushFrag frag
-                      put state'' { generator = gen' }
-                      pure (env, initializers)
+      case runTransT st { level = funLevel } bodyEnv (transExp funBody) of
+        Left err -> throwErr err
+        Right ((ExpTy { exp = bodyExp, ty = bodyTy }, state'), frags) ->
+          if resultTy /= Types.UNIT && resultTy /= bodyTy
+            then
+              throwT funPos
+              $  "computed type of function body "
+              ++ show bodyTy
+              ++ " and annotated type "
+              ++ show resultTy
+              ++ " do not match"
+            else do
+              put st { generator = generator state'
+                     , counter'  = counter' state'
+                     }
+              pushFrags frags
+              state''@SemantState { generator = gen } <- get
+              let (frag, gen') =
+                      Translate.functionDec (level state') bodyExp gen
+              pushFrag frag
+              put state'' { generator = gen' }
+              pure (env, initializers)
 
 transDec (A.TypeDec tydecs) =
   let stronglyConnComps = typeSCCs tydecs
@@ -1081,7 +1074,7 @@ transDec (A.TypeDec tydecs) =
                   transCyclicDecls (env', initializers) tydecs syms
               step (env', initializers) (AcyclicSCC sym) =
                   transAcyclicDecl (env', initializers) tydecs sym
-            in foldM step (env, []) stronglyConnComps
+          foldM step (env, []) stronglyConnComps
 
 extractHeaderM
   :: Map.Map Symbol.Symbol Env.EnvEntry
@@ -1143,19 +1136,18 @@ transCyclicDecls (env, initializers) tydecs syms = do
       )
       []
       bodies
-    in
-    case runTransT state env' maybeTranslatedBodiesM of
-      Left  err -> throwErr err
-      Right ((translatedBodies, state'), frags) -> do
-        put state'
-        pushFrags frags
-        pure
-          ( env
-            { tenv2 = tieTheKnot tenv'
-                                 (Map.fromList $ zip syms translatedBodies)
-            }
-          , initializers
-          )
+  case runTransT state env' maybeTranslatedBodiesM of
+    Left  err -> throwErr err
+    Right ((translatedBodies, state'), frags) -> do
+      put state'
+      pushFrags frags
+      pure
+        ( env
+          { tenv2 = tieTheKnot tenv'
+                               (Map.fromList $ zip syms translatedBodies)
+          }
+        , initializers
+        )
  where
   tieTheKnot :: Env.TEnv -> Map.Map Symbol.Symbol Types.Ty -> Env.TEnv
   tieTheKnot tenv' bodyMap =
@@ -1182,13 +1174,12 @@ transAcyclicDecl
 transAcyclicDecl (env, initializers) tydecs sym = do
   state <- get
   let (A.TyDec _ typ _) = lookupTypeSym sym tydecs
-    in
-    case runTransT state env $ transTy typ of
-      Left  err                        -> throwErr err
-      Right ((typesTy, state'), frags) -> do
-        put state'
-        pushFrags frags
-        pure (env { tenv2 = Map.insert sym typesTy $ tenv2 env }, initializers)
+  case runTransT state env $ transTy typ of
+    Left  err                        -> throwErr err
+    Right ((typesTy, state'), frags) -> do
+      put state'
+      pushFrags frags
+      pure (env { tenv2 = Map.insert sym typesTy $ tenv2 env }, initializers)
 
 checkForIllegalCycles
   :: [A.TyDec] -> [SCC Symbol.Symbol] -> Either SemantError ()

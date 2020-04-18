@@ -81,7 +81,7 @@ instrsToGraph insts =
             )
           )
           nodes
-      in  pure (nodes, defs, uses, isMoves)
+    pure (nodes, defs, uses, isMoves)
 
   allocNodes :: GraphBuilder [(A.Inst, Node)]
   allocNodes = mapM

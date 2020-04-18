@@ -262,13 +262,13 @@ findEscapesVar sym = do
   let ourDepth     = depth state
       theEnv       = env state
       bindingMaybe = Map.lookup sym theEnv
-    in  case bindingMaybe of
-        Just (EnvEntry boundDepth boundPath Var) -> if ourDepth > boundDepth
-          then do
-            tell $ singleton (sym, boundPath)
-            pure ()
-          else pure ()
-        _ -> pure ()
+  case bindingMaybe of
+    Just (EnvEntry boundDepth boundPath Var) -> if ourDepth > boundDepth
+      then do
+        tell $ singleton (sym, boundPath)
+        pure ()
+      else pure ()
+    _ -> pure ()
   pure ()
 
 escapePaths :: A.Exp -> [(Symbol, AstPath)] -> A.Exp

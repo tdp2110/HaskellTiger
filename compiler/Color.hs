@@ -368,15 +368,14 @@ addEdge u v = do
           unless (Set.member v precolored') $ do
             AllocatorState { degree = degree_v, adjList = adjList_v } <- get
             let adjList'' =
-                    let adjList_v' = Set.insert
-                          u
-                          (Map.findWithDefault Set.empty v adjList_v)
-                    in  Map.insert v adjList_v' adjList_v
+                  let adjList_v' = Set.insert
+                        u
+                        (Map.findWithDefault Set.empty v adjList_v)
+                  in  Map.insert v adjList_v' adjList_v
                 oldDegree = Map.findWithDefault 0 v degree_v
                 degree''  = Map.insert v (oldDegree + 1) degree_v
-              in  do
-                  s2 <- get
-                  put s2 { degree = degree'', adjList = adjList'' }
+            s2 <- get
+            put s2 { degree = degree'', adjList = adjList'' }
           s3 <- get
           put s3 { adjSet = adjSet'' }
 
@@ -430,7 +429,7 @@ simplify = do
       let n                  = Set.findMin simplifyWorklist'
           simplifyWorklist'' = Set.delete n simplifyWorklist'
           selectStack''      = (n : selectStack')
-        in  do
+      in  do
             put st { simplifyWorklist = simplifyWorklist''
                    , selectStack      = selectStack''
                    }
@@ -450,13 +449,13 @@ decrementDegree m = do
       (freezeWorklist'', simplifyWorklist'') = if isMoveRelated
         then (Set.insert m freezeWorklist', simplifyWorklist')
         else (freezeWorklist', Set.insert m simplifyWorklist')
-    in  when (d == numColors') $ do
-        enableMoves $ Set.toList $ Set.insert m adj_m
-        put st { degree           = degree''
-               , spillWorklist    = spillWorklist''
-               , freezeWorklist   = freezeWorklist''
-               , simplifyWorklist = simplifyWorklist''
-               }
+  when (d == numColors') $ do
+    enableMoves $ Set.toList $ Set.insert m adj_m
+    put st { degree           = degree''
+           , spillWorklist    = spillWorklist''
+           , freezeWorklist   = freezeWorklist''
+           , simplifyWorklist = simplifyWorklist''
+           }
 
 enableMoves :: [L.NodeId] -> Allocator ()
 enableMoves = mapM_ enableMoves2
@@ -470,9 +469,9 @@ enableMoves = mapM_ enableMoves2
     when (Set.member m activeMoves')
       $ let activeMoves''   = Set.delete m activeMoves'
             worklistMoves'' = Set.insert m worklistMoves'
-         in  put st { activeMoves   = activeMoves''
-                     , worklistMoves = worklistMoves''
-                     }
+        in  put st { activeMoves   = activeMoves''
+                   , worklistMoves = worklistMoves''
+                   }
 
 coalesce :: Allocator ()
 coalesce = do
@@ -480,48 +479,43 @@ coalesce = do
     get
   AllocatorReadOnlyData { precolored = precolored' } <- lift ask
   let m@(x', y') = Set.findMin worklistMoves'
-    in
-    do
-      x <- getAlias x'
-      y <- getAlias y'
-      let
-        (u, v)             = if Set.member y precolored' then (y, x) else (x, y)
-        worklistMoves''    = Set.delete m worklistMoves'
-        coalescedMoves''   = Set.insert m coalescedMoves'
-        constrainedMoves'' = Set.insert m constrainedMoves'
-        activeMoves''      = Set.insert m activeMoves'
-        in
-        do
-          adjacent_u     <- adjacent u
-          adjacent_v     <- adjacent v
-          isConservative <-
-            conservative $ Set.toList $ adjacent_u `Set.union` adjacent_v
-          adjacents_ok <- mapM (`ok` u) $ Set.toList adjacent_v
-          if u == v
-            then do
-              put st { worklistMoves  = worklistMoves''
-                     , coalescedMoves = coalescedMoves''
-                     }
-              addWorkList u
-            else if Set.member v precolored' || Set.member (u, v) adjSet'
-              then do
-                put st { worklistMoves    = worklistMoves''
-                       , constrainedMoves = constrainedMoves''
-                       }
-                addWorkList u
-                addWorkList v
-              else
-                if (Set.member u precolored' && all (== True) adjacents_ok)
-                     || (not (Set.member u precolored') && isConservative)
-                  then do
-                    put st { worklistMoves  = worklistMoves''
-                           , coalescedMoves = coalescedMoves''
-                           }
-                    combine u v
-                    addWorkList u
-                  else put st { worklistMoves = worklistMoves''
-                              , activeMoves   = activeMoves''
-                              }
+  x <- getAlias x'
+  y <- getAlias y'
+  let (u, v)             = if Set.member y precolored' then (y, x) else (x, y)
+      worklistMoves''    = Set.delete m worklistMoves'
+      coalescedMoves''   = Set.insert m coalescedMoves'
+      constrainedMoves'' = Set.insert m constrainedMoves'
+      activeMoves''      = Set.insert m activeMoves'
+  adjacent_u     <- adjacent u
+  adjacent_v     <- adjacent v
+  isConservative <-
+    conservative $ Set.toList $ adjacent_u `Set.union` adjacent_v
+  adjacents_ok <- mapM (`ok` u) $ Set.toList adjacent_v
+  if u == v
+    then do
+      put st { worklistMoves  = worklistMoves''
+             , coalescedMoves = coalescedMoves''
+             }
+      addWorkList u
+    else if Set.member v precolored' || Set.member (u, v) adjSet'
+      then do
+        put st { worklistMoves    = worklistMoves''
+               , constrainedMoves = constrainedMoves''
+               }
+        addWorkList u
+        addWorkList v
+      else
+        if (Set.member u precolored' && all (== True) adjacents_ok)
+             || (not (Set.member u precolored') && isConservative)
+          then do
+            put st { worklistMoves  = worklistMoves''
+                   , coalescedMoves = coalescedMoves''
+                   }
+            combine u v
+            addWorkList u
+          else put st { worklistMoves = worklistMoves''
+                      , activeMoves   = activeMoves''
+                      }
 
 findDegree :: L.NodeId -> Allocator Int
 findDegree n = do
@@ -562,7 +556,7 @@ conservative nodes = do
   AllocatorState { degree = degree' }              <- get
   AllocatorReadOnlyData { numColors = numColors' } <- lift ask
   let k = length $ filter (hasSignificantDegree degree' numColors') nodes
-    in  pure $ k < numColors'
+  pure $ k < numColors'
  where
   hasSignificantDegree degree' numColors' n =
     Map.findWithDefault 0 n degree' >= numColors'
@@ -587,30 +581,29 @@ combine u v = do
       mv_v             = moveList' Map.! v
       mv_u'            = union mv_u mv_v
       moveList''       = Map.insert u mv_u' moveList'
-    in  do
-        s2 <- get
-        put s2 { coalescedNodes = coalescedNodes''
-               , alias          = alias''
-               , moveList       = moveList''
-               }
-        forM_
-          adjacent_v
-          (\t -> do
-            addEdge t u
-            decrementDegree t
-          )
-        when
-            (  Map.findWithDefault 0 u degree'
-            >= numColors'
-            && Set.member u freezeWorklist'
-            )
-          $ let freezeWorklist'' = Set.delete u freezeWorklist'
-                spillWorklist''  = Set.insert u spillWorklist'
-              in  do
-                  s3 <- get
-                  put s3 { freezeWorklist = freezeWorklist''
-                         , spillWorklist  = spillWorklist''
-                         }
+  s2 <- get
+  put s2 { coalescedNodes = coalescedNodes''
+         , alias          = alias''
+         , moveList       = moveList''
+         }
+  forM_
+    adjacent_v
+    (\t -> do
+      addEdge t u
+      decrementDegree t
+    )
+  when
+      (  Map.findWithDefault 0 u degree'
+      >= numColors'
+      && Set.member u freezeWorklist'
+      )
+    $ let freezeWorklist'' = Set.delete u freezeWorklist'
+          spillWorklist''  = Set.insert u spillWorklist'
+      in  do
+            s3 <- get
+            put s3 { freezeWorklist = freezeWorklist''
+                   , spillWorklist  = spillWorklist''
+                   }
 
 freeze :: Allocator ()
 freeze = do
@@ -620,7 +613,7 @@ freeze = do
     Just u ->
       let freezeWorklist''   = Set.delete u freezeWorklist'
           simplifyWorklist'' = Set.insert u simplifyWorklist'
-        in  do
+      in  do
             put st { freezeWorklist   = freezeWorklist''
                    , simplifyWorklist = simplifyWorklist''
                    }
@@ -642,16 +635,15 @@ freezeMoves u = do
     let v             = if alias_x == alias_u then alias_x else alias_y
         activeMoves'' = Set.delete m activeMoves'
         frozenMoves'' = Set.insert m frozenMoves'
-      in  do
-          nodeMoves_v <- nodeMoves v
-          when (null nodeMoves_v && ((degree' Map.! v) < numColors'))
-            $ let freezeWorklist''   = Set.delete v freezeWorklist'
-                  simplifyWorklist'' = Set.insert v simplifyWorklist'
-              in  put st { activeMoves      = activeMoves''
-                         , frozenMoves      = frozenMoves''
-                         , freezeWorklist   = freezeWorklist''
-                         , simplifyWorklist = simplifyWorklist''
-                         }
+    nodeMoves_v <- nodeMoves v
+    when (null nodeMoves_v && ((degree' Map.! v) < numColors'))
+      $ let freezeWorklist''   = Set.delete v freezeWorklist'
+            simplifyWorklist'' = Set.insert v simplifyWorklist'
+        in  put st { activeMoves      = activeMoves''
+                   , frozenMoves      = frozenMoves''
+                   , freezeWorklist   = freezeWorklist''
+                   , simplifyWorklist = simplifyWorklist''
+                   }
 
 selectSpill :: Allocator ()
 selectSpill = do
@@ -662,11 +654,10 @@ selectSpill = do
   let m = chooseASpill spillCost' spillWorklist' nodeIdToTempId'
       spillWorklist'' = Set.delete m spillWorklist'
       simplifyWorklist'' = Set.insert m simplifyWorklist'
-    in  do
-        put st { spillWorklist    = spillWorklist''
-               , simplifyWorklist = simplifyWorklist''
-               }
-        freezeMoves m
+  put st { spillWorklist    = spillWorklist''
+         , simplifyWorklist = simplifyWorklist''
+         }
+  freezeMoves m
  where
   chooseASpill :: (Int -> Float) -> Set L.NodeId -> Map L.NodeId Int -> L.NodeId
   chooseASpill costFn spillWS nodeIdToTempId' = minimumBy
@@ -699,7 +690,7 @@ assignColors = do
                 ++ "\nspilledNodes = "
                 ++ show spilledNodes'
           colors'' = Map.insert n color' colors'
-        in  put st { colors = colors'' }
+      put st { colors = colors'' }
     )
     coalescedNodes'
  where
@@ -715,7 +706,7 @@ assignColors = do
     case selectStack' of
       (n : selectStack'') ->
         let adjlist_n = Map.findWithDefault Set.empty n adjList'
-          in  do
+        in  do
               adjacentAliases <- mapM getAlias $ Set.toList adjlist_n
               let coloredAdjacentAliases = filter
                     (\a -> Set.member a $ coloredNodes' `Set.union` precolored')
@@ -740,18 +731,18 @@ assignColors = do
                     )
                     coloredAdjacentAliases
                   okColors = allColors' \\ colorsAdjacent
-                in  case okColors of
-                    [] ->
-                      let spilledNodes'' = Set.insert n spilledNodes'
-                      in  put st { selectStack  = selectStack''
-                                 , spilledNodes = spilledNodes''
-                                 }
-                    (c : _) ->
-                      let coloredNodes'' = Set.insert n coloredNodes'
-                          colors''       = Map.insert n c colors'
-                      in  put st { selectStack  = selectStack''
-                                 , coloredNodes = coloredNodes''
-                                 , colors       = colors''
-                                 }
+              case okColors of
+                [] ->
+                  let spilledNodes'' = Set.insert n spilledNodes'
+                  in  put st { selectStack  = selectStack''
+                             , spilledNodes = spilledNodes''
+                             }
+                (c : _) ->
+                  let coloredNodes'' = Set.insert n coloredNodes'
+                      colors''       = Map.insert n c colors'
+                  in  put st { selectStack  = selectStack''
+                             , coloredNodes = coloredNodes''
+                             , colors       = colors''
+                             }
 
       [] -> error "shouldn't get here: stackNotEmpty shouldn't allow it"

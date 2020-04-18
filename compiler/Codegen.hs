@@ -456,17 +456,17 @@ doCall callStm maybeMoveStm callArgs escapes returnsOrNot = do
       restores           = restore <$> zip callerSaves callerSaveDests
       (argMap, argSetup) = setupArgs x64 $ zip callArgs escapes
       callStm'           = rewriteCall argMap callStm
-    in  case returnsOrNot of
-        IsReturn ->
-          pure
-            $  saves
-            ++ argSetup
-            ++ (callStm' : case maybeMoveStm of
-                 Just moveStm -> [moveStm]
-                 Nothing      -> []
-               )
-            ++ restores
-        NoReturn -> pure $ argSetup ++ [callStm']
+  case returnsOrNot of
+    IsReturn ->
+      pure
+        $  saves
+        ++ argSetup
+        ++ (callStm' : case maybeMoveStm of
+             Just moveStm -> [moveStm]
+             Nothing      -> []
+           )
+        ++ restores
+    NoReturn -> pure $ argSetup ++ [callStm']
  where
   rewriteCall :: [(Int, Int)] -> A.Inst -> A.Inst
   rewriteCall argMap i@A.OPER { A.operSrc = operSrc } =

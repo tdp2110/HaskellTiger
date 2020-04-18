@@ -30,7 +30,7 @@ main =
         (storeCode, gen6)      = Codegen.codegen x64 gen5 storeStm
         loadStm                = TreeIR.MOVE (TreeIR.TEMP tempId, accessExp)
         (loadCode, _)          = Codegen.codegen x64 gen6 loadStm
-        in
+      in
         do
           length storeCode `shouldBe` 1
           length loadCode `shouldBe` 1
@@ -39,9 +39,7 @@ main =
               = storeCode
             [Assem.OPER { Assem.operDst = [loadDst], Assem.operSrc = [loadSrc] }]
               = loadCode
-            in
-            do
-              storeDst `shouldBe` Frame.fp frame'
-              storeSrc `shouldBe` tempId
-              loadSrc `shouldBe` Frame.fp frame'
-              loadDst `shouldBe` tempId
+          storeDst `shouldBe` Frame.fp frame'
+          storeSrc `shouldBe` tempId
+          loadSrc `shouldBe` Frame.fp frame'
+          loadDst `shouldBe` tempId
