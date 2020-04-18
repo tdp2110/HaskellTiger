@@ -1,11 +1,12 @@
 module Main where
 
-import System.Environment (getArgs)
+import           System.Environment             ( getArgs )
 
-import Lexer
+import           Lexer
 
-main :: IO()
-main = do args <- getArgs
-          case scanner $ head args of
-            Left st -> error st
-            Right ls -> print ls
+main :: IO ()
+main = do
+  args <- getArgs
+  case scanner $ head args of
+    Left  st -> error st
+    Right ls -> print ls

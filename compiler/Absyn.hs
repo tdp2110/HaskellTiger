@@ -1,6 +1,6 @@
 module Absyn where
 
-import Symbol
+import           Symbol
 
 data Pos = Pos { absChrOffset :: !Int
                , lineno :: !Int
@@ -8,7 +8,8 @@ data Pos = Pos { absChrOffset :: !Int
   deriving (Eq)
 
 instance Show Pos where
-  show (Pos _ lineNo colNo) = "line " ++ (show lineNo ++ ", col " ++ show colNo)
+  show (Pos _ lineNo colNo) =
+    "line " ++ (show lineNo ++ ", col " ++ show colNo)
 
 data Var = SimpleVar Symbol Pos
          | FieldVar Var Symbol Pos

@@ -1,11 +1,11 @@
 module Main where
 
-import System.Environment (getArgs)
+import           System.Environment             ( getArgs )
 
-import Parser
+import           Parser
 
-main :: IO()
+main :: IO ()
 main = do
   args <- getArgs
-  str <- readFile $ head args
+  str  <- readFile $ head args
   print $ parse str
