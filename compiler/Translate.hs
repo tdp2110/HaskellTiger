@@ -255,7 +255,8 @@ binOp expLeft expRight op gen =
     binOpExp       = TreeIR.BINOP (op', expLeft', expRight')
     (resExp, gen3) = case op of
       Absyn.DivideOp -> case expRight' of
-        c@(TreeIR.CONST _) -> -- semant checked for division by (const) zero
+        TreeIR.CONST 0 -> error "shouldn't get here with (const) zero dividend"
+        c@(TreeIR.CONST _) ->
           let opExp = TreeIR.BINOP (TreeIR.DIV, expLeft', c)
           in  (Ex opExp, gen'')
         _ ->
