@@ -1,4 +1,8 @@
-module Symbol where
+module Symbol
+  ( Symbol(..)
+  , name
+  )
+where
 
 newtype Symbol = Symbol String deriving (Eq, Ord)
 

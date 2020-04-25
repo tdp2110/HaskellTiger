@@ -1,6 +1,10 @@
 {-# LANGUAGE TypeFamilies #-}
 
-module Frame where
+module Frame
+  ( EscapesOrNot(..)
+  , Frame(..)
+  )
+where
 
 import qualified Absyn
 import qualified Symbol

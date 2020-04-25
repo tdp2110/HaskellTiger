@@ -1,4 +1,9 @@
-module Color where
+module Color
+  ( TempId
+  , Allocation
+  , color
+  )
+where
 
 import qualified Graph
 import qualified Liveness                      as L
@@ -80,8 +85,8 @@ data AllocatorState = AllocatorState {
   }
   deriving (Show)
 
-showAdj :: AllocatorState -> String
-showAdj AllocatorState { adjSet = adjSet', coalescedNodes = coalescedNodes', worklistMoves = worklistMoves', selectStack = selectStack' }
+_showAdj :: AllocatorState -> String
+_showAdj AllocatorState { adjSet = adjSet', coalescedNodes = coalescedNodes', worklistMoves = worklistMoves', selectStack = selectStack' }
   = "graph {\n\t" ++ edges ++ "\n\t" ++ moves ++ "\n}"
  where
   edges = intercalate "\n\t" $ fmap showEdge filteredEdges

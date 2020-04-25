@@ -1,4 +1,12 @@
-module Env where
+module Env
+  ( EnvEntry(..)
+  , VEnv
+  , TEnv
+  , baseTEnv
+  , outermost
+  , baseVEnv
+  )
+where
 
 import qualified Frame
 import qualified X64Frame

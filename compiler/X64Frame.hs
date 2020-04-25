@@ -1,6 +1,29 @@
 {-# LANGUAGE TypeFamilies #-}
 
-module X64Frame where
+module X64Frame
+  ( Frag(..)
+  , X64(..)
+  , X64Frame(..)
+  , X64Access(..)
+  , Register(..)
+  , MaxCallArgs(..)
+  , X64Frame.exp
+  , frameExp
+  , externalCall
+  , externalCallNoReturn
+  , initX64
+  , mainName
+  , staticLinkAccess
+  , staticLinkExp
+  , allocLocal
+  , newFrame
+  , procEntryExit1
+  , procEntryExit2
+  , procEntryExit3
+  , wordSize
+  , registers
+  )
+where
 
 import qualified Absyn
 import qualified Assem
@@ -122,16 +145,6 @@ externalCallNoReturn (Temp.Label (Symbol.Symbol funname)) params =
     , params
     , fmap (const Frame.DoesNotEscape) params
     )
-
-accessExp :: X64Frame -> X64Access -> TreeIR.Exp
-accessExp frame acc = exp acc $ frameExp frame
-
-numFormalsInReg :: X64Frame -> Int
-numFormalsInReg frame = foldl' step (0 :: Int) (formals frame)
- where
-  step :: Int -> X64Access -> Int
-  step ct (InFrame _) = ct
-  step ct (InReg   _) = ct + 1
 
 initX64 :: Temp.Generator -> (X64, Temp.Generator)
 initX64 gen =

@@ -1,6 +1,44 @@
 {-# LANGUAGE TypeFamilies #-}
 
-module Translate where
+module Translate
+  ( Translate(..)
+  , Exp(..)
+  , X64Access(..)
+  , X64Level(..)
+  , X64Translate(..)
+  , x64NewLevel
+  , initExp
+  , functionDec
+  , unNx
+  , Translate.break
+  , array
+  , letExp
+  , while
+  , ifThenElse
+  , ifThenElseStm
+  , ifThen
+  , setField
+  , assign
+  , assignConst
+  , seqExp
+  , setitem
+  , seqStm
+  , record
+  , ptrCmp
+  , stringCmp
+  , relOp
+  , call
+  , binOp
+  , string
+  , intexp
+  , nilexp
+  , subscript
+  , simpleVar
+  , field
+  , x64TranslateFormals
+  , x64AllocLocal
+  )
+where
 
 import qualified Absyn
 import qualified Frame

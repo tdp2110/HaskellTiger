@@ -1,4 +1,11 @@
-module Flow where
+module Flow
+  ( FlowGraph(..)
+  , Node
+  , NodeId(..)
+  , TempId
+  , instrsToGraph
+  )
+where
 
 import qualified Assem                         as A
 import qualified Graph                         as G

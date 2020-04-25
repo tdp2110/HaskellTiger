@@ -1,4 +1,15 @@
-module Absyn where
+module Absyn
+  ( Var(..)
+  , Exp(..)
+  , Dec(..)
+  , Ty(..)
+  , Oper(..)
+  , Field(..)
+  , FunDec(..)
+  , TyDec(..)
+  , Pos(..)
+  )
+where
 
 import           Symbol
 

@@ -1,4 +1,8 @@
-module Assem where
+module Assem
+  ( Inst(..)
+  , Label
+  )
+where
 
 import qualified Temp
 

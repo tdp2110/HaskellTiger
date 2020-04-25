@@ -1,4 +1,16 @@
-module Graph where
+module Graph
+  ( NodeId(..)
+  , Node(..)
+  , GraphBuilder
+  , Graph(..)
+  , addEdge
+  , newGraph
+  , allocNode
+  , edges
+  , hasEdge
+  , toDot
+  )
+where
 
 import           Control.Monad.Trans.Writer     ( execWriter
                                                 , tell
@@ -71,17 +83,6 @@ mkEdge g id1 id2 =
 hasEdge :: NodeId a => Graph a -> a -> a -> Bool
 hasEdge g id1 id2 = let n1 = nodes g Map.! id1 in elem id2 $ succ n1
 
-rmEdge :: NodeId a => Graph a -> a -> a -> Graph a
-rmEdge g id1 id2 =
-  let nodes_g   = nodes g
-      n1        = nodes_g Map.! id1
-      n2        = nodes_g Map.! id2
-      n1'       = n1 { succ = delete id2 $ succ n1 }
-      n2'       = n2 { pred = delete id1 $ pred n2 }
-      nodes_g'  = Map.insert id1 n1' nodes_g
-      nodes_g'' = Map.insert id2 n2' nodes_g'
-  in  g { nodes = nodes_g'' }
-
 edges :: NodeId a => Graph a -> [(a, a)]
 edges g = execWriter accumEdges
  where
@@ -104,12 +105,5 @@ addEdge :: NodeId a => Node a -> Node a -> GraphBuilder a ()
 addEdge n1 n2 = do
   g <- get
   let g' = mkEdge g (nodeId n1) (nodeId n2)
-  put g'
-  pure ()
-
-delEdge :: NodeId a => Node a -> Node a -> GraphBuilder a ()
-delEdge n1 n2 = do
-  g <- get
-  let g' = rmEdge g (nodeId n1) (nodeId n2)
   put g'
   pure ()

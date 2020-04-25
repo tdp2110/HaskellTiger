@@ -1,4 +1,13 @@
-module TreeIR where
+module TreeIR
+  ( Exp(..)
+  , Stm(..)
+  , Binop(..)
+  , Relop(..)
+  , makeSeq
+  , notRel
+  , maxCallArgsStm
+  )
+where
 
 import qualified Frame
 import qualified Symbol

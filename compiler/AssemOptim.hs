@@ -1,4 +1,8 @@
-module AssemOptim where
+module AssemOptim
+  ( Pass
+  , pruneDefdButNotUsed
+  )
+where
 
 import qualified Assem                         as A
 import qualified Flow                          as F

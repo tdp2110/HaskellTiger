@@ -1,4 +1,9 @@
-module Canon where
+module Canon
+  ( linearize
+  , basicBlocks
+  , traceSchedule
+  )
+where
 
 import qualified Temp
 import qualified TreeIR                        as T

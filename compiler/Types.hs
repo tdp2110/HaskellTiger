@@ -1,4 +1,7 @@
-module Types where
+module Types
+  ( Ty(..)
+  )
+where
 
 import           Symbol
 

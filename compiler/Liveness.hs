@@ -1,4 +1,11 @@
-module Liveness where
+module Liveness
+  ( Node
+  , TempId
+  , NodeId(..)
+  , IGraph(..)
+  , interferenceGraph
+  )
+where
 
 import qualified Graph                         as G
 import qualified Flow

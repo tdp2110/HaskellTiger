@@ -1,4 +1,7 @@
-module RegAlloc where
+module RegAlloc
+  ( alloc
+  )
+where
 
 import qualified Assem
 import qualified Codegen

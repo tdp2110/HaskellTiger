@@ -1,4 +1,11 @@
-module Semant where
+module Semant
+  ( ExpTy(..)
+  , SemantError(..)
+  , FragList
+  , transThunked
+  , transProg
+  )
+where
 
 import qualified Absyn                         as A
 import qualified Env
@@ -24,7 +31,6 @@ import           Control.Monad.Trans.Reader     ( ReaderT
 import           Control.Monad.Trans.State      ( StateT
                                                 , get
                                                 , put
-                                                , evalStateT
                                                 , runStateT
                                                 )
 import           Control.Monad.Trans.Writer     ( WriterT
@@ -99,7 +105,6 @@ transLetDecs :: [A.Dec] -> A.Pos -> Translator (SemantEnv, [Translate.Exp])
 transDec :: A.Dec -> Translator (SemantEnv, [Translate.Exp])
 
 type Level = Translate.X64Level
-type Translate = Translate.X64Translate
 type Generator = Temp.Generator
 type Access = Translate.X64Access
 type Frag = X64Frame.Frag
@@ -198,18 +203,6 @@ translateWithFrag transFn typ = do
   pushFrag frag
   put st { generator = gen' }
   pure ExpTy { exp = resExp, ty = typ }
-
-evalTransT
-  :: SemantState
-  -> SemantEnv
-  -> Translator a
-  -> Either SemantError (a, FragList)
-evalTransT st env =
-  runIdentity
-    . runExceptT
-    . flip runReaderT env
-    . runWriterT
-    . flip evalStateT st
 
 nextId :: Translator Integer
 nextId = do
@@ -1232,7 +1225,3 @@ calcTypeGraph = fmap calcNeighbors
 isCyclicSCC :: SCC vertex -> Bool
 isCyclicSCC (CyclicSCC _) = True
 isCyclicSCC _             = False
-
-fragTy :: X64Frame.Frag -> String
-fragTy (X64Frame.PROC _ _) = "PROC"
-fragTy (X64Frame.STRING _) = "STRING"

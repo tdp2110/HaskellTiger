@@ -1,4 +1,12 @@
-module Temp where
+module Temp
+  ( Label(..)
+  , Generator(..)
+  , newtemp
+  , newlabel
+  , newGen
+  , name
+  )
+where
 
 import qualified Symbol
 
