@@ -12,6 +12,7 @@ module Absyn
 where
 
 import           Symbol
+import qualified Data.Text                     as T
 
 data Pos = Pos { absChrOffset :: !Int
                , lineno :: !Int
@@ -30,7 +31,7 @@ data Var = SimpleVar Symbol Pos
 data Exp = VarExp Var
          | NilExp
          | IntExp Int
-         | StringExp String
+         | StringExp T.Text
          | CallExp { func :: Symbol
                    , args :: [Exp]
                    , pos :: Pos }

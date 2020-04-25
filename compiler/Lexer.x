@@ -16,6 +16,7 @@ import Data.Map ( Map )
 import Data.List ( intercalate )
 import System.Environment ( getArgs, getProgName )
 import qualified Data.Map as Map ( empty )
+import qualified Data.Text as T
 }
 
 %wrapper "monadUserState"
@@ -120,7 +121,7 @@ tokPosn (Lexeme p _ _) = p
 
 data LexemeClass =
         EOF
-      | ID         String
+      | ID         T.Text
       | INT        Int
       | STRING     String
       | COMMA
@@ -255,7 +256,7 @@ getInteger (p, _, _, input) len = if (length r == 1)
     r = readDec s
 
 -- a sequence of letters is an identifier, except for reserved words, which are tested for beforehand
-getVariable (p, _, _, input) len = pure (Lexeme p (ID s) (Just s))
+getVariable (p, _, _, input) len = pure (Lexeme p (ID $ T.pack s) (Just s))
   where
     s = take len input
 

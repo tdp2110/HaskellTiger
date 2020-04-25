@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module TreeIR
   ( Exp(..)
   , Stm(..)
@@ -22,6 +24,7 @@ import           Data.DList                     ( DList
                                                 , toList
                                                 , fromList
                                                 )
+import qualified Data.Text                     as T
 
 import           Prelude                 hiding ( GT
                                                 , LT
@@ -100,13 +103,13 @@ notRel op = case op of
 
 type StmWriter = Writer (DList Char) ()
 
-putStrW :: String -> StmWriter
+putStrW :: T.Text -> StmWriter
 putStrW s = do
-  tell $ fromList s
+  tell $ fromList $ T.unpack s
   pure ()
 
-putStrLnW :: String -> StmWriter
-putStrLnW s = putStrW $ s ++ "\n"
+putStrLnW :: T.Text -> StmWriter
+putStrLnW s = putStrW $ s `mappend` "\n"
 
 putCharW :: Char -> StmWriter
 putCharW c = tell $ singleton c
@@ -182,7 +185,7 @@ putExp (MEM e) d = do
 putExp (TEMP t) d = do
   indent d
   putStrW "TEMP "
-  putStrW $ show t
+  putStrW . T.pack $ show t
 putExp (ESEQ (s, e)) d = do
   indent d
   putStrLnW "ESEQ("
@@ -197,7 +200,7 @@ putExp (NAME (Temp.Label (Symbol.Symbol lab))) d = do
 putExp (CONST i) d = do
   indent d
   putStrW "CONST "
-  putStrW $ show i
+  putStrW . T.pack $ show i
 putExp (CALL (e, el, _, _)) d = do
   indent d
   putStrLnW "CALL("

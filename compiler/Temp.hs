@@ -9,12 +9,12 @@ module Temp
 where
 
 import qualified Symbol
-
+import qualified Data.Text                     as T
 
 newtype Label = Label Symbol.Symbol
   deriving (Eq, Ord, Show)
 
-name :: Label -> String
+name :: Label -> T.Text
 name (Label s) = Symbol.name s
 
 data Generator = Generator {tempIdx :: Int, labelIdx :: Int}
@@ -27,4 +27,6 @@ newtemp gen@(Generator idx _) = (idx, gen { tempIdx = idx + 1 })
 
 newlabel :: Generator -> (Label, Generator)
 newlabel gen@(Generator _ idx) =
-  (Label $ Symbol.Symbol $ ".L" ++ show idx, gen { labelIdx = idx + 1 })
+  ( Label $ Symbol.Symbol . T.pack $ ".L" ++ show idx
+  , gen { labelIdx = idx + 1 }
+  )

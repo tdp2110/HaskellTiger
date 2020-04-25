@@ -5,16 +5,17 @@ module Assem
 where
 
 import qualified Temp
+import qualified Data.Text                     as T
 
 type Label = Temp.Label
 
-data Inst = OPER { assem :: String
+data Inst = OPER { assem :: T.Text
                  , operDst :: [Int]
                  , operSrc :: [Int]
                  , jump :: Maybe [Label] }
-          | LABEL { assem :: String
+          | LABEL { assem :: T.Text
                   , lab :: Label }
-          | MOVE { assem :: String
+          | MOVE { assem :: T.Text
                  , moveDst :: Int
                  , moveSrc :: Int }
   deriving (Eq, Show)

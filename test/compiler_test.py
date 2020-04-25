@@ -131,7 +131,7 @@ class TestCompiler(unittest.TestCase):
         assem = assem.decode('utf-8')
         self.assertIn('_main', assem)
         _, assem1, *_ = assem.split('_main')
-        self.assertIn('## (f,', assem1)
+        self.assertIn('## ("f",', assem1)
         self.assertNotIn('sub rsp', assem1)
 
     def test_loop_register_allocator(self):

@@ -11,6 +11,7 @@ import qualified Semant
 import qualified Temp
 import qualified TreeIR
 import qualified X64Frame
+import qualified Data.Text                     as T
 
 import           Control.Monad.Trans.State      ( runState )
 import           Data.Char                      ( digitToInt )
@@ -32,7 +33,7 @@ formatAsm alloc asm =
     formatImpl assem dsts srcs jmps =
       let
         getJmp :: Maybe [Assem.Label] -> Int -> String
-        getJmp (Just labs) idx = Temp.name $ labs !! idx
+        getJmp (Just labs) idx = T.unpack . Temp.name $ labs !! idx
         getJmp _           _   = error "shouldn't get here"
         go ('`' : 'd' : i : rest) =
           printTemp alloc (dsts !! digitToInt i) ++ go rest
@@ -46,10 +47,10 @@ formatAsm alloc asm =
   in
     case asm of
       Assem.OPER { Assem.assem = assem, Assem.operDst = operDst, Assem.operSrc = operSrc, Assem.jump = jmps }
-        -> formatImpl assem operDst operSrc jmps
-      Assem.LABEL { Assem.assem = assem } -> assem
+        -> formatImpl (T.unpack assem) operDst operSrc jmps
+      Assem.LABEL { Assem.assem = assem } -> T.unpack assem
       Assem.MOVE { Assem.assem = assem, Assem.moveDst = moveDst, Assem.moveSrc = moveSrc }
-        -> formatImpl assem [moveDst] [moveSrc] Nothing
+        -> formatImpl (T.unpack assem) [moveDst] [moveSrc] Nothing
 
 
 compileToAsm :: String -> Bool -> String
@@ -99,7 +100,7 @@ compileToAsm text performRegAlloc = case Parser.parse text of
             in  AssemOptim.pruneDefdButNotUsed (instrs, (flowGraph, nodes))
 
           notEmptyInst :: Assem.Inst -> Bool
-          notEmptyInst Assem.OPER { Assem.assem = assem } = assem /= ""
+          notEmptyInst Assem.OPER { Assem.assem = assem } = T.length assem /= 0
           notEmptyInst _ = True
 
           step1
@@ -110,7 +111,12 @@ compileToAsm text performRegAlloc = case Parser.parse text of
             let (insts', g') = Codegen.codegen x64 g stm
             in  (insts ++ insts', g')
         emit (X64Frame.STRING (lab, str)) g =
-          (Temp.name lab ++ ":\n\t.asciz\t\"" ++ str ++ "\"\n", g)
+          ( (T.unpack $ Temp.name lab)
+            ++ ":\n\t.asciz\t\""
+            ++ T.unpack str
+            ++ "\"\n"
+          , g
+          )
         step2
           :: (String, Temp.Generator)
           -> X64Frame.Frag

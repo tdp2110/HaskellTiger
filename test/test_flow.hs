@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 import           Test.Hspec
 
 import qualified Assem                         as A
@@ -9,7 +11,7 @@ import qualified Temp
 
 import qualified Data.Map                      as Map
 import qualified Data.Set                      as Set
-
+import qualified Data.Text                     as T
 
 main :: IO ()
 main =
@@ -28,7 +30,7 @@ main =
                      , A.jump    = Nothing
                      }
             , A.LABEL { A.assem = ".L1", A.lab = l2 }
-            , A.OPER { A.assem   = "b <- a + 1"
+            , A.OPER { A.assem   = T.pack "b <- a + 1"
                      , A.operDst = [b]
                      , A.operSrc = [a]
                      , A.jump    = Nothing

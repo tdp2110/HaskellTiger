@@ -11,7 +11,7 @@ import           Test.Hspec
 instance Arbitrary Temp.Label where
   arbitrary = do
     n <- choose (0, 1024) :: Gen Int
-    pure $ Temp.Label $ Symbol $ "L" ++ show n
+    pure $ Temp.Label $ Symbol.mkSym $ "L" ++ show n
 
 instance Arbitrary T.Exp where
   arbitrary = sized arbExp

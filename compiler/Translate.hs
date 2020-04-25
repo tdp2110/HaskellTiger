@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Translate
   ( Translate(..)
@@ -46,6 +47,7 @@ import qualified Symbol
 import qualified Temp
 import qualified TreeIR
 import qualified X64Frame
+import qualified Data.Text                     as T
 
 import           Control.Monad.Trans.State      ( State
                                                 , get
@@ -540,7 +542,7 @@ setitem arrExpE subscriptE valE gen =
 
 type Frag = X64Frame.Frag
 
-string :: String -> Temp.Generator -> (Exp, Frag, Temp.Generator)
+string :: T.Text -> Temp.Generator -> (Exp, Frag, Temp.Generator)
 string str gen =
   let (label, gen' ) = Temp.newlabel gen
       (r    , gen'') = Temp.newtemp gen'
@@ -550,7 +552,7 @@ string str gen =
           ( sExp
           , X64Frame.externalCall
             (Temp.Label $ Symbol.Symbol "tiger_allocString")
-            [TreeIR.NAME label, TreeIR.CONST $ length str]
+            [TreeIR.NAME label, TreeIR.CONST $ T.length str]
             True
           )
         , sExp

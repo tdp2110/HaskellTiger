@@ -5,6 +5,7 @@ import Data.List
 import Prelude hiding (GT, LT, EQ, init)
 import qualified Lexer as L
 import qualified Absyn as A
+import qualified Data.Text as T
 import Symbol
 }
 
@@ -78,7 +79,7 @@ program :: { A.Exp }
 exp :: { A.Exp }
   : nil                            { A.NilExp }
   | int                            { A.IntExp $1 }
-  | string                         { A.StringExp $1 }
+  | string                         { A.StringExp $ T.pack $1 }
   | lvalue                         { A.VarExp $1 }
   | id '{' recordFields '}'        { recordExp $3 $1 }
   | id '[' exp ']' of exp          { arrayExp $1 $3 $6 }

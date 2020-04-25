@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Main where
 
 import qualified Frame
@@ -9,6 +11,7 @@ import qualified Translate
 import qualified TreeIR
 import qualified Types
 import qualified X64Frame
+import qualified Data.Text                     as T
 
 import           Test.HUnit
 import           System.Exit
@@ -79,9 +82,9 @@ strLiteral = TestCase
      [X64Frame.STRING (lab2, str2)] = DList.toList frags
    in
      do
-       assertEqual "labels match"   lab1         lab2
-       assertEqual "literals match" str1         str2
-       assertEqual "str literal"    Types.STRING ty
+       assertEqual "labels match" lab1 lab2
+       assertEqual "literals match" str1 $ T.unpack str2
+       assertEqual "str literal" Types.STRING ty
        assertEqual "strlen arg is correct" strlen $ length str1
        assertEqual "temp labels match up" t1 t2
   )
@@ -384,7 +387,7 @@ frags2 = TestCase
          assertEqual "found two frags" 2 $ length frags
          assertBool "all frags are string" $ all isString frags
          assertEqual "frags are coorect" ["hello", "world"] $ toList $ fmap
-           (\(X64Frame.STRING (_, s)) -> s)
+           (\(X64Frame.STRING (_, s)) -> T.unpack s)
            frags
   )
 
@@ -410,7 +413,7 @@ frags3 = TestCase
        assertEqual "found 5 frags" 5 $ length frags
        assertEqual "3 procs" 3 $ length $ filter isProc frags
        assertEqual "string values" ["dog", "cat"]
-         $   (\(X64Frame.STRING (_, s)) -> s)
+         $   (\(X64Frame.STRING (_, s)) -> T.unpack s)
          <$> filter isString frags
   )
 

@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Semant
   ( ExpTy(..)
   , SemantError(..)

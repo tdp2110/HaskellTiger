@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Env
   ( EnvEntry(..)
   , VEnv
@@ -64,8 +66,8 @@ baseVEnv x64 gen =
     -> ([(Symbol, EnvEntry)], Temp.Generator)
   enterBuiltin (acc, gen') (nm, formalTys, returnTy) =
     let
-      sym          = Symbol nm
-      lab          = Temp.Label $ Symbol $ "tiger_" ++ nm
+      sym          = Symbol.mkSym nm
+      lab          = Temp.Label $ Symbol.mkSym $ "tiger_" ++ nm
       escapes      = fmap (const Frame.DoesNotEscape) formalTys
       (gen'', lev) = Translate.x64NewLevel
         x64

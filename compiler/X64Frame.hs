@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module X64Frame
   ( Frag(..)
@@ -31,6 +32,7 @@ import qualified Frame
 import qualified Symbol
 import qualified Temp
 import qualified TreeIR
+import qualified Data.Text                     as T
 
 import           Data.List
 import           Data.Map                       ( Map )
@@ -116,7 +118,7 @@ staticLinkExp f =
 
 data Frag = PROC { body :: TreeIR.Stm
                  , fragFrame :: X64Frame }
-          | STRING (Temp.Label, String)
+          | STRING (Temp.Label, T.Text)
   deriving (Show)
 
 wordSize :: Int
@@ -132,7 +134,7 @@ frameExp frame = TreeIR.TEMP $ Frame.fp frame
 
 externalCall :: Temp.Label -> [TreeIR.Exp] -> Bool -> TreeIR.Exp
 externalCall (Temp.Label (Symbol.Symbol funname)) params hasRet = TreeIR.CALL
-  ( TreeIR.NAME (Temp.Label (Symbol.Symbol $ "_" ++ funname)) -- hack for MacOS
+  ( TreeIR.NAME (Temp.Label (Symbol.Symbol $ T.cons '_' funname)) -- hack for MacOS
   , params
   , fmap (const Frame.DoesNotEscape) params
   , hasRet
@@ -141,7 +143,7 @@ externalCall (Temp.Label (Symbol.Symbol funname)) params hasRet = TreeIR.CALL
 externalCallNoReturn :: Temp.Label -> [TreeIR.Exp] -> TreeIR.Exp
 externalCallNoReturn (Temp.Label (Symbol.Symbol funname)) params =
   TreeIR.CALLNORETURN
-    ( TreeIR.NAME (Temp.Label (Symbol.Symbol $ "_" ++ funname)) -- hack for MacOS
+    ( TreeIR.NAME (Temp.Label (Symbol.Symbol $ T.cons '_' funname)) -- hack for MacOS
     , params
     , fmap (const Frame.DoesNotEscape) params
     )
@@ -421,7 +423,7 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) =
         Nothing -> -- we're in a leaf function (ie it calls no other function. use the 128-byte redzone)
           max 0 $ numEscapingLocals - 128 `div` 8
       stackAdjustment =
-          [ Assem.OPER { Assem.assem   = "\tsub `d0, " ++ show stackSize
+          [ Assem.OPER { Assem.assem = T.pack $ "\tsub `d0, " ++ show stackSize
                        , Assem.operDst = [rsp $ x64 frame]
                        , Assem.operSrc = []
                        , Assem.jump    = Nothing
@@ -429,7 +431,7 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) =
           | stackSize /= 0
           ]
       prologue =
-          [ Assem.OPER { Assem.assem   = "\tpush `d0" ++ fmtDebug frame
+          [ Assem.OPER { Assem.assem   = T.pack $ "\tpush `d0" ++ fmtDebug frame
                        , Assem.operDst = [rbp $ x64 frame]
                        , Assem.operSrc = [rsp $ x64 frame]
                        , Assem.jump    = Nothing
@@ -441,7 +443,7 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) =
             ]
             ++ stackAdjustment
       epilogue1 =
-          [ Assem.OPER { Assem.assem   = "\tadd `d0, " ++ show stackSize
+          [ Assem.OPER { Assem.assem = T.pack $ "\tadd `d0, " ++ show stackSize
                        , Assem.operDst = [rsp $ x64 frame]
                        , Assem.operSrc = []
                        , Assem.jump    = Nothing
