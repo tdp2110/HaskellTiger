@@ -51,6 +51,8 @@ formatAsm alloc asm =
       Assem.LABEL { Assem.assem = assem } -> T.unpack assem
       Assem.MOVE { Assem.assem = assem, Assem.moveDst = moveDst, Assem.moveSrc = moveSrc }
         -> formatImpl (T.unpack assem) [moveDst] [moveSrc] Nothing
+      Assem.STORECONST { Assem.assem = assem, Assem.strDst = strDst } ->
+        formatImpl (T.unpack assem) [strDst] [] Nothing
 
 
 compileToAsm :: String -> Bool -> String

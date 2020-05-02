@@ -132,13 +132,15 @@ rewriteProgram insts frame spills gen =
 
       readsTemp :: Assem.Inst -> Bool
       readsTemp Assem.OPER { Assem.operSrc = operSrc } = elem tempId operSrc
+      readsTemp Assem.LABEL{}                          = False
       readsTemp Assem.MOVE { Assem.moveSrc = moveSrc } = tempId == moveSrc
-      readsTemp _ = False
+      readsTemp Assem.STORECONST{}                     = False
 
       writesTemp :: Assem.Inst -> Bool
       writesTemp Assem.OPER { Assem.operDst = operDst } = elem tempId operDst
-      writesTemp Assem.MOVE { Assem.moveDst = moveDst } = tempId == moveDst
-      writesTemp _ = False
+      writesTemp Assem.LABEL{}                              = False
+      writesTemp Assem.MOVE { Assem.moveDst = moveDst }     = tempId == moveDst
+      writesTemp Assem.STORECONST { Assem.strDst = strDst } = tempId == strDst
 
       newTemp = do
         g <- get
@@ -173,12 +175,15 @@ rewriteProgram insts frame spills gen =
               i@Assem.LABEL{} -> i
               i@Assem.MOVE { Assem.moveSrc = moveSrc } ->
                 i { Assem.moveSrc = replace tempId readTemp moveSrc }
+              i@Assem.STORECONST{} -> i
         let inst'' = case inst' of
               i@Assem.OPER { Assem.operDst = operDst } ->
                 i { Assem.operDst = replaceAll tempId writeTemp operDst }
               i@Assem.LABEL{} -> i
               i@Assem.MOVE { Assem.moveDst = moveDst } ->
                 i { Assem.moveDst = replace tempId writeTemp moveDst }
+              i@Assem.STORECONST { Assem.strDst = strDst } ->
+                i { Assem.strDst = replace tempId writeTemp strDst }
         pure
           (maybeLoad ++ [inst''] ++ maybeStore, maybeLoadTemp ++ maybeStoreTemp)
 

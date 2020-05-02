@@ -63,9 +63,10 @@ instrsToGraph insts =
           (\(inst, node) ->
             ( G.nodeId node
             , case inst of
-              A.OPER { A.operDst = dsts } -> dsts
-              A.LABEL{}                   -> []
-              A.MOVE { A.moveDst = dst }  -> [dst]
+              A.OPER { A.operDst = dsts }     -> dsts
+              A.LABEL{}                       -> []
+              A.MOVE { A.moveDst = dst }      -> [dst]
+              A.STORECONST { A.strDst = dst } -> [dst]
             )
           )
           nodes
@@ -76,6 +77,7 @@ instrsToGraph insts =
               A.OPER { A.operSrc = srcs } -> srcs
               A.LABEL{}                   -> []
               A.MOVE { A.moveSrc = src }  -> [src]
+              A.STORECONST{}              -> []
             )
           )
           nodes
