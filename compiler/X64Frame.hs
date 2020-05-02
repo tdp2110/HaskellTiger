@@ -451,9 +451,9 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) =
           | stackSize /= 0
           ]
       raxClearOrNil =
-          [ Assem.OPER { Assem.assem   = "\txor `d0, `s0"
+          [ Assem.OPER { Assem.assem   = "\tmov `d0, 0"
                        , Assem.operDst = [rax $ x64 frame]
-                       , Assem.operSrc = [rax $ x64 frame]
+                       , Assem.operSrc = []
                        , Assem.jump    = Nothing
                        }
           | isMain frame

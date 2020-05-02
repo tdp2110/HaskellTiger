@@ -38,7 +38,6 @@ import           Data.Set                       ( Set )
 import qualified Data.Set                      as Set
 import           Data.Tuple                     ( swap )
 
-
 type TempId = L.TempId
 
 type MoveSet = Set (L.NodeId, L.NodeId)
@@ -491,6 +490,8 @@ coalesce = do
       coalescedMoves''   = Set.insert m coalescedMoves'
       constrainedMoves'' = Set.insert m constrainedMoves'
       activeMoves''      = Set.insert m activeMoves'
+  put st { worklistMoves = worklistMoves'' }
+  st'            <- get
   adjacent_u     <- adjacent u
   adjacent_v     <- adjacent v
   isConservative <-
@@ -498,29 +499,21 @@ coalesce = do
   adjacents_ok <- mapM (`ok` u) $ Set.toList adjacent_v
   if u == v
     then do
-      put st { worklistMoves  = worklistMoves''
-             , coalescedMoves = coalescedMoves''
-             }
+      put st' { coalescedMoves = coalescedMoves'' }
       addWorkList u
     else if Set.member v precolored' || Set.member (u, v) adjSet'
       then do
-        put st { worklistMoves    = worklistMoves''
-               , constrainedMoves = constrainedMoves''
-               }
+        put st' { constrainedMoves = constrainedMoves'' }
         addWorkList u
         addWorkList v
       else
         if (Set.member u precolored' && all (== True) adjacents_ok)
              || (not (Set.member u precolored') && isConservative)
           then do
-            put st { worklistMoves  = worklistMoves''
-                   , coalescedMoves = coalescedMoves''
-                   }
+            put st' { worklistMoves = worklistMoves'' }
             combine u v
             addWorkList u
-          else put st { worklistMoves = worklistMoves''
-                      , activeMoves   = activeMoves''
-                      }
+          else put st' { activeMoves = activeMoves'' }
 
 findDegree :: L.NodeId -> Allocator Int
 findDegree n = do
@@ -573,10 +566,9 @@ getAlias n = do
 
 combine :: L.NodeId -> L.NodeId -> Allocator ()
 combine u v = do
-  s1@AllocatorState { freezeWorklist = freezeWorklist', spillWorklist = spillWorklist', coalescedNodes = coalescedNodes', alias = alias', degree = degree', moveList = moveList' } <-
+  s1@AllocatorState { freezeWorklist = freezeWorklist', spillWorklist = spillWorklist', coalescedNodes = coalescedNodes', alias = alias', moveList = moveList' } <-
     get
   AllocatorReadOnlyData { numColors = numColors' } <- lift ask
-  adjacent_v <- adjacent v
   if Set.member v freezeWorklist'
     then put s1 { freezeWorklist = Set.delete v freezeWorklist' }
     else put s1 { spillWorklist = Set.delete v spillWorklist' }
@@ -591,12 +583,14 @@ combine u v = do
          , alias          = alias''
          , moveList       = moveList''
          }
+  adjacent_v <- adjacent v
   forM_
     adjacent_v
     (\t -> do
       addEdge t u
       decrementDegree t
     )
+  AllocatorState { degree = degree' } <- get
   when
       (  Map.findWithDefault 0 u degree'
       >= numColors'

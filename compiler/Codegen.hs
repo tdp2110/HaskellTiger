@@ -93,16 +93,15 @@ munchStm (TreeIR.LABEL l@(Temp.Label (S.Symbol s))) =
 munchStm (TreeIR.MOVE (TreeIR.TEMP dst, TreeIR.TEMP src)) =
   emit A.MOVE { A.assem = "\tmov `d0, `s0", A.moveDst = dst, A.moveSrc = src }
 munchStm (TreeIR.MOVE (TreeIR.TEMP dst, TreeIR.CONST 0)) = emit A.OPER
-  { A.assem   = "\txor `d0, `s0"
-  , A.operDst = [dst]
-  , A.operSrc = [dst]
-  , A.jump    = Nothing
-  }
-munchStm (TreeIR.MOVE (TreeIR.TEMP dst, TreeIR.CONST c)) = emit A.OPER
-  { A.assem   = T.pack $ "\tmov `d0, " ++ show c
-  , A.operDst = [dst]
+  { A.assem   = "\txor `d0, `d1"
+  , A.operDst = [dst, dst]
   , A.operSrc = []
   , A.jump    = Nothing
+  }
+munchStm (TreeIR.MOVE (TreeIR.TEMP dst, TreeIR.CONST c)) = emit A.STORECONST
+  { A.assem  = T.pack $ "\tmov `d0, " ++ show c
+  , A.strDst = dst
+  , A.strVal = c
   }
 munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s, TreeIR.CONST c))))
   = emit A.OPER

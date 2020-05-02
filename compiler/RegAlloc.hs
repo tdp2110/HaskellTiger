@@ -13,13 +13,13 @@ import qualified Liveness
 import qualified Temp
 import qualified TreeIR
 import qualified X64Frame
+import           Data.List
 
 import           Control.Monad.Trans.State      ( State
                                                 , runState
                                                 , put
                                                 , get
                                                 )
-import           Data.Foldable                  ( foldl' )
 import qualified Data.Map                      as Map
 
 type TempId = Color.TempId
@@ -57,8 +57,15 @@ alloc insts flowGraph frame gen previousSpillTemps =
           let (insts', newTemps, frame', gen') =
                 rewriteProgram insts frame spills gen
               (flowGraph', _) = Flow.instrsToGraph insts'
-          in  alloc insts' flowGraph' frame' gen' newTemps
+          in  alloc insts' flowGraph' frame' gen'
+                $ merge (sort newTemps) (sort previousSpillTemps)
  where
+  merge :: Ord a => [a] -> [a] -> [a]
+  merge (x : xs) (y : ys) =
+    if x < y then x : (merge xs (y : ys)) else y : (merge (x : xs) ys)
+  merge [] xs = xs
+  merge xs [] = xs
+
   isRedundant :: Color.Allocation -> Assem.Inst -> Bool
   isRedundant allocation inst = case inst of
     Assem.MOVE { Assem.moveDst = moveDst, Assem.moveSrc = moveSrc } ->
@@ -86,7 +93,9 @@ alloc insts flowGraph frame gen previousSpillTemps =
           nodeDegree =
               let node = tnode Map.! temp
               in  fromIntegral $ length $ Graph.succ node
-      in  useDefCount / nodeDegree
+      in  if elem temp previousSpillTemps
+            then 1 / 0
+            else useDefCount / nodeDegree
 
 rewriteProgram
   :: [Assem.Inst]
