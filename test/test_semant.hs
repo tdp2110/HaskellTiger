@@ -240,7 +240,7 @@ illegalDecls1 = TestCase
      (Left (Semant.SemantError err _)) = parseToSema text
    in
      assertBool "multiple declarations 1" $ isInfixOf
-       "multiple function or value declarations of symbol N in letExp declarations"
+       "multiple function or value declarations of symbol \"N\" in letExp declarations"
        err
   )
 
@@ -252,7 +252,7 @@ illegalDecls2 = TestCase
      (Left (Semant.SemantError err _)) = parseToSema text
    in
      assertBool "multiple declarations 1" $ isInfixOf
-       "multiple function or value declarations of symbol N in letExp declarations"
+       "multiple function or value declarations of symbol \"N\" in letExp declarations"
        err
   )
 
