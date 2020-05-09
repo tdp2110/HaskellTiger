@@ -45,7 +45,6 @@ alloc insts flowGraph frame gen previousSpillTemps =
                                           initialAllocs
                                           (spillCost flowGraph igraph)
                                           registers
-                                          previousSpillTemps
   in  if null spills
         then
           ( filter (not . isRedundant allocations) insts

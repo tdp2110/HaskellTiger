@@ -110,7 +110,6 @@ data AllocatorReadOnlyData = AllocatorReadOnlyData {
     precolored :: Set L.NodeId -- machine registers, preassigned color
   , numColors :: Int
   , allColors :: [Int]
-  , previousSpillTemps :: Set L.NodeId
   , spillCost :: Int -> Float
   , nodeIdToTempId :: Map L.NodeId Int
   }
@@ -127,10 +126,8 @@ color
   -> -- spillCost
      [X64Frame.Register]
   -> -- available registers
-     [Int]
-  -> -- short-lived temps from previous spills
      (Allocation, [Int]) -- assignments using available registers, list of spills
-color igraph@L.IGraph { L.gtemp = gtemp, L.tnode = tnode } initAlloc spillCost' registers previousSpillTemps'
+color igraph@L.IGraph { L.gtemp = gtemp, L.tnode = tnode } initAlloc spillCost' registers
   = let
       numColors'     = length registers
       allColors'     = [0 .. numColors' - 1]
@@ -174,15 +171,10 @@ color igraph@L.IGraph { L.gtemp = gtemp, L.tnode = tnode } initAlloc spillCost' 
                                     , moveList         = moveList'
                                     }
 
-      previousSpillTempsNodes = fmap
-        (\tempId -> Graph.nodeId $ tnode Map.! tempId)
-        previousSpillTemps'
-
       readOnlyData = AllocatorReadOnlyData
         { precolored         = precolored'
         , numColors          = numColors'
         , allColors          = allColors'
-        , previousSpillTemps = Set.fromList previousSpillTempsNodes
         , spillCost          = spillCost'
         , nodeIdToTempId     = gtemp
         }
