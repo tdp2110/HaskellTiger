@@ -10,15 +10,23 @@ module Graph
   , hasEdge
   , toDot
   , exitNodes
+  , quasiTopoSort
   )
 where
 
-import           Control.Monad.Trans.Writer     ( execWriter
+import           Control.Monad.Trans.Writer     ( WriterT
+                                                , execWriter
                                                 , tell
                                                 )
-import           Control.Monad.Trans.State      ( State
+import           Control.Monad.Trans.State      ( StateT
+                                                , State
                                                 , get
                                                 , put
+                                                )
+import           Data.Functor.Identity
+import           Data.DList                     ( DList
+                                                , toList
+                                                , singleton
                                                 )
 import           Data.List
 import           Data.Map                       ( Map )
@@ -47,6 +55,14 @@ data Graph a = Graph { nodes :: Map a (Node a)
 exitNodes :: Graph (Node a) -> [Node a]
 exitNodes g = filter isExitNode $ Map.keys $ nodes g
   where isExitNode = null . succ
+
+type TopoSorter a = WriterT (DList (Node a)) (StateT (Map a Bool) Identity)
+
+quasiTopoSort :: Graph (Node a) -> [Node a]
+quasiTopoSort = undefined
+
+quasiTopoSortM :: Graph (Node a) -> TopoSorter a ()
+quasiTopoSortM = undefined
 
 -- | produce a repr of a graph in the "dot" language
 toDot :: Show a => Graph a -> String
