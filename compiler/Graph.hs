@@ -9,6 +9,7 @@ module Graph
   , edges
   , hasEdge
   , toDot
+  , exitNodes
   )
 where
 
@@ -42,6 +43,10 @@ freshNode nId = Node { succ = [], pred = [], nodeId = nId }
 data Graph a = Graph { nodes :: Map a (Node a)
                      , nextId :: a }
   deriving (Show)
+
+exitNodes :: Graph (Node a) -> [Node a]
+exitNodes g = filter isExitNode $ Map.keys $ nodes g
+  where isExitNode = null . succ
 
 -- | produce a repr of a graph in the "dot" language
 toDot :: Show a => Graph a -> String
