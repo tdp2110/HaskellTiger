@@ -14,14 +14,18 @@ module Graph
   )
 where
 
+import           Control.Monad                  ( when )
+import           Control.Monad.Trans.Class      ( lift )
 import           Control.Monad.Trans.Writer     ( WriterT
                                                 , execWriter
+                                                , runWriterT
                                                 , tell
                                                 )
 import           Control.Monad.Trans.State      ( StateT
                                                 , State
                                                 , get
                                                 , put
+                                                , runState
                                                 )
 import           Data.Functor.Identity
 import           Data.DList                     ( DList
@@ -52,17 +56,37 @@ data Graph a = Graph { nodes :: Map a (Node a)
                      , nextId :: a }
   deriving (Show)
 
-exitNodes :: Graph (Node a) -> [Node a]
-exitNodes g = filter isExitNode $ Map.keys $ nodes g
+exitNodes :: NodeId a => Graph a -> [Node a]
+exitNodes g = filter isExitNode $ Map.elems $ nodes g
   where isExitNode = null . succ
 
-type TopoSorter a = WriterT (DList (Node a)) (StateT (Map a Bool) Identity)
+type TopoSorter a = WriterT (DList a) (StateT (Map a Bool) Identity)
 
-quasiTopoSort :: Graph (Node a) -> [Node a]
-quasiTopoSort = undefined
+quasiTopoSort :: NodeId a => Graph a -> [Node a]
+quasiTopoSort g =
+  let
+    marks =
+      Map.fromList $ fmap (\nodeId_ -> (nodeId_, False)) $ Map.keys $ nodes g
+    (((), sortedNodes), marks') =
+      (flip runState marks . runWriterT) $ quasiTopoSortM g
+    -- TODO next: need to look for and process unmarked nodes
+  in
+    undefined
 
-quasiTopoSortM :: Graph (Node a) -> TopoSorter a ()
-quasiTopoSortM = undefined
+quasiTopoSortM :: NodeId a => Graph a -> TopoSorter a ()
+quasiTopoSortM g = let exits = exitNodes g in mapM_ dfs exits
+ where
+  dfs node =
+    let nodeId_ = nodeId node
+    in  do
+          mark <- lift get
+          when (mark Map.! nodeId_)
+            $ let mark' = Map.insert nodeId_ True mark
+              in  do
+                    (lift . put) mark'
+                    mapM_ dfs $ fmap (nodes g Map.!) $ pred node
+                    tell $ singleton nodeId_
+                    pure ()
 
 -- | produce a repr of a graph in the "dot" language
 toDot :: Show a => Graph a -> String
