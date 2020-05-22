@@ -152,9 +152,12 @@ type IGraphBuilder = WriterT Moves (WriterT [(TempId, Node)] GraphBuilder)
 -- | computes live-out sets per FlowGraph node
 buildLiveMap :: Flow.FlowGraph -> Map Flow.NodeId (Set TempId)
 buildLiveMap g =
-  let flowKeys = Map.keys $ G.nodes $ Flow.control g
+  let cfg = Flow.control g
+      --flowKeys = Map.keys $ G.nodes cfg
       liveIn   = Map.fromList $ fmap (\nodeId -> (nodeId, Set.empty)) flowKeys
       liveOut  = liveIn
+      quasiToposortedNodes = G.quasiTopoSort cfg
+      flowKeys = fmap (G.nodeId) quasiToposortedNodes
   in  buildImpl flowKeys liveIn liveOut
  where
   buildImpl

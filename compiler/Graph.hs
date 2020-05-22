@@ -35,6 +35,8 @@ import           Data.DList                     ( DList
 import           Data.List
 import           Data.Map                       ( Map )
 import qualified Data.Map                      as Map
+import           Data.Set                       ( Set )
+import qualified Data.Set                      as Set
 
 import           Prelude                 hiding ( succ
                                                 , pred
@@ -60,33 +62,36 @@ exitNodes :: NodeId a => Graph a -> [Node a]
 exitNodes g = filter isExitNode $ Map.elems $ nodes g
   where isExitNode = null . succ
 
-type TopoSorter a = WriterT (DList a) (StateT (Map a Bool) Identity)
+type TopoSorter a = WriterT (DList a) (StateT (Set a) Identity)
 
 quasiTopoSort :: NodeId a => Graph a -> [Node a]
 quasiTopoSort g =
-  let
-    marks =
-      Map.fromList $ fmap (\nodeId_ -> (nodeId_, False)) $ Map.keys $ nodes g
-    (((), sortedNodes), marks') =
-      (flip runState marks . runWriterT) $ quasiTopoSortM g
-    -- TODO next: need to look for and process unmarked nodes
-  in
-    undefined
+  let unvisitedIds = Set.fromList $ Map.keys $ nodes g
+      (((), dlist1), unvisitedIds') =
+          (flip runState unvisitedIds . runWriterT) $ quasiTopoSortM g
+      (((), dlist2), _) =
+          (flip runState unvisitedIds' . runWriterT) $ quasiTopoSortM g
+
+      ids1   = toList dlist1
+      ids2   = toList dlist2
+      allIds = reverse $ ids1 ++ ids2
+  in  fmap (nodes g Map.!) allIds
 
 quasiTopoSortM :: NodeId a => Graph a -> TopoSorter a ()
-quasiTopoSortM g = let exits = exitNodes g in mapM_ dfs exits
- where
-  dfs node =
-    let nodeId_ = nodeId node
-    in  do
-          mark <- lift get
-          when (mark Map.! nodeId_)
-            $ let mark' = Map.insert nodeId_ True mark
-              in  do
-                    (lift . put) mark'
-                    mapM_ dfs $ fmap (nodes g Map.!) $ pred node
-                    tell $ singleton nodeId_
-                    pure ()
+quasiTopoSortM g = let exits = exitNodes g in mapM_ (dfs g) exits
+
+dfs :: NodeId a => Graph a -> Node a -> TopoSorter a ()
+dfs g node =
+  let nodeId_ = nodeId node
+  in  do
+        unvisited <- lift get
+        when (Set.member nodeId_ unvisited)
+          $ let unvisited' = Set.delete nodeId_ unvisited
+            in  do
+                  (lift . put) unvisited'
+                  mapM_ (dfs g) $ fmap (nodes g Map.!) $ pred node
+                  tell $ singleton nodeId_
+                  pure ()
 
 -- | produce a repr of a graph in the "dot" language
 toDot :: Show a => Graph a -> String
