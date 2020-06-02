@@ -1037,7 +1037,7 @@ transDec (A.FunctionDec fundecs) = do
         Right ((ExpTy { exp = bodyExp, ty = bodyTy }, state'), frags) ->
           if resultTy
              /= Types.UNIT
-             && (not $ typesAreCompatible resultTy bodyTy)
+             && not (typesAreCompatible resultTy bodyTy)
           then
             throwT funPos
             $  "computed type of function body "

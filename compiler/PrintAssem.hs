@@ -115,7 +115,7 @@ compileToAsm text performRegAlloc = case Parser.parse text of
             let (insts', g') = Codegen.codegen x64 g stm
             in  (insts ++ insts', g')
         emit (X64Frame.STRING (lab, str)) g =
-          ( (T.unpack $ Temp.name lab)
+          ( T.unpack (Temp.name lab)
             ++ ":\n\t.asciz\t\""
             ++ T.unpack str
             ++ "\"\n"

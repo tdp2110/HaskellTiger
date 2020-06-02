@@ -157,7 +157,7 @@ buildLiveMap g =
       liveIn   = Map.fromList $ fmap (\nodeId -> (nodeId, Set.empty)) flowKeys
       liveOut  = liveIn
       quasiToposortedNodes = G.quasiTopoSort cfg
-      flowKeys = fmap (G.nodeId) quasiToposortedNodes
+      flowKeys = fmap G.nodeId quasiToposortedNodes
   in  buildImpl flowKeys liveIn liveOut
  where
   buildImpl

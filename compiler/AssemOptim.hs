@@ -9,7 +9,6 @@ import qualified Assem                         as A
 import qualified Flow                          as F
 import qualified Graph                         as G
 
-import           Control.Monad                  ( join )
 import           Data.Foldable                  ( foldl' )
 import qualified Data.Map                      as Map
 
@@ -51,12 +50,12 @@ removeTrivialJumps (insts, (_, flowNodes)) =
   let
     nodes = zip insts $ fmap G.nodeId flowNodes
     potentialTrivialJumps =
-      join $ fmap extractPotentialTrivialJumps $ zip nodes $ tail nodes
+      extractPotentialTrivialJumps =<< zip nodes (tail nodes)
     labelJumpCounts = foldl' labelJumpCountAccumulator Map.empty insts
     trivialJumps    = filter (\(_, _, lab) -> hasCountOne lab labelJumpCounts)
                              potentialTrivialJumps
-    nodesToDelete = join $ fmap (\(n1, n2, _) -> [n1, n2]) trivialJumps
-    prunedNodes   = filter (\(_, n) -> not $ elem n nodesToDelete) nodes
+    nodesToDelete = (\(n1, n2, _) -> [n1, n2]) =<< trivialJumps
+    prunedNodes   = filter (\(_, n) -> n `notElem` nodesToDelete) nodes
     insts'        = fmap fst prunedNodes
   in
     (insts', F.instrsToGraph insts')
@@ -68,7 +67,7 @@ removeTrivialJumps (insts, (_, flowNodes)) =
 
   labelJumpCountAccumulator
     :: Map.Map A.Label Int -> A.Inst -> Map.Map A.Label Int
-  labelJumpCountAccumulator acc (A.OPER { A.jump = Just jumpTargets }) = foldl'
+  labelJumpCountAccumulator acc A.OPER { A.jump = Just jumpTargets } = foldl'
     (\acc' jt ->
       let ct = Map.findWithDefault 0 jt acc' in Map.insert jt (ct + 1) acc'
     )
@@ -77,5 +76,5 @@ removeTrivialJumps (insts, (_, flowNodes)) =
   labelJumpCountAccumulator acc _ = acc
 
   extractPotentialTrivialJumps ((A.OPER { A.jump = Just [lab1] }, n1), (A.LABEL { A.lab = lab2 }, n2))
-    = if lab1 == lab2 then [(n2, n1, lab1)] else []
+    = [ (n2, n1, lab1) | lab1 == lab2 ]
   extractPotentialTrivialJumps _ = []

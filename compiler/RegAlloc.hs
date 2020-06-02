@@ -61,7 +61,7 @@ alloc insts flowGraph frame gen previousSpillTemps =
  where
   merge :: Ord a => [a] -> [a] -> [a]
   merge (x : xs) (y : ys) =
-    if x < y then x : (merge xs (y : ys)) else y : (merge (x : xs) ys)
+    if x < y then x : merge xs (y : ys) else y : merge (x : xs) ys
   merge [] xs = xs
   merge xs [] = xs
 
@@ -92,7 +92,7 @@ alloc insts flowGraph frame gen previousSpillTemps =
           nodeDegree =
               let node = tnode Map.! temp
               in  fromIntegral $ length $ Graph.succ node
-      in  if elem temp previousSpillTemps
+      in  if temp `elem` previousSpillTemps
             then 1 / 0
             else useDefCount / nodeDegree
 

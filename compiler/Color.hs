@@ -568,7 +568,7 @@ combine u v = do
       alias''          = Map.insert v u alias'
       mv_u             = moveList' Map.! u
       mv_v             = moveList' Map.! v
-      mv_u'            = union mv_u mv_v
+      mv_u'            = mv_u `union` mv_v
       moveList''       = Map.insert u mv_u' moveList'
   s2 <- get
   put s2 { coalescedNodes = coalescedNodes''
