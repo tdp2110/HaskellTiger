@@ -1,7 +1,5 @@
 module AssemOptim
-  ( Pass
-  , pruneDefdButNotUsed
-  , removeTrivialJumps
+  ( optimize
   )
 where
 
@@ -13,10 +11,27 @@ import           Data.Foldable                  ( foldl' )
 import qualified Data.Map                      as Map
 
 
-type Pass
-  = ([A.Inst], (F.FlowGraph, [F.Node])) -> ([A.Inst], (F.FlowGraph, [F.Node]))
+type CFG = ([A.Inst], (F.FlowGraph, [F.Node]))
+type PassKernel = CFG -> [A.Inst]
+type Pass = CFG -> CFG
 
-pruneDefdButNotUsed :: Pass
+optimize :: [A.Inst] -> CFG
+optimize insts =
+  let (flowGraph, nodes) = F.instrsToGraph insts
+      input              = (insts, (flowGraph, nodes))
+  in  foldl' applyPass input passes
+ where
+  passes :: [Pass]
+  passes = fmap makePass [pruneDefdButNotUsed, removeTrivialJumps]
+
+  makePass :: PassKernel -> Pass
+  makePass kernel input =
+    let instrs = kernel input in (instrs, F.instrsToGraph instrs)
+
+  applyPass :: CFG -> Pass -> CFG
+  applyPass input pass = pass input
+
+pruneDefdButNotUsed :: PassKernel
 pruneDefdButNotUsed (insts, (F.FlowGraph { F.control = control, F.use = use }, _))
   = let getDefaultZero = Map.findWithDefault (0 :: Int)
         useCounts =
@@ -36,16 +51,15 @@ pruneDefdButNotUsed (insts, (F.FlowGraph { F.control = control, F.use = use }, _
                 Map.empty
               $ Map.keys
               $ G.nodes control
-        insts' = filter
+    in  filter
           (\inst -> case inst of
             A.MOVE { A.moveDst = defdId } ->
               getDefaultZero defdId useCounts /= 0
             _ -> True
           )
           insts
-    in  (insts', F.instrsToGraph insts')
 
-removeTrivialJumps :: Pass
+removeTrivialJumps :: PassKernel
 removeTrivialJumps (insts, (_, flowNodes)) =
   let
     nodes = zip insts $ fmap G.nodeId flowNodes
@@ -56,9 +70,8 @@ removeTrivialJumps (insts, (_, flowNodes)) =
                              potentialTrivialJumps
     nodesToDelete = (\(n1, n2, _) -> [n1, n2]) =<< trivialJumps
     prunedNodes   = filter (\(_, n) -> n `notElem` nodesToDelete) nodes
-    insts'        = fmap fst prunedNodes
   in
-    (insts', F.instrsToGraph insts')
+    fmap fst prunedNodes
  where
   hasCountOne :: A.Label -> Map.Map A.Label Int -> Bool
   hasCountOne lab countMap = case Map.lookup lab countMap of

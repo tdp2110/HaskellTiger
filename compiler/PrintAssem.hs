@@ -4,7 +4,6 @@ import qualified Assem
 import qualified AssemOptim
 import qualified Canon
 import qualified Codegen
-import qualified Flow
 import qualified Parser
 import qualified RegAlloc
 import qualified Semant
@@ -77,7 +76,7 @@ compileToAsm text performRegAlloc = case Parser.parse text of
               insts' = X64Frame.procEntryExit2 frame insts
               maxCallArgs = TreeIR.maxCallArgsStm bodyStm
               tempMap = X64Frame.tempMap x64
-              (insts'', (flowGraph, _)) = optimize insts'
+              (insts'', (flowGraph, _)) = AssemOptim.optimize insts'
               (insts''', alloc, frame', gen6) = if performRegAlloc
                 then RegAlloc.alloc insts'' flowGraph frame gen5 []
                 else (insts'', tempMap, frame, gen5)
@@ -95,14 +94,6 @@ compileToAsm text performRegAlloc = case Parser.parse text of
               , gen6
               )
          where
-          optimize
-            :: [Assem.Inst] -> ([Assem.Inst], (Flow.FlowGraph, [Flow.Node]))
-          optimize instrs =
-            let (flowGraph, nodes) = Flow.instrsToGraph instrs
-                (insts', (flowGraph', nodes')) =
-                    AssemOptim.pruneDefdButNotUsed (instrs, (flowGraph, nodes))
-            in  AssemOptim.removeTrivialJumps (insts', (flowGraph', nodes'))
-
           notEmptyInst :: Assem.Inst -> Bool
           notEmptyInst Assem.OPER { Assem.assem = assem } = T.length assem /= 0
           notEmptyInst _ = True
