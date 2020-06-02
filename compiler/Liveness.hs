@@ -10,6 +10,7 @@ where
 import qualified Graph                         as G
 import qualified Flow
 
+import           Control.Monad                  ( join )
 import           Control.Monad.Trans.Class      ( lift )
 import           Control.Monad.Trans.Writer     ( WriterT
                                                 , runWriterT
@@ -22,6 +23,8 @@ import           Data.Map                       ( Map )
 import qualified Data.Map                      as Map
 import           Data.Set                       ( Set )
 import qualified Data.Set                      as Set
+import           Data.Vector                    ( Vector )
+import qualified Data.Vector                   as Vector
 
 type TempId = Flow.TempId
 
@@ -152,27 +155,43 @@ type IGraphBuilder = WriterT Moves (WriterT [(TempId, Node)] GraphBuilder)
 -- | computes live-out sets per FlowGraph node
 buildLiveMap :: Flow.FlowGraph -> Map Flow.NodeId (Set TempId)
 buildLiveMap g =
-  let cfg = Flow.control g
+  let cfg                  = Flow.control g
       --flowKeys = Map.keys $ G.nodes cfg
-      liveIn   = Map.fromList $ fmap (\nodeId -> (nodeId, Set.empty)) flowKeys
-      liveOut  = liveIn
+      liveIn = Map.fromList $ fmap (\nodeId -> (nodeId, emptyBitset)) flowKeys
+      liveOut              = liveIn
       quasiToposortedNodes = G.quasiTopoSort cfg
-      flowKeys = fmap (G.nodeId) quasiToposortedNodes
-  in  buildImpl flowKeys liveIn liveOut
+      flowKeys             = fmap (G.nodeId) quasiToposortedNodes
+  in  Map.map bitsetToMap $ buildImpl flowKeys liveIn liveOut
  where
+  emptyBitset :: Bitset
+  emptyBitset = Vector.replicate (maxTempId + 1) False
+
+  maxTempId :: Int
+  maxTempId =
+    let allDefs = join $ Map.elems $ Flow.def g
+        allUse  = join $ Map.elems $ Flow.use g
+    in  maximum $ allDefs ++ allUse
+
+  bitsetToMap :: Bitset -> Set TempId
+  bitsetToMap bs =
+    let lst              = Vector.toList bs
+        lstWithIx        = zip [0 ..] lst
+        filtered         = filter snd lstWithIx
+        appearingIndices = fmap fst filtered
+    in  Set.fromList appearingIndices
+
   buildImpl
     :: [Flow.NodeId]
-    -> Map Flow.NodeId (Set TempId)
-    -> Map Flow.NodeId (Set TempId)
-    -> Map Flow.NodeId (Set TempId)
+    -> Map Flow.NodeId Bitset
+    -> Map Flow.NodeId Bitset
+    -> Map Flow.NodeId Bitset
   buildImpl flowKeys liveIn liveOut =
     let liveIn'    = Map.fromList $ fmap (updateIn liveOut) flowKeys
         liveOut'   = Map.fromList $ fmap (updateOut liveIn) flowKeys
         shouldStop = liveIn' == liveIn && liveOut' == liveOut
     in  if shouldStop then liveOut else buildImpl flowKeys liveIn' liveOut'
 
-  updateIn
-    :: Map Flow.NodeId (Set TempId) -> Flow.NodeId -> (Flow.NodeId, Set TempId)
+  updateIn :: Map Flow.NodeId Bitset -> Flow.NodeId -> (Flow.NodeId, Bitset)
   updateIn liveOut nodeId =
     -- in[n] = use[n] \union (out[n]-def[n])
     let usesList = Flow.use g Map.! nodeId
@@ -182,11 +201,19 @@ buildLiveMap g =
         defSet   = Set.fromList defList
     in  (nodeId, Set.union usesSet $ Set.difference out defSet)
 
-  updateOut
-    :: Map Flow.NodeId (Set TempId) -> Flow.NodeId -> (Flow.NodeId, Set TempId)
+  updateOut :: Map Flow.NodeId Bitset -> Flow.NodeId -> (Flow.NodeId, Bitset)
   updateOut liveIn nodeId =
     -- out[n] = \Union_{s \in succ[n]} in[s]
     let succs     = G.succ $ G.nodes (Flow.control g) Map.! nodeId
         inOfSuccs = fmap (liveIn Map.!) succs
         out'      = foldl' Set.union Set.empty inOfSuccs
     in  (nodeId, out')
+
+type Bitset = Vector Bool
+
+_difference :: Bitset -> Bitset -> Bitset
+_difference = Vector.zipWith diffFun
+  where diffFun x y = if x && y then False else x
+
+_union :: Bitset -> Bitset -> Bitset
+_union = Vector.zipWith (||)
