@@ -99,7 +99,9 @@ compileToAsm text performRegAlloc = case Parser.parse text of
             :: [Assem.Inst] -> ([Assem.Inst], (Flow.FlowGraph, [Flow.Node]))
           optimize instrs =
             let (flowGraph, nodes) = Flow.instrsToGraph instrs
-            in  AssemOptim.pruneDefdButNotUsed (instrs, (flowGraph, nodes))
+                (insts', (flowGraph', nodes')) =
+                    AssemOptim.pruneDefdButNotUsed (instrs, (flowGraph, nodes))
+            in  AssemOptim.removeTrivialJumps (insts', (flowGraph', nodes'))
 
           notEmptyInst :: Assem.Inst -> Bool
           notEmptyInst Assem.OPER { Assem.assem = assem } = T.length assem /= 0
