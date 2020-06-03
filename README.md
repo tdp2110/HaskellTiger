@@ -51,7 +51,58 @@ cc hello_world.s runtime/build/libtiger_rt.a -lc++ -o hello_world
 ./hello_world
 ```
 
-NB: I'm still working through the bugs :)
+hello_world.tiger is simply
+
+```
+println("hello world")
+```
+
+hello_world.s will look something like
+
+```
+        .globl _main
+        .section    __TEXT,__text,regular,pure_instructions
+        .intel_syntax noprefix
+.L15:
+        .asciz  "hello world"
+_main:
+        push rbp                 ## ("_main",line -1, col -1)
+        mov rbp, rsp
+        sub rsp, 32
+        lea rbx, [rip + .L15]
+        mov qword ptr [rbp-8], rbx
+        mov rbx, 11
+        mov qword ptr [rbp-16], rbx
+        lea r15, [rip + _tiger_allocString]
+        mov r14, rax            ## caller saves
+        mov r13, rdx            ## caller saves
+        mov r12, rsi            ## caller saves
+        mov rbx, rdi            ## caller saves
+        mov rdi, qword ptr [rbp-8]
+        mov rsi, qword ptr [rbp-16]
+        call r15
+        mov r15, rax
+        mov rax, r14            ## caller restores
+        mov rdx, r13            ## caller restores
+        mov rsi, r12            ## caller restores
+        mov rdi, rbx            ## caller restores
+        lea r14, [rip + _tiger_println]
+        mov r13, rax            ## caller saves
+        mov r12, rdx            ## caller saves
+        mov rbx, rdi            ## caller saves
+        mov rdi, r15
+        call r14
+        mov rax, r13            ## caller restores
+        mov rdx, r12            ## caller restores
+        mov rdi, rbx            ## caller restores
+        mov rax, rbp
+        add rsp, 32
+        pop rbp
+        mov rax, 0
+        ret
+```
+
+As you can see, it is not optimal :)
 
 ## Running tests
 
