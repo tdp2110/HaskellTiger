@@ -21,7 +21,7 @@ import           Data.Map                       ( Map )
 import qualified Data.Map                      as Map
 import           System.Environment             ( getArgs )
 import           System.Console.GetOpt
-
+import           Text.Pretty.Simple
 
 parseToExp :: String -> (Translate.Exp, Semant.FragList)
 parseToExp text =
@@ -209,7 +209,7 @@ main = do
       else if optShowAst clopts
         then do
           str <- readFile $ head args'
-          print $ Parser.parse str
+          pPrint $ Parser.parse str
         else if optShowTreeIR clopts
           then do
             str <- readFile $ head args'
@@ -225,4 +225,4 @@ main = do
                 putStrLn "CX ..."
           else do
             str <- readFile $ head args'
-            putStrLn $ compileToAsm str (optNoRegAlloc clopts)
+            putStrLn $ compileToAsm str $ optNoRegAlloc clopts

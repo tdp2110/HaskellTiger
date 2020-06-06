@@ -14,6 +14,7 @@ where
 import           Symbol
 import qualified Data.Text                     as T
 
+
 data Pos = Pos { absChrOffset :: !Int
                , lineno :: !Int
                , colno :: !Int}
