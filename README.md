@@ -46,7 +46,7 @@ cabal new-build
 For example, to compile and run examples/hello_world.tiger, after building the compiler and runtime
 
 ```
-cabal -v0 new-run tiger examples/hello_world.tiger > hello_world.s
+cabal -v0 new-run tigerc examples/hello_world.tiger > hello_world.s
 clang hello_world.s runtime/build/libtiger_rt.a -lc++ -o hello_world
 ./hello_world
 ```
