@@ -150,9 +150,11 @@ main = do
   if "--lex" `elem` args
     then
       let args' = delete "--lex" args
-      in  case Lexer.scanner $ head args' of
-            Left  st -> error st
-            Right ls -> print ls
+      in  do
+            str <- readFile $ head args'
+            case Lexer.scanner str of
+              Left  st -> error st
+              Right ls -> print ls
     else if "--ast" `elem` args
       then
         let args' = delete "--ast" args
