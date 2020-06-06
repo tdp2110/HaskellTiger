@@ -27,7 +27,7 @@ class TestCompiler(unittest.TestCase):
         return os.path.join(self.temp_dir.name, 'source.s')
 
     def check_compiler(self, source_file, expected_output=None, run=True):
-        tiger_process = Popen(['cabal', '-v0', 'new-run', 'PrintAssem',
+        tiger_process = Popen(['cabal', '-v0', 'new-run', 'tiger',
                                 source_file, '-O0', self.compiler_outfile],
                               stdout=PIPE)
             
