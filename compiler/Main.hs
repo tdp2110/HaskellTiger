@@ -20,6 +20,7 @@ import           Data.List
 import           Data.Map                       ( Map )
 import qualified Data.Map                      as Map
 import           System.Environment             ( getArgs )
+import           System.Console.GetOpt
 
 
 parseToExp :: String -> (Translate.Exp, Semant.FragList)
@@ -144,42 +145,84 @@ compileToAsm text performRegAlloc = case Parser.parse text of
       in
         header ++ fst (foldl' step2 ([], gen) frags)
 
+data Clopts = Clopts {
+    optShowTokens :: Bool
+  , optShowAst :: Bool
+  , optShowTreeIR :: Bool
+  , optNoRegAlloc :: Bool
+  , optShowHelp :: Bool
+  } deriving Show
+
+defaultClopts :: Clopts
+defaultClopts = Clopts { optShowTokens = False
+                       , optShowAst    = False
+                       , optShowTreeIR = False
+                       , optNoRegAlloc = False
+                       , optShowHelp   = False
+                       }
+
+options :: [OptDescr (Clopts -> Clopts)]
+options =
+  [ Option []
+           ["show-tokens"]
+           (NoArg (\opts -> opts { optShowTokens = True }))
+           "tokenize input file"
+  , Option []
+           ["show-ast"]
+           (NoArg (\opts -> opts { optShowAst = True }))
+           "parse input file to AST"
+  , Option []
+           ["show-tree-ir"]
+           (NoArg (\opts -> opts { optShowTreeIR = True }))
+           "show tree intermediate representation"
+  , Option
+    []
+    ["noreg"]
+    (NoArg (\opts -> opts { optNoRegAlloc = True }))
+    "if set, do not perform register allocation (leaves temporary registers)"
+  , Option ['h']
+           ["help"]
+           (NoArg (\opts -> opts { optShowHelp = True }))
+           "show help"
+  ]
+
+parseClopts :: [String] -> IO (Clopts, [String])
+parseClopts argv = case getOpt Permute options argv of
+  (o, n, []  ) -> return (foldl (flip id) defaultClopts o, n)
+  (_, _, errs) -> ioError (userError (concat errs ++ help))
+
+help :: String
+help = usageInfo "Usage: tigerc [OPTION...] files..." options
+
 main :: IO ()
 main = do
-  args <- getArgs
-  if "--lex" `elem` args
-    then
-      let args' = delete "--lex" args
-      in  do
-            str <- readFile $ head args'
-            case Lexer.scanner str of
-              Left  st -> error st
-              Right ls -> print ls
-    else if "--ast" `elem` args
-      then
-        let args' = delete "--ast" args
-        in  do
-              str <- readFile $ head args'
-              print $ Parser.parse str
-      else if "--treeIR" `elem` args
-        then
-          let args' = delete "--treeIR" args
-          in  do
-                str <- readFile $ head args'
-                case parseToExp str of
-                  (Translate.Ex treeExp, frags) -> do
-                    mapM_ showFrag frags
-                    print treeExp
-                    pure ()
-                  (Translate.Nx treeStm, frags) -> do
-                    mapM_ showFrag frags
-                    print treeStm
-                    pure ()
-                  (Translate.Cx _, frags) -> do
-                    mapM_ showFrag frags
-                    putStrLn "CX ..."
-        else do
-          let shouldRegAlloc = "--noreg" `notElem` args
-          let args'          = delete "--noreg" args
+  args            <- getArgs
+  (clopts, args') <- parseClopts args
+  if optShowHelp clopts
+    then putStrLn help
+    else if optShowTokens clopts
+      then do
+        str <- readFile $ head args'
+        case Lexer.scanner str of
+          Left  err  -> error err
+          Right toks -> print toks
+      else if optShowAst clopts
+        then do
           str <- readFile $ head args'
-          putStrLn $ compileToAsm str shouldRegAlloc
+          print $ Parser.parse str
+        else if optShowTreeIR clopts
+          then do
+            str <- readFile $ head args'
+            case parseToExp str of
+              (Translate.Ex treeExp, frags) -> do
+                mapM_ showFrag frags
+                print treeExp
+              (Translate.Nx treeStm, frags) -> do
+                mapM_ showFrag frags
+                print treeStm
+              (Translate.Cx _, frags) -> do
+                mapM_ showFrag frags
+                putStrLn "CX ..."
+          else do
+            str <- readFile $ head args'
+            putStrLn $ compileToAsm str (optNoRegAlloc clopts)
