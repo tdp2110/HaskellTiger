@@ -227,4 +227,4 @@ main = do
                 putStrLn "CX ..."
           else do
             str <- readFile $ head args'
-            putStrLn $ compileToAsm str $ optNoRegAlloc clopts
+            putStrLn $ compileToAsm str $ not $ optNoRegAlloc clopts
