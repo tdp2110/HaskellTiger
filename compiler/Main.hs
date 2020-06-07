@@ -209,7 +209,9 @@ main = do
       else if optShowAst clopts
         then do
           str <- readFile $ head args'
-          pPrint $ Parser.parse str
+          case Parser.parse str of
+            Left err -> error err
+            Right expr -> pPrint expr
         else if optShowTreeIR clopts
           then do
             str <- readFile $ head args'
