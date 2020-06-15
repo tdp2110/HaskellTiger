@@ -1,6 +1,9 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Assem
   ( Inst(..)
   , Label
+  , defaultOper
   )
 where
 
@@ -12,6 +15,7 @@ type Label = Temp.Label
 data Inst = OPER { assem :: T.Text
                  , operDst :: [Int]
                  , operSrc :: [Int]
+                 , hasFallthrough :: Bool
                  , jump :: Maybe [Label] }
           | LABEL { assem :: T.Text
                   , lab :: Label }
@@ -22,3 +26,11 @@ data Inst = OPER { assem :: T.Text
                      , strDst :: Int
                      , strVal :: Int }
   deriving (Eq, Show)
+
+defaultOper :: Inst
+defaultOper = OPER { assem          = ""
+                   , operDst        = []
+                   , operSrc        = []
+                   , hasFallthrough = False
+                   , jump           = Nothing
+                   }

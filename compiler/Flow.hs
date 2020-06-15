@@ -104,6 +104,8 @@ instrsToGraph insts =
   insertFallthroughs nodes =
     mapM_
         (\((i1, n1), (_, n2)) -> case i1 of
+          A.OPER { A.jump = Just _, A.hasFallthrough = True } ->
+            G.addEdge n1 n2
           A.OPER { A.jump = Just _ } -> pure ()
           _                          -> G.addEdge n1 n2
         )

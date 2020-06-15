@@ -391,7 +391,7 @@ procEntryExit1 frame bodyExp gen =
 -- that certain regisers are live at procedure exit.
 -- fun procEntryExit2(frame, body) =
 --   body @
---   [A.OPER{assem="",
+--   [A.defaultOper{assem="",
 --           src=[ZERO,RA,SP]@calleesaves,
 --           dst=[],jump=SOME[]}]
 procEntryExit2 :: X64Frame -> [Assem.Inst] -> [Assem.Inst]
@@ -399,7 +399,7 @@ procEntryExit2 frame bodyAsm =
   let x64'            = x64 frame
       maybeCalleSaves = if isMain frame then [] else calleeSaves x64'
   in  bodyAsm
-        ++ [ Assem.OPER
+        ++ [ Assem.defaultOper
                { Assem.assem   = ""
                , Assem.operDst = []
                , Assem.operSrc = [rax x64', rsp x64', rbp x64']
@@ -423,19 +423,21 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) =
         Nothing -> -- we're in a leaf function (ie it calls no other function. use the 128-byte redzone)
           max 0 $ numEscapingLocals - 128 `div` 8
       stackAdjustment =
-          [ Assem.OPER { Assem.assem = T.pack $ "\tsub `d0, " ++ show stackSize
-                       , Assem.operDst = [rsp $ x64 frame]
-                       , Assem.operSrc = []
-                       , Assem.jump    = Nothing
-                       }
+          [ Assem.defaultOper
+              { Assem.assem   = T.pack $ "\tsub `d0, " ++ show stackSize
+              , Assem.operDst = [rsp $ x64 frame]
+              , Assem.operSrc = []
+              , Assem.jump    = Nothing
+              }
           | stackSize /= 0
           ]
       prologue =
-          [ Assem.OPER { Assem.assem   = T.pack $ "\tpush `d0" ++ fmtDebug frame
-                       , Assem.operDst = [rbp $ x64 frame]
-                       , Assem.operSrc = [rsp $ x64 frame]
-                       , Assem.jump    = Nothing
-                       }
+          [ Assem.defaultOper
+              { Assem.assem   = T.pack $ "\tpush `d0" ++ fmtDebug frame
+              , Assem.operDst = [rbp $ x64 frame]
+              , Assem.operSrc = [rsp $ x64 frame]
+              , Assem.jump    = Nothing
+              }
             , Assem.MOVE { Assem.assem   = "\tmov `d0, `s0"
                          , Assem.moveDst = rbp $ x64 frame
                          , Assem.moveSrc = rsp $ x64 frame
@@ -443,34 +445,35 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) =
             ]
             ++ stackAdjustment
       epilogue1 =
-          [ Assem.OPER { Assem.assem = T.pack $ "\tadd `d0, " ++ show stackSize
-                       , Assem.operDst = [rsp $ x64 frame]
-                       , Assem.operSrc = []
-                       , Assem.jump    = Nothing
-                       }
+          [ Assem.defaultOper
+              { Assem.assem   = T.pack $ "\tadd `d0, " ++ show stackSize
+              , Assem.operDst = [rsp $ x64 frame]
+              , Assem.operSrc = []
+              , Assem.jump    = Nothing
+              }
           | stackSize /= 0
           ]
       raxClearOrNil =
-          [ Assem.OPER { Assem.assem   = "\tmov `d0, 0"
-                       , Assem.operDst = [rax $ x64 frame]
-                       , Assem.operSrc = []
-                       , Assem.jump    = Nothing
-                       }
+          [ Assem.defaultOper { Assem.assem   = "\tmov `d0, 0"
+                              , Assem.operDst = [rax $ x64 frame]
+                              , Assem.operSrc = []
+                              , Assem.jump    = Nothing
+                              }
           | isMain frame
           ]
       epilogue2 =
-          [ Assem.OPER { Assem.assem   = "\tpop `d0"
-                       , Assem.operDst = [rbp $ x64 frame]
-                       , Assem.operSrc = []
-                       , Assem.jump    = Nothing
-                       }
+          [ Assem.defaultOper { Assem.assem   = "\tpop `d0"
+                              , Assem.operDst = [rbp $ x64 frame]
+                              , Assem.operSrc = []
+                              , Assem.jump    = Nothing
+                              }
             ]
             ++ raxClearOrNil
-            ++ [ Assem.OPER { Assem.assem   = "\tret"
-                            , Assem.operDst = [rsp $ x64 frame]
-                            , Assem.operSrc = []
-                            , Assem.jump    = Nothing
-                            }
+            ++ [ Assem.defaultOper { Assem.assem   = "\tret"
+                                   , Assem.operDst = [rsp $ x64 frame]
+                                   , Assem.operSrc = []
+                                   , Assem.jump    = Nothing
+                                   }
                ]
       epilogue = epilogue1 ++ epilogue2
   in  [label] ++ prologue ++ bodyAsm' ++ epilogue
