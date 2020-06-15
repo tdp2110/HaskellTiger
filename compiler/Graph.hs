@@ -11,6 +11,8 @@ module Graph
   , toDot
   , exitNodes
   , quasiTopoSort
+  , newNode
+  , mkEdge
   )
 where
 
@@ -92,6 +94,7 @@ dfs g node =
                   mapM_ (dfs g) $ fmap (nodes g Map.!) $ pred node
                   tell $ singleton nodeId_
                   pure ()
+
 
 -- | produce a repr of a graph in the "dot" language
 toDot :: Show a => Graph a -> String
