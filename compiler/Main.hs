@@ -78,6 +78,29 @@ formatAsm alloc asm =
       Assem.STORECONST { Assem.assem = assem, Assem.strDst = strDst } ->
         formatImpl (T.unpack assem) [strDst] [] Nothing
 
+showFlatIR :: String -> String
+showFlatIR text = case Parser.parse text of
+  Left  err -> show err
+  Right ast -> case Semant.transThunked ast of
+    Left err -> show err
+    Right (_, frags, gen, _) ->
+      let emit
+            :: X64Frame.Frag -> Temp.Generator -> (Canon.Block, Temp.Generator)
+          emit X64Frame.PROC { X64Frame.body = bodyStm } gen' =
+              let
+                (stmts, gen'') = Canon.linearize bodyStm gen'
+                ((blocks, lab), gen3) = runState (Canon.basicBlocks stmts) gen''
+                (stmts', gen4) = runState (Canon.traceSchedule blocks lab) gen3
+              in
+                (stmts', gen4)
+          emit (X64Frame.STRING _) g = ([], g)
+          accum
+            :: (Canon.Block, Temp.Generator)
+            -> X64Frame.Frag
+            -> (Canon.Block, Temp.Generator)
+          accum (b, g) f = let (b', g') = emit f g in (b ++ b', g')
+          flatIr = fst (foldl' accum ([] :: Canon.Block, gen) frags)
+      in  intercalate "\n" (fmap show flatIr)
 
 compileToAsm :: String -> Bool -> String
 compileToAsm text performRegAlloc = case Parser.parse text of
@@ -151,6 +174,7 @@ data Clopts = Clopts {
   , optShowTreeIR :: Bool
   , optNoRegAlloc :: Bool
   , optShowHelp :: Bool
+  , optShowFlatIR :: Bool
   } deriving Show
 
 defaultClopts :: Clopts
@@ -159,6 +183,7 @@ defaultClopts = Clopts { optShowTokens = False
                        , optShowTreeIR = False
                        , optNoRegAlloc = False
                        , optShowHelp   = False
+                       , optShowFlatIR = False
                        }
 
 options :: [OptDescr (Clopts -> Clopts)]
@@ -175,6 +200,10 @@ options =
            ["show-tree-ir"]
            (NoArg (\opts -> opts { optShowTreeIR = True }))
            "show tree intermediate representation"
+  , Option []
+           ["show-flat-ir"]
+           (NoArg (\opts -> opts { optShowFlatIR = True }))
+           "show flattened intermediate representation"
   , Option
     []
     ["noreg"]
@@ -210,7 +239,7 @@ main = do
         then do
           str <- readFile $ head args'
           case Parser.parse str of
-            Left err -> error err
+            Left  err  -> error err
             Right expr -> pPrint expr
         else if optShowTreeIR clopts
           then do
@@ -225,6 +254,10 @@ main = do
               (Translate.Cx _, frags) -> do
                 mapM_ showFrag frags
                 putStrLn "CX ..."
-          else do
-            str <- readFile $ head args'
-            putStrLn $ compileToAsm str $ not $ optNoRegAlloc clopts
+          else if optShowFlatIR clopts
+            then do
+              str <- readFile $ head args'
+              putStrLn $ showFlatIR str
+            else do
+              str <- readFile $ head args'
+              putStrLn $ compileToAsm str $ not $ optNoRegAlloc clopts

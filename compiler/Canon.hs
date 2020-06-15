@@ -2,6 +2,7 @@ module Canon
   ( linearize
   , basicBlocks
   , traceSchedule
+  , Block
   )
 where
 

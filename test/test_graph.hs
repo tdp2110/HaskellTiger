@@ -25,8 +25,7 @@ main =
   hspec
     $ describe "toposort"
     $ it "works"
-    $ let nid0            = NodeId 0
-          g0              = G.newGraph nid0
+    $ let g0              = G.newGraph $ NodeId 0
           (node0, g1)     = G.newNode g0
           (node1, g2)     = G.newNode g1
           (node2, g3)     = G.newNode g2
