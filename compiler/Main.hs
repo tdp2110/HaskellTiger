@@ -5,6 +5,7 @@ import qualified AssemOptim
 import qualified Canon
 import qualified Codegen
 import qualified Flow
+import qualified IROptim
 import qualified Lexer
 import qualified Parser
 import qualified RegAlloc
@@ -23,6 +24,7 @@ import qualified Data.Map                      as Map
 import           System.Environment             ( getArgs )
 import           System.Console.GetOpt
 import           Text.Pretty.Simple
+
 
 parseToExp :: String -> (Translate.Exp, Semant.FragList)
 parseToExp text =
@@ -79,8 +81,8 @@ formatAsm alloc asm =
       Assem.STORECONST { Assem.assem = assem, Assem.strDst = strDst } ->
         formatImpl (T.unpack assem) [strDst] [] Nothing
 
-showFlatIR :: String -> String
-showFlatIR text = case Parser.parse text of
+showFlatIR :: String -> Bool -> String
+showFlatIR text optimize = case Parser.parse text of
   Left  err -> show err
   Right ast -> case Semant.transThunked ast of
     Left err -> show err
@@ -91,7 +93,8 @@ showFlatIR text = case Parser.parse text of
               let
                 (stmts, gen'') = Canon.linearize bodyStm gen'
                 ((blocks, lab), gen3) = runState (Canon.basicBlocks stmts) gen''
-                (stmts', gen4) = runState (Canon.traceSchedule blocks lab) gen3
+                blocks' = if optimize then fmap IROptim.optimizeBasicBlock blocks else blocks
+                (stmts', gen4) = runState (Canon.traceSchedule blocks' lab) gen3
               in
                 (stmts', gen4)
           emit (X64Frame.STRING _) g = ([], g)
@@ -120,7 +123,8 @@ compileToAsm text performRegAlloc optimize = case Parser.parse text of
           = let
               (stmts        , gen'')    = Canon.linearize bodyStm gen'
               ((blocks, lab), gen3) = runState (Canon.basicBlocks stmts) gen''
-              (stmts', gen4) = runState (Canon.traceSchedule blocks lab) gen3
+              blocks' = if optimize then fmap IROptim.optimizeBasicBlock blocks else blocks
+              (stmts', gen4) = runState (Canon.traceSchedule blocks' lab) gen3
               (insts        , gen5 )    = foldl' step1 ([], gen4) stmts'
               insts'                    = X64Frame.procEntryExit2 frame insts
               maxCallArgs               = TreeIR.maxCallArgsStm bodyStm
@@ -267,7 +271,7 @@ main = do
           else if optShowFlatIR clopts
             then do
               str <- readFile $ head args'
-              putStrLn $ showFlatIR str
+              putStrLn $ showFlatIR str (not $ optO0 clopts)
             else do
               str <- readFile $ head args'
               putStrLn $ compileToAsm str

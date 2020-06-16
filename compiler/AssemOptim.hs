@@ -8,6 +8,7 @@ import qualified Assem                         as A
 import qualified Flow                          as F
 import qualified Graph                         as G
 
+import qualified Data.Bifunctor
 import           Data.Foldable                  ( foldl' )
 import qualified Data.Map                      as Map
 
@@ -70,7 +71,7 @@ chaseJumps (insts, (F.FlowGraph { F.control = cfg }, flowNodes)) =
   let nodeIds = fmap G.nodeId flowNodes
       label2NodeId =
           Map.fromList
-            $ fmap (\(i, n) -> (A.lab i, n))
+            $ fmap (Data.Bifunctor.first A.lab)
             $ filter (\(i, _) -> isLabel i)
             $ zip insts nodeIds
       nodeId2Inst = Map.fromList $ zip nodeIds insts
@@ -82,7 +83,7 @@ chaseJumps (insts, (F.FlowGraph { F.control = cfg }, flowNodes)) =
 
   chase label2NodeId nodeId2Inst inst@A.OPER { A.jump = Just [jumpTargetLab], A.operSrc = [], A.operDst = [] }
     = let jumpTargetNodeId = label2NodeId Map.! jumpTargetLab -- `debug` show inst
-          jumpTargetNode   = (G.nodes cfg) Map.! jumpTargetNodeId
+          jumpTargetNode   = G.nodes cfg Map.! jumpTargetNodeId
           succs            = G.succ jumpTargetNode
       in  case succs of
             [succId] -> case nodeId2Inst Map.! succId of
