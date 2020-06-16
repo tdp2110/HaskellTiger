@@ -339,7 +339,7 @@ mutuallyRecFuns = TestCase
   (let text =
            "let\n"
              ++ "  function isOdd(x:int) : int = \n"
-             ++ "    if x = 1 then 1 else isEven(x-1)\n"
+             ++ "    if x = 0 then 0 else isEven(x-1)\n"
              ++ "  function isEven(x:int) : int = \n"
              ++ "    if x = 0 then 1 else isOdd(x-1)\n"
              ++ "in isEven(140) end"

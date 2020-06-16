@@ -125,6 +125,9 @@ class TestCompiler(unittest.TestCase):
     def test_merge(self):
         self.check_compiler('examples/merge.tiger', run=False)
 
+    def test_mutual_recursion(self):
+        self.check_compiler('examples/mutualRecursion.tiger', '0\n1\n1\n0\n')
+        
     def test_redzone(self):
         assem = self.check_compiler('examples/redzone.tiger', '190\n')
         # if would be better to do this in a more structured way :D

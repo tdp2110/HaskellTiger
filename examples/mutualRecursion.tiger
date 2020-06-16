@@ -1,0 +1,13 @@
+let
+    function isOdd(x: int) : int =
+        if x = 0 then 0
+        else isEven(x - 1)
+    function isEven(x: int) : int =
+        if x = 0 then 1
+        else isOdd(x - 1)
+in
+    println(itoa(isOdd(2)));
+    println(itoa(isOdd(3)));
+    println(itoa(isEven(4)));
+    println(itoa(isEven(5)))
+end
