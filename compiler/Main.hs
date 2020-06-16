@@ -4,6 +4,7 @@ import qualified Assem
 import qualified AssemOptim
 import qualified Canon
 import qualified Codegen
+import qualified Flow
 import qualified Lexer
 import qualified Parser
 import qualified RegAlloc
@@ -102,8 +103,8 @@ showFlatIR text = case Parser.parse text of
           flatIr = fst (foldl' accum ([] :: Canon.Block, gen) frags)
       in  intercalate "\n" (fmap show flatIr)
 
-compileToAsm :: String -> Bool -> String
-compileToAsm text performRegAlloc = case Parser.parse text of
+compileToAsm :: String -> Bool -> Bool -> String
+compileToAsm text performRegAlloc optimize = case Parser.parse text of
   Left  err -> show err
   Right ast -> case Semant.transThunked ast of
     Left err -> show err
@@ -117,20 +118,23 @@ compileToAsm text performRegAlloc = case Parser.parse text of
         emit :: X64Frame.Frag -> Temp.Generator -> (String, Temp.Generator)
         emit X64Frame.PROC { X64Frame.body = bodyStm, X64Frame.fragFrame = frame } gen'
           = let
-              (stmts, gen'') = Canon.linearize bodyStm gen'
+              (stmts        , gen'')    = Canon.linearize bodyStm gen'
               ((blocks, lab), gen3) = runState (Canon.basicBlocks stmts) gen''
               (stmts', gen4) = runState (Canon.traceSchedule blocks lab) gen3
-              (insts, gen5) = foldl' step1 ([], gen4) stmts'
-              insts' = X64Frame.procEntryExit2 frame insts
-              maxCallArgs = TreeIR.maxCallArgsStm bodyStm
-              tempMap = X64Frame.tempMap x64
-              (insts'', (flowGraph, _)) = AssemOptim.optimizePreRegAlloc insts'
+              (insts        , gen5 )    = foldl' step1 ([], gen4) stmts'
+              insts'                    = X64Frame.procEntryExit2 frame insts
+              maxCallArgs               = TreeIR.maxCallArgsStm bodyStm
+              tempMap                   = X64Frame.tempMap x64
+              (insts'', (flowGraph, _)) = if optimize
+                then AssemOptim.optimizePreRegAlloc insts'
+                else (insts', Flow.instrsToGraph insts')
               (insts''', alloc, frame', gen6) = if performRegAlloc
                 then
                   let (instsAlloc, allocs, frameAlloc, genAlloc) =
                         RegAlloc.alloc insts'' flowGraph frame gen5 []
-                      (instsAllocOpt, _) =
-                        AssemOptim.optimizePostRegAlloc instsAlloc
+                      (instsAllocOpt, _) = if optimize
+                        then AssemOptim.optimizePostRegAlloc instsAlloc
+                        else (instsAlloc, undefined)
                   in  (instsAllocOpt, allocs, frameAlloc, genAlloc)
                 else (insts'', tempMap, frame, gen5)
               insts4 = X64Frame.procEntryExit3
@@ -180,6 +184,7 @@ data Clopts = Clopts {
   , optNoRegAlloc :: Bool
   , optShowHelp :: Bool
   , optShowFlatIR :: Bool
+  , optO0 :: Bool
   } deriving Show
 
 defaultClopts :: Clopts
@@ -189,6 +194,7 @@ defaultClopts = Clopts { optShowTokens = False
                        , optNoRegAlloc = False
                        , optShowHelp   = False
                        , optShowFlatIR = False
+                       , optO0         = False
                        }
 
 options :: [OptDescr (Clopts -> Clopts)]
@@ -209,11 +215,10 @@ options =
            ["show-flat-ir"]
            (NoArg (\opts -> opts { optShowFlatIR = True }))
            "show flattened intermediate representation"
-  , Option
-    []
-    ["noreg"]
-    (NoArg (\opts -> opts { optNoRegAlloc = True }))
-    "if set, do not perform register allocation (leaves temporary registers)"
+  , Option []
+           ["O0"]
+           (NoArg (\opts -> opts { optO0 = True }))
+           "optimization level 0 (no optimization)"
   , Option ['h']
            ["help"]
            (NoArg (\opts -> opts { optShowHelp = True }))
@@ -265,4 +270,6 @@ main = do
               putStrLn $ showFlatIR str
             else do
               str <- readFile $ head args'
-              putStrLn $ compileToAsm str $ not $ optNoRegAlloc clopts
+              putStrLn $ compileToAsm str
+                                      (not $ optNoRegAlloc clopts)
+                                      (not $ optO0 clopts)
