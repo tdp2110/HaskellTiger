@@ -27,44 +27,49 @@ class TestCompiler(unittest.TestCase):
         return os.path.join(self.temp_dir.name, 'source.s')
 
     def check_compiler(self, source_file, expected_output=None, run=True):
-        tiger_process = Popen(['cabal', '-v0', 'new-run', 'tigerc',
-                                source_file, '-O0', self.compiler_outfile],
-                              stdout=PIPE)
-            
-        assem, err = tiger_process.communicate()
+        base_compile_command = ['cabal', '-v0', 'new-run', 'tigerc', '--',
+                                source_file]
 
-        tiger_process.wait()
+        def check_at_optim_level(compile_command):        
+            tiger_process = Popen(compile_command,
+                                  stdout=PIPE)
 
-        self.assertEqual(tiger_process.returncode, 0, (assem, err))
+            assem, err = tiger_process.communicate()
 
-        with open(self.assem_file, 'wb') as f:
-            f.write(assem)
-        
-        codegen_process = Popen(['echo', assem], stdout=PIPE)
-        clang_process = Popen(['clang', self.assem_file, 'runtime/build/libtiger_rt.a',
-                               '-lc++', '-o', self.compiler_outfile],
-                              stdin=codegen_process.stdout)
+            tiger_process.wait()
 
-        codegen_process.stdout.close()
-        out, err = clang_process.communicate()
+            self.assertEqual(tiger_process.returncode, 0, (assem, err))
 
-        codegen_process.wait()
-        clang_process.wait()
+            with open(self.assem_file, 'wb') as f:
+                f.write(assem)
 
-        self.assertEqual(clang_process.returncode, 0, (out, err))
+            codegen_process = Popen(['echo', assem], stdout=PIPE)
+            clang_process = Popen(['clang', self.assem_file, 'runtime/build/libtiger_rt.a',
+                                   '-lc++', '-o', self.compiler_outfile],
+                                  stdin=codegen_process.stdout)
 
-        if run:
-            binary_process = Popen([self.compiler_outfile], stdout=PIPE)
-            out, err = binary_process.communicate()
+            codegen_process.stdout.close()
+            out, err = clang_process.communicate()
 
-            binary_process.wait()
+            codegen_process.wait()
+            clang_process.wait()
 
-            self.assertEqual(binary_process.returncode, 0, (out, err))
+            self.assertEqual(clang_process.returncode, 0, (out, err))
 
-            self.assertEqual(out.decode('utf-8'), expected_output)
+            if run:
+                binary_process = Popen([self.compiler_outfile], stdout=PIPE)
+                out, err = binary_process.communicate()
 
-        return assem
-    
+                binary_process.wait()
+
+                self.assertEqual(binary_process.returncode, 0, (out, err))
+                self.assertEqual(out.decode('utf-8'), expected_output)
+
+            return assem
+
+        check_at_optim_level(base_compile_command + ['--O0'])
+        return check_at_optim_level(base_compile_command)
+
     def test_hello_world(self):
         self.check_compiler('examples/hello_world.tiger', 'hello world\n')
 
