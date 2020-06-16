@@ -92,19 +92,19 @@ chaseJumps (insts, (F.FlowGraph { F.control = cfg }, flowNodes)) =
             _ -> inst
   chase _ _ inst = inst
 
+-- | remove
 removeTrivialJumps :: PassKernel
 removeTrivialJumps (insts, (_, flowNodes)) =
-  let
-    nodes = zip insts $ fmap G.nodeId flowNodes
-    potentialTrivialJumps =
-      extractPotentialTrivialJumps =<< zip nodes (tail nodes)
-    labelJumpCounts = foldl' labelJumpCountAccumulator Map.empty insts
-    trivialJumps    = filter (\(_, _, lab) -> hasCountOne lab labelJumpCounts)
-                             potentialTrivialJumps
-    nodesToDelete = (\(n1, n2, _) -> [n1, n2]) =<< trivialJumps
-    prunedNodes   = filter (\(_, n) -> n `notElem` nodesToDelete) nodes
-  in
-    fmap fst prunedNodes
+  let nodes           = zip insts $ fmap G.nodeId flowNodes
+      trivialJumps    = extractTrivialJumps =<< zip nodes (tail nodes)
+      labelJumpCounts = foldl' labelJumpCountAccumulator Map.empty insts
+      nodesToDelete =
+          (\(n1, n2, lab) ->
+              if hasCountOne lab labelJumpCounts then [n1, n2] else [n2]
+            )
+            =<< trivialJumps
+      prunedNodes = filter (\(_, n) -> n `notElem` nodesToDelete) nodes
+  in  fmap fst prunedNodes
  where
   hasCountOne :: A.Label -> Map.Map A.Label Int -> Bool
   hasCountOne lab countMap = case Map.lookup lab countMap of
@@ -121,6 +121,6 @@ removeTrivialJumps (insts, (_, flowNodes)) =
     jumpTargets
   labelJumpCountAccumulator acc _ = acc
 
-  extractPotentialTrivialJumps ((A.OPER { A.jump = Just [lab1], A.operSrc = [], A.operDst = [] }, n1), (A.LABEL { A.lab = lab2 }, n2))
+  extractTrivialJumps ((A.OPER { A.jump = Just [lab1], A.operSrc = [], A.operDst = [] }, n1), (A.LABEL { A.lab = lab2 }, n2))
     = [ (n2, n1, lab1) | lab1 == lab2 ]
-  extractPotentialTrivialJumps _ = []
+  extractTrivialJumps _ = []
