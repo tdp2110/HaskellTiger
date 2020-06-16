@@ -124,9 +124,14 @@ compileToAsm text performRegAlloc = case Parser.parse text of
               insts' = X64Frame.procEntryExit2 frame insts
               maxCallArgs = TreeIR.maxCallArgsStm bodyStm
               tempMap = X64Frame.tempMap x64
-              (insts'', (flowGraph, _)) = AssemOptim.optimize insts'
+              (insts'', (flowGraph, _)) = AssemOptim.optimizePreRegAlloc insts'
               (insts''', alloc, frame', gen6) = if performRegAlloc
-                then RegAlloc.alloc insts'' flowGraph frame gen5 []
+                then
+                  let (instsAlloc, allocs, frameAlloc, genAlloc) =
+                        RegAlloc.alloc insts'' flowGraph frame gen5 []
+                      (instsAllocOpt, _) =
+                        AssemOptim.optimizePostRegAlloc instsAlloc
+                  in  (instsAllocOpt, allocs, frameAlloc, genAlloc)
                 else (insts'', tempMap, frame, gen5)
               insts4 = X64Frame.procEntryExit3
                 frame'

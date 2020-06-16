@@ -1,5 +1,6 @@
 module AssemOptim
-  ( optimize
+  ( optimizePreRegAlloc
+  , optimizePostRegAlloc
   )
 where
 
@@ -15,19 +16,24 @@ type CFG = ([A.Inst], (F.FlowGraph, [F.Node]))
 type PassKernel = CFG -> [A.Inst]
 type Pass = CFG -> CFG
 
-optimize :: [A.Inst] -> CFG
-optimize insts =
+makePass :: PassKernel -> Pass
+makePass kernel input =
+  let instrs = kernel input in (instrs, F.instrsToGraph instrs)
+
+optimizePreRegAlloc :: [A.Inst] -> CFG
+optimizePreRegAlloc =
+  optimize $ fmap makePass [pruneDefdButNotUsed, removeTrivialJumps]
+
+optimizePostRegAlloc :: [A.Inst] -> CFG
+optimizePostRegAlloc =
+  optimize $ fmap makePass [chaseJumps, removeTrivialJumps]
+
+optimize :: [Pass] -> [A.Inst] -> CFG
+optimize passes insts =
   let (flowGraph, nodes) = F.instrsToGraph insts
       input              = (insts, (flowGraph, nodes))
   in  foldl' applyPass input passes
  where
-  passes :: [Pass]
-  passes = fmap makePass [pruneDefdButNotUsed, removeTrivialJumps]
-
-  makePass :: PassKernel -> Pass
-  makePass kernel input =
-    let instrs = kernel input in (instrs, F.instrsToGraph instrs)
-
   applyPass :: CFG -> Pass -> CFG
   applyPass input pass = pass input
 
@@ -59,6 +65,33 @@ pruneDefdButNotUsed (insts, (F.FlowGraph { F.control = control, F.use = use }, _
           )
           insts
 
+chaseJumps :: PassKernel
+chaseJumps (insts, (F.FlowGraph { F.control = cfg }, flowNodes)) =
+  let nodeIds = fmap G.nodeId flowNodes
+      label2NodeId =
+          Map.fromList
+            $ fmap (\(i, n) -> (A.lab i, n))
+            $ filter (\(i, _) -> isLabel i)
+            $ zip insts nodeIds
+      nodeId2Inst = Map.fromList $ zip nodeIds insts
+      insts'      = fmap (chase label2NodeId nodeId2Inst) insts
+  in  insts'
+ where
+  isLabel A.LABEL{} = True
+  isLabel _         = False
+
+  chase label2NodeId nodeId2Inst inst@A.OPER { A.jump = Just [jumpTargetLab], A.operSrc = [], A.operDst = [] }
+    = let jumpTargetNodeId = label2NodeId Map.! jumpTargetLab -- `debug` show inst
+          jumpTargetNode   = (G.nodes cfg) Map.! jumpTargetNodeId
+          succs            = G.succ jumpTargetNode
+      in  case succs of
+            [succId] -> case nodeId2Inst Map.! succId of
+              inst'@A.OPER { A.jump = Just [_], A.operSrc = [], A.operDst = [] }
+                -> inst'
+              _ -> inst
+            _ -> inst
+  chase _ _ inst = inst
+
 removeTrivialJumps :: PassKernel
 removeTrivialJumps (insts, (_, flowNodes)) =
   let
@@ -88,6 +121,6 @@ removeTrivialJumps (insts, (_, flowNodes)) =
     jumpTargets
   labelJumpCountAccumulator acc _ = acc
 
-  extractPotentialTrivialJumps ((A.OPER { A.jump = Just [lab1] }, n1), (A.LABEL { A.lab = lab2 }, n2))
+  extractPotentialTrivialJumps ((A.OPER { A.jump = Just [lab1], A.operSrc = [], A.operDst = [] }, n1), (A.LABEL { A.lab = lab2 }, n2))
     = [ (n2, n1, lab1) | lab1 == lab2 ]
   extractPotentialTrivialJumps _ = []
