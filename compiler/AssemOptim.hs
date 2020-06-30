@@ -40,31 +40,33 @@ optimize passes insts =
 
 pruneDefdButNotUsed :: PassKernel
 pruneDefdButNotUsed (insts, (F.FlowGraph { F.control = control, F.use = use }, _))
-  = let getDefaultZero = Map.findWithDefault (0 :: Int)
-        useCounts =
-            foldl'
-                (\acc nodeId ->
-                  let uses = use Map.! nodeId
-                      acc2 = foldl'
-                        (\acc3 usedId ->
-                          let ct   = getDefaultZero usedId acc3
-                              acc4 = Map.insert usedId (ct + 1) acc3
-                          in  acc4
-                        )
-                        acc
-                        uses
-                  in  acc2
+  = filter shouldKeep insts
+ where
+  shouldKeep :: A.Inst -> Bool
+  shouldKeep A.MOVE { A.moveDst = defdId } = idHasUse defdId
+  shouldKeep A.OPER { A.operDst = defdIds, A.hasSideEffect = False } =
+    any idHasUse defdIds
+  shouldKeep _ = True
+
+  getDefaultZero = Map.findWithDefault (0 :: Int)
+  idHasUse defdId = getDefaultZero defdId useCounts /= 0
+  useCounts =
+    foldl'
+        (\acc nodeId ->
+          let uses = use Map.! nodeId
+              acc2 = foldl'
+                (\acc3 usedId ->
+                  let ct   = getDefaultZero usedId acc3
+                      acc4 = Map.insert usedId (ct + 1) acc3
+                  in  acc4
                 )
-                Map.empty
-              $ Map.keys
-              $ G.nodes control
-    in  filter
-          (\inst -> case inst of
-            A.MOVE { A.moveDst = defdId } ->
-              getDefaultZero defdId useCounts /= 0
-            _ -> True
-          )
-          insts
+                acc
+                uses
+          in  acc2
+        )
+        Map.empty
+      $ Map.keys
+      $ G.nodes control
 
 chaseJumps :: PassKernel
 chaseJumps (insts, (F.FlowGraph { F.control = cfg }, flowNodes)) =
@@ -82,7 +84,7 @@ chaseJumps (insts, (F.FlowGraph { F.control = cfg }, flowNodes)) =
   isLabel _         = False
 
   chase label2NodeId nodeId2Inst inst@A.OPER { A.jump = Just [jumpTargetLab], A.operSrc = [], A.operDst = [] }
-    = let jumpTargetNodeId = label2NodeId Map.! jumpTargetLab -- `debug` show inst
+    = let jumpTargetNodeId = label2NodeId Map.! jumpTargetLab
           jumpTargetNode   = G.nodes cfg Map.! jumpTargetNodeId
           succs            = G.succ jumpTargetNode
       in  case succs of

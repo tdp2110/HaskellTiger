@@ -130,134 +130,150 @@ munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.MINUS, Tr
     )
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.TEMP d), e)) = do
   eReg <- munchExp e
-  emit A.defaultOper { A.assem   = "\tmov qword ptr [`s0], `s1"
-                     , A.operDst = []
-                     , A.operSrc = [d, eReg]
-                     , A.jump    = Nothing
+  emit A.defaultOper { A.assem         = "\tmov qword ptr [`s0], `s1"
+                     , A.operDst       = []
+                     , A.operSrc       = [d, eReg]
+                     , A.hasSideEffect = True
+                     , A.jump          = Nothing
                      }
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP d0, TreeIR.TEMP d1)), e))
   = do
     eReg <- munchExp e
-    emit A.defaultOper { A.assem   = "\tmov qword ptr [`s0+`s1], `s2"
-                       , A.operDst = []
-                       , A.operSrc = [d0, d1, eReg]
-                       , A.jump    = Nothing
+    emit A.defaultOper { A.assem         = "\tmov qword ptr [`s0+`s1], `s2"
+                       , A.operDst       = []
+                       , A.operSrc       = [d0, d1, eReg]
+                       , A.hasSideEffect = True
+                       , A.jump          = Nothing
                        }
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.CONST c1, TreeIR.TEMP d)), TreeIR.CONST c2))
   = emit A.defaultOper
-    { A.assem   = T.pack
-                  $  "\tmov qword ptr [`s0"
-                  ++ plusMinusInt c1
-                  ++ "], "
-                  ++ show c2
-                  ++ ""
-    , A.operDst = []
-    , A.operSrc = [d]
-    , A.jump    = Nothing
+    { A.assem         = T.pack
+                        $  "\tmov qword ptr [`s0"
+                        ++ plusMinusInt c1
+                        ++ "], "
+                        ++ show c2
+                        ++ ""
+    , A.operDst       = []
+    , A.operSrc       = [d]
+    , A.hasSideEffect = True
+    , A.jump          = Nothing
     }
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.CONST c, TreeIR.TEMP d)), e))
   = do
     eReg <- munchExp e
     emit A.defaultOper
       { A.assem = T.pack $ "\tmov qword ptr [`s0" ++ plusMinusInt c ++ "], `s1"
-      , A.operDst = []
-      , A.operSrc = [d, eReg]
-      , A.jump    = Nothing
+      , A.operDst       = []
+      , A.operSrc       = [d, eReg]
+      , A.hasSideEffect = True
+      , A.jump          = Nothing
       }
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP d, TreeIR.CONST c1)), TreeIR.CONST c2))
   = emit A.defaultOper
-    { A.assem   = T.pack
-                  $  "\tmov qword ptr [`s0"
-                  ++ plusMinusInt c1
-                  ++ "], "
-                  ++ show c2
-                  ++ ""
-    , A.operDst = []
-    , A.operSrc = [d]
-    , A.jump    = Nothing
+    { A.assem         = T.pack
+                        $  "\tmov qword ptr [`s0"
+                        ++ plusMinusInt c1
+                        ++ "], "
+                        ++ show c2
+                        ++ ""
+    , A.operDst       = []
+    , A.operSrc       = [d]
+    , A.hasSideEffect = True
+    , A.jump          = Nothing
     }
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP d, TreeIR.CONST c)), e))
   = do
     eReg <- munchExp e
     emit A.defaultOper
       { A.assem = T.pack $ "\tmov qword ptr [`s0" ++ plusMinusInt c ++ "], `s1"
-      , A.operDst = []
-      , A.operSrc = [d, eReg]
-      , A.jump    = Nothing
+      , A.operDst       = []
+      , A.operSrc       = [d, eReg]
+      , A.hasSideEffect = True
+      , A.jump          = Nothing
       }
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.MINUS, TreeIR.TEMP d, TreeIR.CONST c)), e))
   = do
     eReg <- munchExp e
     emit A.defaultOper
-      { A.assem   = T.pack
-                    $  "\tmov qword ptr [`s0"
-                    ++ plusMinusInt (-c)
-                    ++ "], `s1"
-      , A.operDst = []
-      , A.operSrc = [d, eReg]
-      , A.jump    = Nothing
+      { A.assem         = T.pack
+                          $  "\tmov qword ptr [`s0"
+                          ++ plusMinusInt (-c)
+                          ++ "], `s1"
+      , A.operDst       = []
+      , A.operSrc       = [d, eReg]
+      , A.hasSideEffect = True
+      , A.jump          = Nothing
       }
 munchStm (TreeIR.MOVE (TreeIR.MEM e1, e2)) = do
   src <- munchExp e2
   dst <- munchExp e1
-  emit A.defaultOper { A.assem   = "\tmov [`s0], `s1"
-                     , A.operDst = []
-                     , A.operSrc = [dst, src]
-                     , A.jump    = Nothing
+  emit A.defaultOper { A.assem         = "\tmov [`s0], `s1"
+                     , A.operDst       = []
+                     , A.operSrc       = [dst, src]
+                     , A.hasSideEffect = True
+                     , A.jump          = Nothing
                      }
 munchStm (TreeIR.MOVE (TreeIR.TEMP t, e2)) = do
   src <- munchExp e2
   emit A.MOVE { A.assem = "\tmov `d0, `s0", A.moveDst = t, A.moveSrc = src }
 munchStm m@(TreeIR.MOVE _) = error $ "codegen can't handle move: " ++ show m
 munchStm (TreeIR.JUMP (TreeIR.NAME lab, _)) = emit A.defaultOper
-  { A.assem   = "\tjmp `j0"
-  , A.operDst = []
-  , A.operSrc = []
-  , A.jump    = Just [lab]
+  { A.assem         = "\tjmp `j0"
+  , A.operDst       = []
+  , A.operSrc       = []
+  , A.hasSideEffect = True
+  , A.jump          = Just [lab]
   }
 munchStm (TreeIR.JUMP (e, labels)) = do
   src <- munchExp e
-  emit A.defaultOper { A.assem   = "\tjmp `s0"
-                     , A.operDst = []
-                     , A.operSrc = [src]
-                     , A.jump    = Just labels
+  emit A.defaultOper { A.assem         = "\tjmp `s0"
+                     , A.operDst       = []
+                     , A.operSrc       = [src]
+                     , A.hasSideEffect = True
+                     , A.jump          = Just labels
                      }
 munchStm (TreeIR.CJUMP (op, e1, TreeIR.CONST i, t, f)) = do
   src1 <- munchExp e1
-  emit A.defaultOper { A.assem   = T.pack $ "\tcmp `s0, " ++ show i
-                     , A.operDst = []
-                     , A.operSrc = [src1]
-                     , A.jump    = Nothing
+  emit A.defaultOper { A.assem         = T.pack $ "\tcmp `s0, " ++ show i
+                     , A.operDst       = []
+                     , A.operSrc       = [src1]
+                     , A.hasSideEffect = True
+                     , A.jump          = Nothing
                      }
   emit A.OPER { A.assem          = T.pack $ "\t" ++ opToJump op ++ " `j0"
               , A.operDst        = []
               , A.operSrc        = []
+              , A.hasSideEffect  = True
               , A.hasFallthrough = True
               , A.jump           = Just [t]
               }
-  emit A.defaultOper { A.assem   = T.pack $ "\tjmp `j0"
-                     , A.operDst = []
-                     , A.operSrc = []
-                     , A.jump    = Just [f]
+  emit A.defaultOper { A.assem         = T.pack $ "\tjmp `j0"
+                     , A.operDst       = []
+                     , A.operSrc       = []
+                     , A.hasSideEffect = True
+                     , A.jump          = Just [f]
                      }
 munchStm (TreeIR.CJUMP (op, e1, e2, t, f)) = do
   src1 <- munchExp e1
   src2 <- munchExp e2
-  emit A.defaultOper { A.assem   = T.pack "\tcmp `s0, `s1"
-                     , A.operDst = []
-                     , A.operSrc = [src1, src2]
-                     , A.jump    = Nothing
+  emit A.defaultOper { A.assem         = T.pack "\tcmp `s0, `s1"
+                     , A.operDst       = []
+                     , A.operSrc       = [src1, src2]
+                     , A.hasSideEffect = True
+                     , A.jump          = Nothing
                      }
   emit A.OPER { A.assem          = T.pack $ "\t" ++ opToJump op ++ " `j0"
               , A.operDst        = []
               , A.operSrc        = []
+              , A.hasSideEffect  = True
               , A.hasFallthrough = True
               , A.jump           = Just [t]
               }
-  emit A.defaultOper { A.assem   = T.pack $ "\tjmp `j0"
-                     , A.operDst = []
-                     , A.operSrc = []
-                     , A.jump    = Just [f]
+  emit A.defaultOper { A.assem         = T.pack $ "\tjmp `j0"
+                     , A.operDst       = []
+                     , A.operSrc       = []
+                     , A.hasSideEffect = True
+                     , A.jump          = Just [f]
                      }
 opToJump :: TreeIR.Relop -> String
 opToJump oper = case oper of
@@ -349,15 +365,17 @@ munchExp (TreeIR.BINOP (op, e1, e2)) = if op == TreeIR.DIV
                , A.moveDst = X64Frame.dividendRegister x64
                , A.moveSrc = src1
                }
-      , A.defaultOper { A.assem   = "\tcqo"
-                      , A.operDst = [X64Frame.rdx x64]
-                      , A.operSrc = [X64Frame.rax x64]
-                      , A.jump    = Nothing
+      , A.defaultOper { A.assem         = "\tcqo"
+                      , A.operDst       = [X64Frame.rdx x64]
+                      , A.operSrc       = [X64Frame.rax x64]
+                      , A.hasSideEffect = True
+                      , A.jump          = Nothing
                       }
-      , A.defaultOper { A.assem   = "\tidiv `s0"
-                      , A.operDst = divideDests
-                      , A.operSrc = src2 : divideDests
-                      , A.jump    = Nothing
+      , A.defaultOper { A.assem         = "\tidiv `s0"
+                      , A.operDst       = divideDests
+                      , A.operSrc       = src2 : divideDests
+                      , A.hasSideEffect = True
+                      , A.jump          = Nothing
                       }
       , A.MOVE { A.assem   = "\tmov `d0, `s0"
                , A.moveDst = r
@@ -394,10 +412,11 @@ munchExp (TreeIR.CALL (expr, args, escapes, hasRet)) = result $ \r -> do
   x64     <- getArch
   doCall
     (A.defaultOper
-      { A.assem   = "\tcall `s0"
-      , A.operDst = X64Frame.callDests x64
+      { A.assem         = "\tcall `s0"
+      , A.operDst       = X64Frame.callDests x64
       , A.operSrc = exprReg : X64Frame.rsp x64 : X64Frame.rbp x64 : argRegs
-      , A.jump    = Nothing
+      , A.hasSideEffect = True
+      , A.jump          = Nothing
       }
     )
     (if hasRet
@@ -415,10 +434,11 @@ munchExp (TreeIR.CALLNORETURN (expr, args, escapes)) = result $ \_ -> do
   exprReg <- munchExp expr
   x64     <- getArch
   doCall
-    (A.defaultOper { A.assem   = "\tcall `s0"
-                   , A.operDst = X64Frame.callDests x64
-                   , A.operSrc = exprReg : X64Frame.rsp x64 : argRegs
-                   , A.jump    = Nothing
+    (A.defaultOper { A.assem         = "\tcall `s0"
+                   , A.operDst       = X64Frame.callDests x64
+                   , A.operSrc       = exprReg : X64Frame.rsp x64 : argRegs
+                   , A.hasSideEffect = True
+                   , A.jump          = Nothing
                    }
     )
     Nothing
@@ -536,13 +556,14 @@ doCall callStm maybeMoveStm callArgs escapes returnsOrNot = do
       Frame.Escapes ->
         let (stackOffset : nextStackOffsets') = nextStackOffsets
             inst                              = A.defaultOper
-              { A.assem   = T.pack
-                            $  "\tmov qword ptr [`s0 - "
-                            ++ show stackOffset
-                            ++ "], `s1"
-              , A.operDst = []
-              , A.operSrc = [X64Frame.rsp x64, argReg]
-              , A.jump    = Nothing
+              { A.assem         = T.pack
+                                  $  "\tmov qword ptr [`s0 - "
+                                  ++ show stackOffset
+                                  ++ "], `s1"
+              , A.operDst       = []
+              , A.operSrc       = [X64Frame.rsp x64, argReg]
+              , A.hasSideEffect = True
+              , A.jump          = Nothing
               }
         in  (paramRegs, argMap, nextStackOffsets', acc ++ [inst])
       Frame.DoesNotEscape -> case paramRegs of
