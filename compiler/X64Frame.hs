@@ -397,13 +397,13 @@ procEntryExit1 frame bodyExp gen =
 procEntryExit2 :: X64Frame -> [Assem.Inst] -> [Assem.Inst]
 procEntryExit2 frame bodyAsm =
   let x64'            = x64 frame
-      maybeCalleSaves = if isMain frame then [] else calleeSaves x64'
+      maybeCalleeSaves = if isMain frame then [] else calleeSaves x64'
   in  bodyAsm
         ++ [ Assem.defaultOper
                { Assem.assem   = ""
                , Assem.operDst = []
                , Assem.operSrc = [rax x64', rsp x64', rbp x64']
-                                   ++ maybeCalleSaves
+                                   ++ maybeCalleeSaves
                , Assem.jump    = Just []
                }
            ]
