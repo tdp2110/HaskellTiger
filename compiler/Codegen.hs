@@ -247,7 +247,7 @@ munchStm (TreeIR.CJUMP (op, e1, TreeIR.CONST i, t, f)) = do
               , A.hasFallthrough = True
               , A.jump           = Just [t]
               }
-  emit A.defaultOper { A.assem         = T.pack $ "\tjmp `j0"
+  emit A.defaultOper { A.assem         = T.pack "\tjmp `j0"
                      , A.operDst       = []
                      , A.operSrc       = []
                      , A.hasSideEffect = True
@@ -269,7 +269,7 @@ munchStm (TreeIR.CJUMP (op, e1, e2, t, f)) = do
               , A.hasFallthrough = True
               , A.jump           = Just [t]
               }
-  emit A.defaultOper { A.assem         = T.pack $ "\tjmp `j0"
+  emit A.defaultOper { A.assem         = T.pack "\tjmp `j0"
                      , A.operDst       = []
                      , A.operSrc       = []
                      , A.hasSideEffect = True
