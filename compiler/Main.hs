@@ -220,6 +220,10 @@ options =
            (NoArg (\opts -> opts { optShowFlatIR = True }))
            "show flattened intermediate representation"
   , Option []
+           ["noreg"]
+           (NoArg (\opts -> opts { optNoRegAlloc = True }))
+           "compile to asm without performing register allocation"
+  , Option []
            ["O0"]
            (NoArg (\opts -> opts { optO0 = True }))
            "optimization level 0 (no optimization)"
