@@ -12,10 +12,74 @@ import           Control.Monad.Trans.State      ( State
                                                 , put
                                                 , evalState
                                                 )
+import           Data.Bits                      ( shiftL
+                                                , shiftR
+                                                , xor
+                                                )
 
 
 optimizeBasicBlock :: Canon.Block -> Canon.Block
-optimizeBasicBlock = propagateConstants
+optimizeBasicBlock = foldConstants . propagateConstants
+
+foldConstants :: Canon.Block -> Canon.Block
+foldConstants bb = evalState (mapM foldConstantsM bb) Map.empty
+ where
+  foldConstantsM :: T.Stm -> State (Map.Map Int Int) T.Stm
+  foldConstantsM stm@(T.MOVE (T.TEMP dst, T.TEMP src)) = do
+    constMap <- get
+    case Map.lookup src constMap of
+      Just constVal ->
+        let constMap' = Map.insert dst constVal constMap
+        in  do
+              put constMap'
+              pure $ T.MOVE (T.TEMP dst, T.CONST constVal)
+      _ -> do
+        deleteFromConstMap stm
+        pure stm
+  foldConstantsM stm@(T.MOVE (T.TEMP dst, T.CONST constVal)) = do
+    constMap <- get
+    let constMap' = Map.insert dst constVal constMap
+    put constMap'
+    pure stm
+  foldConstantsM stm@(T.MOVE (tmp@(T.TEMP _), e)) = do
+    deleteFromConstMap stm
+    constMap <- get
+    pure $ T.MOVE (tmp, constFoldExp constMap e)
+  foldConstantsM (T.MOVE (e1, e2)) = do
+    constMap <- get
+    pure $ T.MOVE (constFoldExp constMap e1, constFoldExp constMap e2)
+  foldConstantsM stm = pure stm -- TODO expand on this!
+
+  constFoldExp :: Map.Map Int Int -> T.Exp -> T.Exp
+  constFoldExp _ c@(  T.CONST _) = c
+  constFoldExp _ nm@( T.NAME  _) = nm
+  constFoldExp _ tmp@(T.TEMP  _) = tmp
+  constFoldExp constMap (T.BINOP (op, e1, e2)) =
+    case T.BINOP (op, constFoldExp constMap e1, constFoldExp constMap e2) of
+      T.BINOP (op', T.CONST c1, T.CONST c2) -> T.CONST $ (convert op') c1 c2
+      binop@_                               -> binop
+  constFoldExp constMap (T.MEM e) = T.MEM $ constFoldExp constMap e
+  constFoldExp constMap (T.CALL (f, args, escapes, hasResult)) = T.CALL
+    ( constFoldExp constMap f
+    , fmap (constFoldExp constMap) args
+    , escapes
+    , hasResult
+    )
+  constFoldExp constMap (T.CALLNORETURN (f, args, escapes)) = T.CALLNORETURN
+    (constFoldExp constMap f, fmap (constFoldExp constMap) args, escapes)
+  constFoldExp constMap (T.ESEQ (stm, e)) =
+    T.ESEQ (stm, constFoldExp constMap e)
+
+  convert T.PLUS    = (+)
+  convert T.MINUS   = (-)
+  convert T.MUL     = (*)
+  convert T.DIV     = div
+  convert T.AND     = \arg1 arg2 -> fromEnum $ arg1 /= 0 && arg2 /= 0
+  convert T.OR      = \arg1 arg2 -> fromEnum $ arg1 /= 0 || arg2 /= 0
+  convert T.LSHIFT  = shiftL
+  convert T.RSHIFT  = shiftR
+  convert T.ARSHIFT = error "don't know how to convert ARSHIFT"
+  convert T.XOR     = xor
 
 propagateConstants :: Canon.Block -> Canon.Block
 propagateConstants bb = evalState (mapM propagateConstantsM bb) Map.empty
@@ -29,14 +93,16 @@ propagateConstants bb = evalState (mapM propagateConstantsM bb) Map.empty
         in  do
               put constMap'
               pure $ T.MOVE (T.TEMP dst, T.CONST constVal)
-      _ -> deleteFromConstMap stm
+      _ -> do
+        deleteFromConstMap stm
+        pure stm
   propagateConstantsM stm@(T.MOVE (T.TEMP dst, T.CONST constVal)) = do
     constMap <- get
     let constMap' = Map.insert dst constVal constMap
     put constMap'
     pure stm
   propagateConstantsM stm@(T.MOVE (tmp@(T.TEMP _), e)) = do
-    _        <- deleteFromConstMap stm
+    deleteFromConstMap stm
     constMap <- get
     pure $ T.MOVE (tmp, constPropExp constMap e)
   propagateConstantsM (T.MOVE (e1, e2)) = do
@@ -86,10 +152,10 @@ propagateConstants bb = evalState (mapM propagateConstantsM bb) Map.empty
     T.SEQ (constPropStm constMap stm1, constPropStm constMap stm2)
   constPropStm _ lab@(T.LABEL _) = lab
 
-deleteFromConstMap :: T.Stm -> State (Map.Map Int Int) T.Stm
-deleteFromConstMap stm@(T.MOVE (T.TEMP dst, _)) = do
+deleteFromConstMap :: T.Stm -> State (Map.Map Int Int) ()
+deleteFromConstMap (T.MOVE (T.TEMP dst, _)) = do
   constMap <- get
   let constMap' = Map.delete dst constMap
   put constMap'
-  pure stm
-deleteFromConstMap stm = pure stm
+  pure ()
+deleteFromConstMap _ = pure ()
