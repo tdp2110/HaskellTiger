@@ -43,7 +43,8 @@ pruneDefdButNotUsed (insts, (F.FlowGraph { F.control = control, F.use = use }, _
   = filter shouldKeep insts
  where
   shouldKeep :: A.Inst -> Bool
-  shouldKeep A.MOVE { A.moveDst = defdId } = idHasUse defdId
+  shouldKeep A.MOVE { A.moveDst = defdId }      = idHasUse defdId
+  shouldKeep A.STORECONST { A.strDst = defdId } = idHasUse defdId
   shouldKeep A.OPER { A.operDst = defdIds, A.hasSideEffect = False } =
     any idHasUse defdIds
   shouldKeep _ = True
