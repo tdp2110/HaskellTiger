@@ -72,10 +72,10 @@ foldConstants bb = evalState (mapM foldConstantsM bb) Map.empty
   constFoldExp _ c@(  T.CONST _) = c
   constFoldExp _ nm@( T.NAME  _) = nm
   constFoldExp _ tmp@(T.TEMP  _) = tmp
-  constFoldExp constMap (T.BINOP (op, e1, e2)) =
-    case T.BINOP (op, constFoldExp constMap e1, constFoldExp constMap e2) of
-      T.BINOP (op', T.CONST c1, T.CONST c2) -> T.CONST $ convertOp op' c1 c2
-      binop -> binop
+  constFoldExp constMap binop@(T.BINOP (op, e1, e2)) =
+    case (constFoldExp constMap e1, constFoldExp constMap e2) of
+      (T.CONST c1, T.CONST c2) -> T.CONST $ convertOp op c1 c2
+      _                        -> binop
   constFoldExp constMap (T.MEM e) = T.MEM $ constFoldExp constMap e
   constFoldExp constMap (T.CALL (f, args, escapes, hasResult)) = T.CALL
     ( constFoldExp constMap f
