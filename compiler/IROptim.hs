@@ -19,7 +19,9 @@ import           Data.Bits                      ( shiftL
 
 
 optimizeBasicBlock :: Canon.Block -> Canon.Block
-optimizeBasicBlock = foldConstants . propagateConstants
+optimizeBasicBlock bb =
+  let bb' = (foldConstants . propagateConstants) bb
+  in  if bb' == bb then bb else optimizeBasicBlock bb'
 
 foldConstants :: Canon.Block -> Canon.Block
 foldConstants bb = evalState (mapM foldConstantsM bb) Map.empty
@@ -47,8 +49,22 @@ foldConstants bb = evalState (mapM foldConstantsM bb) Map.empty
     pure $ T.MOVE (tmp, constFoldExp constMap e)
   foldConstantsM (T.MOVE (e1, e2)) = do
     constMap <- get
-    pure $ T.MOVE (constFoldExp constMap e1, constFoldExp constMap e2)
-  foldConstantsM stm = pure stm -- TODO expand on this!
+    pure $ T.MOVE (e1, constFoldExp constMap e2)
+  foldConstantsM (T.EXP e) = do
+    constMap <- get
+    pure $ T.EXP $ constFoldExp constMap e
+  foldConstantsM (T.JUMP (e, labs)) = do
+    constMap <- get
+    pure $ T.JUMP (constFoldExp constMap e, labs)
+  foldConstantsM (T.CJUMP (op, e1, e2, lab1, lab2)) = do
+    constMap <- get
+    pure $ T.CJUMP
+      (op, constFoldExp constMap e1, constFoldExp constMap e2, lab1, lab2)
+  foldConstantsM (T.SEQ (stm1, stm2)) = do
+    stm1' <- foldConstantsM stm1
+    stm2' <- foldConstantsM stm2
+    pure $ T.SEQ (stm1', stm2')
+  foldConstantsM lab@(T.LABEL _) = pure lab
 
   constFoldExp :: Map.Map Int Int -> T.Exp -> T.Exp
   constFoldExp _ c@(  T.CONST _) = c
