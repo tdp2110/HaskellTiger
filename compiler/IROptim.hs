@@ -129,10 +129,27 @@ propagateConstants bb = evalState (mapM propagateConstantsM bb) Map.empty
   propagateConstantsM (T.EXP e) = do
     constMap <- get
     pure $ T.EXP $ constPropExp constMap e
-  propagateConstantsM j@( T.JUMP  _) = pure j
-  propagateConstantsM cj@(T.CJUMP _) = do
+  propagateConstantsM j@(T.JUMP  _                       ) = pure j
+  propagateConstantsM (  T.CJUMP (op, e1, e2, lab1, lab2)) = do
     constMap <- get
-    pure $ constPropStm constMap cj
+    let e1' = constPropExp constMap e1
+    let e2' = constPropExp constMap e2
+    pure $ case (e1', e2') of
+      (T.CONST c1, T.CONST c2) -> if evalOp op c1 c2
+        then T.JUMP (T.NAME lab1, [lab1])
+        else T.JUMP (T.NAME lab2, [lab2])
+      _ -> T.CJUMP (op, e1', e2', lab1, lab2)
+   where
+    evalOp T.EQ  = (==)
+    evalOp T.NE  = (/=)
+    evalOp T.LT  = (<)
+    evalOp T.GT  = (>)
+    evalOp T.LE  = (<=)
+    evalOp T.GE  = (>=)
+    evalOp T.ULT = (<)
+    evalOp T.ULE = (<=)
+    evalOp T.UGT = (>)
+    evalOp T.UGE = (>=)
   propagateConstantsM s@(T.SEQ _) = do
     constMap <- get
     pure $ constPropStm constMap s
