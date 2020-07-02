@@ -74,8 +74,8 @@ foldConstants bb = evalState (mapM foldConstantsM bb) Map.empty
   constFoldExp _ tmp@(T.TEMP  _) = tmp
   constFoldExp constMap (T.BINOP (op, e1, e2)) =
     case T.BINOP (op, constFoldExp constMap e1, constFoldExp constMap e2) of
-      T.BINOP (op', T.CONST c1, T.CONST c2) -> T.CONST $ (convert op') c1 c2
-      binop@_                               -> binop
+      T.BINOP (op', T.CONST c1, T.CONST c2) -> T.CONST $ convertOp op' c1 c2
+      binop -> binop
   constFoldExp constMap (T.MEM e) = T.MEM $ constFoldExp constMap e
   constFoldExp constMap (T.CALL (f, args, escapes, hasResult)) = T.CALL
     ( constFoldExp constMap f
@@ -88,16 +88,16 @@ foldConstants bb = evalState (mapM foldConstantsM bb) Map.empty
   constFoldExp constMap (T.ESEQ (stm, e)) =
     T.ESEQ (stm, constFoldExp constMap e)
 
-  convert T.PLUS    = (+)
-  convert T.MINUS   = (-)
-  convert T.MUL     = (*)
-  convert T.DIV     = div
-  convert T.AND     = (.&.)
-  convert T.OR      = (.|.)
-  convert T.LSHIFT  = shiftL
-  convert T.RSHIFT  = shiftR
-  convert T.ARSHIFT = error "don't know how to convert ARSHIFT"
-  convert T.XOR     = xor
+  convertOp T.PLUS    = (+)
+  convertOp T.MINUS   = (-)
+  convertOp T.MUL     = (*)
+  convertOp T.DIV     = div
+  convertOp T.AND     = (.&.)
+  convertOp T.OR      = (.|.)
+  convertOp T.LSHIFT  = shiftL
+  convertOp T.RSHIFT  = shiftR
+  convertOp T.ARSHIFT = error "don't know how to convert ARSHIFT"
+  convertOp T.XOR     = xor
 
 propagateConstants :: Canon.Block -> Canon.Block
 propagateConstants bb = evalState (mapM propagateConstantsM bb) Map.empty
