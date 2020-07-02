@@ -15,6 +15,8 @@ import           Control.Monad.Trans.State      ( State
 import           Data.Bits                      ( shiftL
                                                 , shiftR
                                                 , xor
+                                                , (.&.)
+                                                , (.|.)
                                                 )
 
 
@@ -90,8 +92,8 @@ foldConstants bb = evalState (mapM foldConstantsM bb) Map.empty
   convert T.MINUS   = (-)
   convert T.MUL     = (*)
   convert T.DIV     = div
-  convert T.AND     = \arg1 arg2 -> fromEnum $ arg1 /= 0 && arg2 /= 0
-  convert T.OR      = \arg1 arg2 -> fromEnum $ arg1 /= 0 || arg2 /= 0
+  convert T.AND     = (.&.)
+  convert T.OR      = (.|.)
   convert T.LSHIFT  = shiftL
   convert T.RSHIFT  = shiftR
   convert T.ARSHIFT = error "don't know how to convert ARSHIFT"
