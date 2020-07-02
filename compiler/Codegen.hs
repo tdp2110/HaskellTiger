@@ -290,11 +290,10 @@ opToJump oper = case oper of
 
 munchExp :: TreeIR.Exp -> CodeGenerator Int
 munchExp (TreeIR.CONST c) = result $ \r -> pure
-  [ A.defaultOper { A.assem   = T.pack $ "\tmov `d0, " ++ show c ++ ""
-                  , A.operDst = [r]
-                  , A.operSrc = []
-                  , A.jump    = Nothing
-                  }
+  [ A.STORECONST { A.assem  = T.pack $ "\tmov `d0, " ++ show c ++ ""
+                 , A.strDst = r
+                 , A.strVal = c
+                 }
   ]
 munchExp (TreeIR.TEMP t     ) = pure t
 munchExp (TreeIR.ESEQ (s, e)) = do
