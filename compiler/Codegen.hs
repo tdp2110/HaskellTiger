@@ -245,6 +245,8 @@ munchStm (TreeIR.CJUMP (op, e1, TreeIR.CONST i, t, f)) = do
               , A.operSrc        = []
               , A.hasSideEffect  = True
               , A.hasFallthrough = True
+              , A.calls          = Nothing
+              , A.noreturn       = False
               , A.jump           = Just [t]
               }
   emit A.defaultOper { A.assem         = T.pack "\tjmp `j0"
@@ -267,6 +269,8 @@ munchStm (TreeIR.CJUMP (op, e1, e2, t, f)) = do
               , A.operSrc        = []
               , A.hasSideEffect  = True
               , A.hasFallthrough = True
+              , A.calls          = Nothing
+              , A.noreturn       = False
               , A.jump           = Just [t]
               }
   emit A.defaultOper { A.assem         = T.pack "\tjmp `j0"
@@ -405,45 +409,52 @@ munchExp (TreeIR.BINOP (op, e1, e2)) = if op == TreeIR.DIV
     TreeIR.RSHIFT -> "shr"
     TreeIR.XOR    -> "xor"
     _             -> error $ "unsupported operator: " ++ show oper
-munchExp (TreeIR.CALL (expr, args, escapes, hasRet)) = result $ \r -> do
-  argRegs <- mapM munchExp args
-  exprReg <- munchExp expr
-  x64     <- getArch
-  doCall
-    (A.defaultOper
-      { A.assem         = "\tcall `s0"
-      , A.operDst       = X64Frame.callDests x64
-      , A.operSrc = exprReg : X64Frame.rsp x64 : X64Frame.rbp x64 : argRegs
-      , A.hasSideEffect = True
-      , A.jump          = Nothing
-      }
-    )
-    (if hasRet
-      then Just $ A.MOVE { A.assem   = "\tmov `d0, `s0"
-                         , A.moveDst = r
-                         , A.moveSrc = X64Frame.rax x64
-                         }
-      else Nothing
-    )
-    argRegs
-    escapes
-    IsReturn
-munchExp (TreeIR.CALLNORETURN (expr, args, escapes)) = result $ \_ -> do
-  argRegs <- mapM munchExp args
-  exprReg <- munchExp expr
-  x64     <- getArch
-  doCall
-    (A.defaultOper { A.assem         = "\tcall `s0"
-                   , A.operDst       = X64Frame.callDests x64
-                   , A.operSrc       = exprReg : X64Frame.rsp x64 : argRegs
-                   , A.hasSideEffect = True
-                   , A.jump          = Nothing
-                   }
-    )
-    Nothing
-    argRegs
-    escapes
-    NoReturn
+munchExp (TreeIR.CALL (expr@(TreeIR.NAME callTarget), args, escapes, hasRet)) =
+  result $ \r -> do
+    argRegs <- mapM munchExp args
+    exprReg <- munchExp expr
+    x64     <- getArch
+    doCall
+      (A.defaultOper
+        { A.assem         = "\tcall `s0"
+        , A.operDst       = X64Frame.callDests x64
+        , A.operSrc = exprReg : X64Frame.rsp x64 : X64Frame.rbp x64 : argRegs
+        , A.hasSideEffect = True
+        , A.calls         = Just callTarget
+        , A.jump          = Nothing
+        }
+      )
+      (if hasRet
+        then Just $ A.MOVE { A.assem   = "\tmov `d0, `s0"
+                           , A.moveDst = r
+                           , A.moveSrc = X64Frame.rax x64
+                           }
+        else Nothing
+      )
+      argRegs
+      escapes
+      IsReturn
+munchExp (TreeIR.CALL _) = error "Expected TreeIR.NAME as call target"
+munchExp (TreeIR.CALLNORETURN (expr@(TreeIR.NAME callTarget), args, escapes)) =
+  result $ \_ -> do
+    argRegs <- mapM munchExp args
+    exprReg <- munchExp expr
+    x64     <- getArch
+    doCall
+      (A.defaultOper { A.assem         = "\tcall `s0"
+                     , A.operDst       = X64Frame.callDests x64
+                     , A.operSrc       = exprReg : X64Frame.rsp x64 : argRegs
+                     , A.hasSideEffect = True
+                     , A.noreturn      = True
+                     , A.calls         = Just callTarget
+                     , A.jump          = Nothing
+                     }
+      )
+      Nothing
+      argRegs
+      escapes
+      NoReturn
+munchExp (TreeIR.CALLNORETURN _) = error "Expected TreeIR.NAME as call target"
 munchExp (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, e, TreeIR.CONST c))) =
   result $ \r -> do
     src <- munchExp e

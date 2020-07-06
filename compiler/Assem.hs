@@ -17,6 +17,8 @@ data Inst = OPER { assem :: T.Text
                  , operSrc :: [Int]
                  , hasFallthrough :: Bool
                  , hasSideEffect :: Bool
+                 , calls :: Maybe Label
+                 , noreturn :: Bool
                  , jump :: Maybe [Label] }
           | LABEL { assem :: T.Text
                   , lab :: Label }
@@ -34,5 +36,7 @@ defaultOper = OPER { assem          = ""
                    , operSrc        = []
                    , hasSideEffect  = False
                    , hasFallthrough = False
+                   , calls          = Nothing
+                   , noreturn       = False
                    , jump           = Nothing
                    }
