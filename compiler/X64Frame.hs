@@ -434,7 +434,7 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) =
           ]
       prologue =
           [ Assem.defaultOper
-              { Assem.assem   = T.pack $ "\tpush `d0" ++ fmtDebug frame
+              { Assem.assem   = T.pack $ "\tpush `d0"
               , Assem.operDst = [rbp $ x64 frame]
               , Assem.operSrc = [rsp $ x64 frame]
               , Assem.jump    = Nothing
@@ -476,14 +476,16 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) =
                                    , Assem.jump    = Nothing
                                    }
                ]
+      label' = label { Assem.assem = T.pack $ (T.unpack $ Assem.assem label) ++ fmtDebug frame }
+
       epilogue = epilogue1 ++ epilogue2
-  in  [label] ++ prologue ++ bodyAsm' ++ epilogue
+  in  [label'] ++ prologue ++ bodyAsm' ++ epilogue
  where
   nextMultipleOf16 :: Int -> Int
   nextMultipleOf16 n = 16 * ((n + 15) `div` 16)
 
   fmtDebug :: X64Frame -> String
-  fmtDebug X64Frame { frameDebug = Just dbg } = "\t\t ## " ++ show dbg
+  fmtDebug X64Frame { frameDebug = Just dbg } = "\t\t\t\t## " ++ show dbg
   fmtDebug _ = ""
 
   numEscapingLocals :: Int
