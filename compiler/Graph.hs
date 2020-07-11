@@ -10,6 +10,7 @@ module Graph
   , hasEdge
   , toDot
   , exitNodes
+  , entryNodes
   , quasiTopoSort
   , newNode
   , mkEdge
@@ -64,6 +65,10 @@ exitNodes :: NodeId a => Graph a -> [Node a]
 exitNodes g = filter isExitNode $ Map.elems $ nodes g
   where isExitNode = null . succ
 
+entryNodes :: NodeId a => Graph a -> [Node a]
+entryNodes g = filter isEntryNode $ Map.elems $ nodes g
+  where isEntryNode = null . pred
+
 type TopoSorter a = WriterT (DList a) (StateT (Set a) Identity)
 
 quasiTopoSort :: NodeId a => Graph a -> [Node a]
@@ -97,10 +102,10 @@ dfs g node =
 
 
 -- | produce a repr of a graph in the "dot" language
-toDot :: Show a => Graph a -> String
-toDot g =
+toDot :: Show a => Graph a -> (a -> String) -> String
+toDot g nodePrinter =
   let graphBody = execWriter $ dotBuilder $ nodes g
-  in  "graph {\n" ++ graphBody ++ "}"
+  in  "digraph {\n" ++ graphBody ++ "}\n"
  where
   dotBuilder m = mapM_ processNode $ Map.toList m
 
@@ -110,9 +115,9 @@ toDot g =
 
   dotId n = "node_" ++ show n
   indent = "    "
-  fmtNode n = indent ++ dotId n ++ " [label=\"" ++ show n ++ "\"];\n"
+  fmtNode n = indent ++ dotId n ++ " [label=\"" ++ nodePrinter n ++ "\"];\n"
   fmtSuccs n = mapM_ (fmtEdge n)
-  fmtEdge n1 n2 = tell $ indent ++ dotId n1 ++ " -- " ++ dotId n2 ++ ";\n"
+  fmtEdge n1 n2 = tell $ indent ++ dotId n1 ++ " -> " ++ dotId n2 ++ ";\n"
 
 newGraph :: a -> Graph a
 newGraph firstId = Graph { nodes = Map.empty, nextId = firstId }

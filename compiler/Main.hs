@@ -5,6 +5,7 @@ import qualified AssemOptim
 import qualified Canon
 import qualified Codegen
 import qualified Flow
+import qualified Graph
 import qualified IROptim
 import qualified Lexer
 import qualified Parser
@@ -81,30 +82,94 @@ formatAsm alloc asm =
       Assem.STORECONST { Assem.assem = assem, Assem.strDst = strDst } ->
         formatImpl (T.unpack assem) [strDst] [] Nothing
 
+dumpCFG :: String -> Bool -> Bool -> String
+dumpCFG text performRegAlloc optimize = case Parser.parse text of
+  Left  err -> show err
+  Right ast -> case Semant.transThunked ast of
+    Left err -> show err
+    Right (_, frags, gen, x64) ->
+      let
+        emit :: X64Frame.Frag -> Temp.Generator -> (String, Temp.Generator)
+        emit X64Frame.PROC { X64Frame.body = bodyStm, X64Frame.fragFrame = frame } gen'
+          = let
+              (stmts        , gen'') = Canon.linearize bodyStm gen'
+              ((blocks, lab), gen3 ) = runState (Canon.basicBlocks stmts) gen''
+              blocks'                = if optimize
+                then fmap IROptim.optimizeBasicBlock blocks
+                else blocks
+              (stmts', gen4) = runState (Canon.traceSchedule blocks' lab) gen3
+              (insts , gen5)            = foldl' step1 ([], gen4) stmts'
+              insts'                    = X64Frame.procEntryExit2 frame insts
+              tempMap                   = X64Frame.tempMap x64
+              (insts'', (flowGraph, _)) = if optimize
+                then AssemOptim.optimizePreRegAlloc insts'
+                else (insts', Flow.instrsToGraph insts')
+              (insts''', alloc, _, gen6) = if performRegAlloc
+                then
+                  let (instsAlloc, allocs, frameAlloc, genAlloc) =
+                        RegAlloc.alloc insts'' flowGraph frame gen5 []
+                      (instsAllocOpt, _) = if optimize
+                        then AssemOptim.optimizePostRegAlloc instsAlloc
+                        else (instsAlloc, undefined)
+                  in  (instsAllocOpt, allocs, frameAlloc, genAlloc)
+                else (insts'', tempMap, frame, gen5)
+              (flowGraph', nodes) = Flow.instrsToGraph insts'''
+            in
+              (dumpFragCFG insts''' flowGraph' nodes alloc, gen6)
+        emit (X64Frame.STRING _) g = ([], g)
+
+        step1
+          :: ([Assem.Inst], Temp.Generator)
+          -> TreeIR.Stm
+          -> ([Assem.Inst], Temp.Generator)
+        step1 (insts, g) stm =
+          let (insts', g') = Codegen.codegen x64 g stm in (insts ++ insts', g')
+
+        dumpFragCFG insts (Flow.FlowGraph { Flow.control = cfg }) nodes tempMap
+          = let
+              nodeIdInstPairs = zip (fmap Graph.nodeId nodes) insts
+              nodeIdToInst    = Map.fromList nodeIdInstPairs
+              nodePrinter nodeId =
+                let Just inst = Map.lookup (nodeId) nodeIdToInst
+                in  formatAsm tempMap inst
+            in
+              Graph.toDot cfg nodePrinter
+
+        processFrag
+          :: (String, Temp.Generator)
+          -> X64Frame.Frag
+          -> (String, Temp.Generator)
+        processFrag (s, g) f = let (s', g') = emit f g in (s ++ s', g')
+      in
+        fst (foldl' processFrag ([], gen) frags)
+
 showFlatIR :: String -> Bool -> String
 showFlatIR text optimize = case Parser.parse text of
   Left  err -> show err
   Right ast -> case Semant.transThunked ast of
     Left err -> show err
     Right (_, frags, gen, _) ->
-      let emit
-            :: X64Frame.Frag -> Temp.Generator -> (Canon.Block, Temp.Generator)
-          emit X64Frame.PROC { X64Frame.body = bodyStm } gen' =
-              let
-                (stmts, gen'') = Canon.linearize bodyStm gen'
-                ((blocks, lab), gen3) = runState (Canon.basicBlocks stmts) gen''
-                blocks' = if optimize then fmap IROptim.optimizeBasicBlock blocks else blocks
-                (stmts', gen4) = runState (Canon.traceSchedule blocks' lab) gen3
-              in
-                (stmts', gen4)
-          emit (X64Frame.STRING _) g = ([], g)
-          accum
-            :: (Canon.Block, Temp.Generator)
-            -> X64Frame.Frag
-            -> (Canon.Block, Temp.Generator)
-          accum (b, g) f = let (b', g') = emit f g in (b ++ b', g')
-          flatIr = fst (foldl' accum ([] :: Canon.Block, gen) frags)
-      in  intercalate "\n" (fmap show flatIr)
+      let
+        emit :: X64Frame.Frag -> Temp.Generator -> (Canon.Block, Temp.Generator)
+        emit X64Frame.PROC { X64Frame.body = bodyStm } gen' =
+          let
+            (stmts        , gen'') = Canon.linearize bodyStm gen'
+            ((blocks, lab), gen3 ) = runState (Canon.basicBlocks stmts) gen''
+            blocks'                = if optimize
+              then fmap IROptim.optimizeBasicBlock blocks
+              else blocks
+            (stmts', gen4) = runState (Canon.traceSchedule blocks' lab) gen3
+          in
+            (stmts', gen4)
+        emit (X64Frame.STRING _) g = ([], g)
+        accum
+          :: (Canon.Block, Temp.Generator)
+          -> X64Frame.Frag
+          -> (Canon.Block, Temp.Generator)
+        accum (b, g) f = let (b', g') = emit f g in (b ++ b', g')
+        flatIr = fst (foldl' accum ([] :: Canon.Block, gen) frags)
+      in
+        intercalate "\n" (fmap show flatIr)
 
 compileToAsm :: String -> Bool -> Bool -> String
 compileToAsm text performRegAlloc optimize = case Parser.parse text of
@@ -121,11 +186,13 @@ compileToAsm text performRegAlloc optimize = case Parser.parse text of
         emit :: X64Frame.Frag -> Temp.Generator -> (String, Temp.Generator)
         emit X64Frame.PROC { X64Frame.body = bodyStm, X64Frame.fragFrame = frame } gen'
           = let
-              (stmts        , gen'')    = Canon.linearize bodyStm gen'
-              ((blocks, lab), gen3) = runState (Canon.basicBlocks stmts) gen''
-              blocks' = if optimize then fmap IROptim.optimizeBasicBlock blocks else blocks
+              (stmts        , gen'') = Canon.linearize bodyStm gen'
+              ((blocks, lab), gen3 ) = runState (Canon.basicBlocks stmts) gen''
+              blocks'                = if optimize
+                then fmap IROptim.optimizeBasicBlock blocks
+                else blocks
               (stmts', gen4) = runState (Canon.traceSchedule blocks' lab) gen3
-              (insts        , gen5 )    = foldl' step1 ([], gen4) stmts'
+              (insts , gen5)            = foldl' step1 ([], gen4) stmts'
               insts'                    = X64Frame.procEntryExit2 frame insts
               maxCallArgs               = TreeIR.maxCallArgsStm bodyStm
               tempMap                   = X64Frame.tempMap x64
@@ -188,6 +255,7 @@ data Clopts = Clopts {
   , optNoRegAlloc :: Bool
   , optShowHelp :: Bool
   , optShowFlatIR :: Bool
+  , optDumpCFG :: Bool
   , optO0 :: Bool
   } deriving Show
 
@@ -198,6 +266,7 @@ defaultClopts = Clopts { optShowTokens = False
                        , optNoRegAlloc = False
                        , optShowHelp   = False
                        , optShowFlatIR = False
+                       , optDumpCFG    = False
                        , optO0         = False
                        }
 
@@ -219,6 +288,10 @@ options =
            ["show-flat-ir"]
            (NoArg (\opts -> opts { optShowFlatIR = True }))
            "show flattened intermediate representation"
+  , Option []
+           ["dump-cfg"]
+           (NoArg (\opts -> opts { optDumpCFG = True }))
+           "dump dotgraph of control flow graphs (work in progress)"
   , Option []
            ["noreg"]
            (NoArg (\opts -> opts { optNoRegAlloc = True }))
@@ -276,8 +349,14 @@ main = do
             then do
               str <- readFile $ head args'
               putStrLn $ showFlatIR str (not $ optO0 clopts)
-            else do
-              str <- readFile $ head args'
-              putStrLn $ compileToAsm str
-                                      (not $ optNoRegAlloc clopts)
-                                      (not $ optO0 clopts)
+            else if optDumpCFG clopts
+              then do
+                str <- readFile $ head args'
+                putStrLn $ dumpCFG str
+                                   (not $ optNoRegAlloc clopts)
+                                   (not $ optO0 clopts)
+              else do
+                str <- readFile $ head args'
+                putStrLn $ compileToAsm str
+                                        (not $ optNoRegAlloc clopts)
+                                        (not $ optO0 clopts)

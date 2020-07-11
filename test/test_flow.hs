@@ -63,9 +63,6 @@ main =
             length nodes `shouldBe` length insts
             length nodes `shouldBe` 7
 
-            -- putStrLn "ControlFlowGraph:"
-            -- putStrLn $ G.toDot $ F.control flowGraph
-
             defs Map.! F.NodeId 0 `shouldBe` [a]
             defs Map.! F.NodeId 1 `shouldBe` []
             defs Map.! F.NodeId 2 `shouldBe` [b]
@@ -81,9 +78,6 @@ main =
             uses Map.! F.NodeId 4 `shouldBe` [b]
             uses Map.! F.NodeId 5 `shouldBe` [a]
             uses Map.! F.NodeId 6 `shouldBe` []
-
-            -- putStrLn "InterferenceGraph:"
-            -- putStrLn $ G.toDot igraphGraph
 
             Map.size liveMap `shouldBe` length nodes
 

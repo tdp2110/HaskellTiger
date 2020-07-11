@@ -96,6 +96,9 @@ chaseJumps (insts, (F.FlowGraph { F.control = cfg }, flowNodes)) =
             _ -> inst
   chase _ _ inst = inst
 
+eliminateDeadCode :: PassKernel
+eliminateDeadCode (_, (_, _)) = undefined
+
 -- | remove
 removeTrivialJumps :: PassKernel
 removeTrivialJumps (insts, (_, flowNodes)) =
@@ -113,7 +116,7 @@ removeTrivialJumps (insts, (_, flowNodes)) =
   hasCountOne :: A.Label -> Map.Map A.Label Int -> Bool
   hasCountOne lab countMap = case Map.lookup lab countMap of
     Just ct -> ct == 1
-    _       -> False
+    Nothing -> False
 
   labelJumpCountAccumulator
     :: Map.Map A.Label Int -> A.Inst -> Map.Map A.Label Int
