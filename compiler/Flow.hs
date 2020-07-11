@@ -44,10 +44,18 @@ data FlowGraph = FlowGraph { control :: Graph
 
 instrsToGraph :: [A.Inst] -> (FlowGraph, [Node])
 instrsToGraph insts =
-  let ((nodes, defs, uses, isMoves), cfg) =
+  let ((initialInstsAndNodes, defs, uses, isMoves), cfg) =
           runState buildGraph $ G.newGraph $ NodeId 0
+      initialNodes = fmap snd initialInstsAndNodes
+      nodes        = fmap
+        (\initialNode ->
+          let Just completedNode =
+                  Map.lookup (G.nodeId initialNode) $ G.nodes cfg
+          in  completedNode
+        )
+        initialNodes
   in  ( FlowGraph { control = cfg, def = defs, use = uses, ismove = isMoves }
-      , fmap snd nodes
+      , nodes
       )
  where
   buildGraph
