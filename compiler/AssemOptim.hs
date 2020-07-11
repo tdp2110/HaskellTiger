@@ -7,11 +7,15 @@ where
 import qualified Assem                         as A
 import qualified Flow                          as F
 import qualified Graph                         as G
+import qualified Temp
 
+import           Control.Monad                  ( join )
 import qualified Data.Bifunctor
 import           Data.Foldable                  ( foldl' )
 import qualified Data.Map                      as Map
-
+import qualified Data.Set                      as Set
+import qualified Data.Text                     as Text
+import           Data.List                      ( zip4 )
 
 type CFG = ([A.Inst], (F.FlowGraph, [F.Node]))
 type PassKernel = CFG -> [A.Inst]
@@ -97,7 +101,53 @@ chaseJumps (insts, (F.FlowGraph { F.control = cfg }, flowNodes)) =
   chase _ _ inst = inst
 
 eliminateDeadCode :: PassKernel
-eliminateDeadCode (_, (_, _)) = undefined
+eliminateDeadCode (insts, (F.FlowGraph { F.control = _ }, nodes)) =
+  let nodesWithNoPred = fmap nodeHasNoPred nodes
+      maybeMains      = fmap instMaybeIsMain insts
+      shouldDeletes =
+          fmap
+              (\(hasNoPred, isLabel, isNotCalled, maybeMain) ->
+                hasNoPred && isLabel && isNotCalled && (not maybeMain)
+              )
+            $ zip4 nodesWithNoPred labelNodes uncalledNodes maybeMains
+      labsToDelete =
+          join
+            $ fmap
+                (\(inst, shouldDelete) -> case inst of
+                  A.LABEL { A.lab = lab } -> if shouldDelete then [lab] else []
+                  _                       -> []
+                )
+            $ zip insts shouldDeletes
+  in  error $ show labsToDelete
+ where
+  nodeHasNoPred node = null $ G.pred node
+
+  instMaybeIsMain (A.LABEL { A.lab = lab }) =
+    let labName = Text.unpack $ Temp.name lab
+    in  labName == "main" || labName == "_main"
+  instMaybeIsMain _ = False
+
+  labelNodes = fmap
+    (\inst -> case inst of
+      A.LABEL{} -> True
+      _         -> False
+    )
+    insts
+
+  uncalledNodes = fmap
+    (\inst -> case inst of
+      A.LABEL { A.lab = lab } -> not $ Set.member lab callTargetLabs
+      _                       -> False
+    )
+    insts
+
+  callTargetLabs = foldl'
+    (\acc inst -> case inst of
+      A.OPER { A.calls = Just lab } -> Set.insert lab acc
+      _                             -> acc
+    )
+    Set.empty
+    insts
 
 -- | remove
 removeTrivialJumps :: PassKernel
