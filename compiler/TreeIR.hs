@@ -8,13 +8,16 @@ module TreeIR
   , makeSeq
   , notRel
   , maxCallArgsStm
+  , fmtDebug
   )
 where
 
+import qualified Absyn
 import qualified Frame
 import qualified Symbol
 import qualified Temp
 
+import           Control.Monad                  ( when )
 import           Control.Monad.Trans.Writer     ( Writer
                                                 , tell
                                                 , execWriter
@@ -25,6 +28,7 @@ import           Data.DList                     ( DList
                                                 , fromList
                                                 )
 import qualified Data.Text                     as T
+import           Data.Maybe                     ( isJust )
 
 import           Prelude                 hiding ( GT
                                                 , LT
@@ -43,14 +47,20 @@ data Exp =
   | ESEQ (Stm, Exp)
   deriving (Eq)
 
+type DebugInfo = Maybe (Symbol.Symbol, Absyn.Pos)
+
 data Stm =
     MOVE (Exp, Exp) -- (dst, src)
   | EXP Exp
   | JUMP (Exp, [Temp.Label])
   | CJUMP (Relop, Exp, Exp, Temp.Label, Temp.Label)
   | SEQ (Stm, Stm)
-  | LABEL Temp.Label
+  | LABEL (Temp.Label, DebugInfo)
   deriving (Eq)
+
+fmtDebug :: DebugInfo -> String
+fmtDebug (Just info) = show info
+fmtDebug Nothing     = ""
 
 makeSeq :: [TreeIR.Stm] -> TreeIR.Stm
 makeSeq []             = TreeIR.EXP $ TreeIR.CONST 0
@@ -130,10 +140,12 @@ putStm (SEQ (a, b)) d = do
   putStrLnW ","
   putStm b $ d + 1
   putCharW ')'
-putStm (LABEL (Temp.Label (Symbol.Symbol lab))) d = do
+putStm (LABEL (Temp.Label (Symbol.Symbol lab), info)) d = do
   indent d
   putStrW "LABEL "
   putStrW lab
+  when (isJust info) $ do
+    putStrW $ T.pack $ " ## " ++ fmtDebug info
 putStm (JUMP (e, _)) d = do
   indent d
   putStrLnW "JUMP("

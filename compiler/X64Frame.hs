@@ -476,17 +476,13 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) =
                                    , Assem.jump    = Nothing
                                    }
                ]
-      label' = label { Assem.assem = T.pack $ (T.unpack $ Assem.assem label) ++ fmtDebug frame }
+      label' = label { Assem.assem = T.pack $ (T.unpack $ Assem.assem label)}
 
       epilogue = epilogue1 ++ epilogue2
   in  [label'] ++ prologue ++ bodyAsm' ++ epilogue
  where
   nextMultipleOf16 :: Int -> Int
   nextMultipleOf16 n = 16 * ((n + 15) `div` 16)
-
-  fmtDebug :: X64Frame -> String
-  fmtDebug X64Frame { frameDebug = Just dbg } = "\t\t\t\t## " ++ show dbg
-  fmtDebug _ = ""
 
   numEscapingLocals :: Int
   numEscapingLocals = length $ filter isInFrame $ locals frame

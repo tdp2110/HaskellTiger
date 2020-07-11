@@ -176,9 +176,9 @@ unEx (Cx genstm) gen =
         ( TreeIR.makeSeq
           [ TreeIR.MOVE (TreeIR.TEMP r, TreeIR.CONST 1)
           , genstm t f
-          , TreeIR.LABEL f
+          , TreeIR.LABEL (f, Nothing)
           , TreeIR.MOVE (TreeIR.TEMP r, zero)
-          , TreeIR.LABEL t
+          , TreeIR.LABEL (t, Nothing)
           ]
         , TreeIR.TEMP r
         )
@@ -197,7 +197,8 @@ unNx (Ex exp) gen = (TreeIR.EXP exp, gen)
 unNx (Cx genstm) gen =
   let (t, gen' ) = Temp.newlabel gen
       (f, gen'') = Temp.newlabel gen'
-      stmtRes    = TreeIR.makeSeq [genstm t f, TreeIR.LABEL t, TreeIR.LABEL f]
+      stmtRes    = TreeIR.makeSeq
+        [genstm t f, TreeIR.LABEL (t, Nothing), TreeIR.LABEL (f, Nothing)]
   in  (stmtRes, gen'')
 
 simpleVar :: X64Access -> X64Level -> Exp
@@ -283,40 +284,43 @@ transRelOp op = case op of
 
 binOp :: Exp -> Exp -> Absyn.Oper -> Temp.Generator -> (Exp, Temp.Generator)
 binOp expLeft expRight op gen =
-  let
-    (expLeft' , gen' ) = unEx expLeft gen
-    (expRight', gen'') = unEx expRight gen'
-    op'                = case op of
-      Absyn.PlusOp   -> TreeIR.PLUS
-      Absyn.MinusOp  -> TreeIR.MINUS
-      Absyn.TimesOp  -> TreeIR.MUL
-      Absyn.DivideOp -> TreeIR.DIV
-      _              -> error "shouldn't get here"
-    binOpExp       = TreeIR.BINOP (op', expLeft', expRight')
-    (resExp, gen3) = case op of
-      Absyn.DivideOp -> case expRight' of
-        TreeIR.CONST 0 -> error "shouldn't get here with (const) zero dividend"
-        c@(TreeIR.CONST _) ->
-          let opExp = TreeIR.BINOP (TreeIR.DIV, expLeft', c)
-          in  (Ex opExp, gen'')
-        _ ->
-          let (testExp, gen''') = relOp expRight zeroExp Absyn.NeqOp gen''
-              testExpGen        = unCx testExp
-              (t, gen4)         = Temp.newlabel gen'''
-              (f, gen5)         = Temp.newlabel gen4
-              onDivByZero       = TreeIR.EXP $ X64Frame.externalCallNoReturn
-                (Temp.Label $ Symbol.Symbol "tiger_divByZero")
-                []
-          in  ( Ex $ TreeIR.ESEQ
-                ( TreeIR.makeSeq
-                  [testExpGen t f, TreeIR.LABEL f, onDivByZero, TreeIR.LABEL t]
-                , binOpExp
+  let (expLeft' , gen' ) = unEx expLeft gen
+      (expRight', gen'') = unEx expRight gen'
+      op'                = case op of
+        Absyn.PlusOp   -> TreeIR.PLUS
+        Absyn.MinusOp  -> TreeIR.MINUS
+        Absyn.TimesOp  -> TreeIR.MUL
+        Absyn.DivideOp -> TreeIR.DIV
+        _              -> error "shouldn't get here"
+      binOpExp       = TreeIR.BINOP (op', expLeft', expRight')
+      (resExp, gen3) = case op of
+        Absyn.DivideOp -> case expRight' of
+          TreeIR.CONST 0 ->
+            error "shouldn't get here with (const) zero dividend"
+          c@(TreeIR.CONST _) ->
+            let opExp = TreeIR.BINOP (TreeIR.DIV, expLeft', c)
+            in  (Ex opExp, gen'')
+          _ ->
+            let (testExp, gen''') = relOp expRight zeroExp Absyn.NeqOp gen''
+                testExpGen        = unCx testExp
+                (t, gen4)         = Temp.newlabel gen'''
+                (f, gen5)         = Temp.newlabel gen4
+                onDivByZero       = TreeIR.EXP $ X64Frame.externalCallNoReturn
+                  (Temp.Label $ Symbol.Symbol "tiger_divByZero")
+                  []
+            in  ( Ex $ TreeIR.ESEQ
+                  ( TreeIR.makeSeq
+                    [ testExpGen t f
+                    , TreeIR.LABEL (f, Nothing)
+                    , onDivByZero
+                    , TreeIR.LABEL (t, Nothing)
+                    ]
+                  , binOpExp
+                  )
+                , gen5
                 )
-              , gen5
-              )
-      _ -> (Ex binOpExp, gen'')
-  in
-    (resExp, gen3)
+        _ -> (Ex binOpExp, gen'')
+  in  (resExp, gen3)
 
 ifThen :: Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
 ifThen testExpE thenExpE gen =
@@ -325,8 +329,8 @@ ifThen testExpE thenExpE gen =
     (thenStm, gen'  ) = unNx thenExpE gen
     (t      , gen'' ) = Temp.newlabel gen'
     (f      , gen''') = Temp.newlabel gen''
-    resExp =
-      Nx $ TreeIR.makeSeq [cx t f, TreeIR.LABEL t, thenStm, TreeIR.LABEL f]
+    resExp            = Nx $ TreeIR.makeSeq
+      [cx t f, TreeIR.LABEL (t, Nothing), thenStm, TreeIR.LABEL (f, Nothing)]
   in
     (resExp, gen''')
 
@@ -386,32 +390,26 @@ ifThenElseStm testExpE thenExp elseExp gen =
       (elseStm, gen5  ) = unNx elseExp gen4
       resExp            = Nx $ TreeIR.makeSeq
         [ testGen t f
-        , TreeIR.LABEL t
+        , TreeIR.LABEL (t, Nothing)
         , thenStm
         , TreeIR.JUMP (TreeIR.NAME joinLab, [joinLab])
-        , TreeIR.LABEL f
+        , TreeIR.LABEL (f, Nothing)
         , elseStm
-        , TreeIR.LABEL joinLab
+        , TreeIR.LABEL (joinLab, Nothing)
         ]
   in  (resExp, gen5)
 
 ifThenElse :: Exp -> Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
 ifThenElse (Cx testGen) (Ex (TreeIR.CONST 1)) (Cx elseGen) gen = -- orExp from Parser.y
-  let
-    (z, gen') = Temp.newlabel gen
-    resExp =
-      Cx $ \t f ->
-        TreeIR.SEQ (testGen t z, TreeIR.SEQ (TreeIR.LABEL z, elseGen t f))
-  in
-    (resExp, gen')
+  let (z, gen') = Temp.newlabel gen
+      resExp    = Cx $ \t f -> TreeIR.SEQ
+        (testGen t z, TreeIR.SEQ (TreeIR.LABEL (z, Nothing), elseGen t f))
+  in  (resExp, gen')
 ifThenElse (Cx testGen) (Cx thenGen) (Ex (TreeIR.CONST 0)) gen = -- andExp from Parser.y
-  let
-    (z, gen') = Temp.newlabel gen
-    resExp =
-      Cx $ \t f ->
-        TreeIR.SEQ (testGen z f, TreeIR.SEQ (TreeIR.LABEL z, thenGen t f))
-  in
-    (resExp, gen')
+  let (z, gen') = Temp.newlabel gen
+      resExp    = Cx $ \t f -> TreeIR.SEQ
+        (testGen z f, TreeIR.SEQ (TreeIR.LABEL (z, Nothing), thenGen t f))
+  in  (resExp, gen')
 ifThenElse testExpE thenExpE elseExpE gen =
   let testGen           = unCx testExpE
       (thenExp, gen'  ) = unEx thenExpE gen
@@ -423,12 +421,12 @@ ifThenElse testExpE thenExpE elseExpE gen =
       resExp            = Ex $ TreeIR.ESEQ
         ( TreeIR.makeSeq
           [ testGen t f
-          , TreeIR.LABEL t
+          , TreeIR.LABEL (t, Nothing)
           , TreeIR.MOVE (TreeIR.TEMP r, thenExp)
           , TreeIR.JUMP (TreeIR.NAME joinLab, [joinLab])
-          , TreeIR.LABEL f
+          , TreeIR.LABEL (f, Nothing)
           , TreeIR.MOVE (TreeIR.TEMP r, elseExp)
-          , TreeIR.LABEL joinLab
+          , TreeIR.LABEL (joinLab, Nothing)
           ]
         , TreeIR.TEMP r
         )
@@ -465,12 +463,12 @@ while testExpE bodyExpE doneLab gen =
       (testExp, gen''') = unEx testExpE gen''
       (bodyExp, gen4  ) = unEx bodyExpE gen'''
       resExp            = Nx $ TreeIR.makeSeq
-        [ TreeIR.LABEL testLab
+        [ TreeIR.LABEL (testLab, Nothing)
         , TreeIR.CJUMP (TreeIR.NE, zero, testExp, bodyLab, doneLab)
-        , TreeIR.LABEL bodyLab
+        , TreeIR.LABEL (bodyLab, Nothing)
         , TreeIR.EXP bodyExp
         , TreeIR.JUMP (TreeIR.NAME testLab, [testLab])
-        , TreeIR.LABEL doneLab
+        , TreeIR.LABEL (doneLab, Nothing)
         ]
   in  (resExp, gen4)
 
@@ -626,7 +624,10 @@ functionDec X64Level { x64Frame = frame } bodyExp gen =
  where
   makeProc :: TreeIR.Stm -> Frag
   makeProc bodyStm =
-    let resBody = TreeIR.SEQ (TreeIR.LABEL $ X64Frame.name frame, bodyStm)
+    let resBody = TreeIR.SEQ
+          ( TreeIR.LABEL (X64Frame.name frame, X64Frame.frameDebug frame)
+          , bodyStm
+          )
     in  X64Frame.PROC { X64Frame.body = resBody, X64Frame.fragFrame = frame }
 functionDec X64Outermost _ _ = error "should not get here"
 

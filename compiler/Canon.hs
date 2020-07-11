@@ -114,7 +114,8 @@ linearize stm = runState (linearizeM stm)
   doStm (T.MOVE (T.TEMP t, T.CALL (e, el, escapes, hasRet))) =
     reorderStm (e : el)
       $ \(e' : el') -> T.MOVE (T.TEMP t, T.CALL (e', el', escapes, hasRet))
-  doStm (T.MOVE (T.TEMP t, b)) = reorderStm [b] $ \[b'] -> T.MOVE (T.TEMP t, b')
+  doStm (T.MOVE (T.TEMP t, b)) =
+    reorderStm [b] $ \[b'] -> T.MOVE (T.TEMP t, b')
   doStm (T.MOVE (T.MEM e, b)) =
     reorderStm [e, b] $ \[e', b'] -> T.MOVE (T.MEM e', b')
   doStm (T.MOVE (T.ESEQ (s, e), b)) = doStm $ T.SEQ (s, T.MOVE (e, b))
@@ -160,7 +161,7 @@ basicBlocks stms = do
           next :: [T.Stm] -> Block -> State Temp.Generator [Block]
           next (s@(T.JUMP  _) : rest) thisBlock = endBlock rest (s : thisBlock)
           next (s@(T.CJUMP _) : rest) thisBlock = endBlock rest (s : thisBlock)
-          next stms''@(T.LABEL lab : _) thisBlock =
+          next stms''@(T.LABEL (lab, _) : _) thisBlock =
             next (T.JUMP (T.NAME lab, [lab]) : stms'') thisBlock
           next (s : rest) thisBlock = next rest (s : thisBlock)
           next [] thisBlock = next [T.JUMP (T.NAME done, [done])] thisBlock
@@ -172,7 +173,7 @@ basicBlocks stms = do
       blocks []    blist = pure $ reverse blist
       blocks stms' blist = do
         t <- newLabel
-        blocks (T.LABEL t : stms') blist
+        blocks (T.LABEL (t, Nothing) : stms') blist
   res <- blocks stms []
   pure (res, done)
 
@@ -191,16 +192,17 @@ From a list of basic blocks satisfying properties 1-6,
 traceSchedule :: [Block] -> Temp.Label -> State Temp.Generator Block
 traceSchedule blocks done = do
   allExceptDone <- getNext (foldr' enterBlock Map.empty blocks) blocks
-  pure $ allExceptDone ++ [T.LABEL done]
+  pure $ allExceptDone ++ [T.LABEL (done, Nothing)]
  where
   enterBlock :: Block -> Table -> Table
-  enterBlock b@(T.LABEL s : _) table = Map.insert s b table
-  enterBlock _                 table = table
+  enterBlock b@(T.LABEL (s, _) : _) table = Map.insert s b table
+  enterBlock _                      table = table
 
   getNext :: Map Temp.Label [T.Stm] -> [[T.Stm]] -> State Temp.Generator Block
-  getNext table (b@((T.LABEL lab) : _) : rest) = case Map.lookup lab table of
-    Just (_ : _) -> trace table b rest
-    _            -> getNext table rest
+  getNext table (b@((T.LABEL (lab, _)) : _) : rest) =
+    case Map.lookup lab table of
+      Just (_ : _) -> trace table b rest
+      _            -> getNext table rest
   getNext _ [] = pure []
   getNext _ _  = impossible
 
@@ -209,7 +211,7 @@ traceSchedule blocks done = do
     -> [T.Stm]
     -> [[T.Stm]]
     -> State Temp.Generator Block
-  trace table' b@(T.LABEL lab : _) rest =
+  trace table' b@(T.LABEL (lab, _) : _) rest =
     let table = Map.insert lab [] table'
     in  case splitLast b of
           (most, T.JUMP (T.NAME lab', _)) -> case Map.lookup lab' table of
@@ -233,7 +235,7 @@ traceSchedule blocks done = do
                 pure
                   $  most
                   ++ [ T.CJUMP (op, x, y, t, f')
-                     , T.LABEL f'
+                     , T.LABEL (f', Nothing)
                      , T.JUMP (T.NAME f, [f])
                      ]
                   ++ next

@@ -12,6 +12,7 @@ import qualified Temp
 import qualified TreeIR
 import qualified X64Frame
 
+import           Data.Maybe                     ( isJust )
 import           Control.Monad.Trans.Writer     ( WriterT
                                                 , tell
                                                 , runWriterT
@@ -88,8 +89,13 @@ munchStm (TreeIR.EXP (TreeIR.CONST _)) = noop
 munchStm (TreeIR.EXP e               ) = do
   _ <- munchExp e
   noop
-munchStm (TreeIR.LABEL l@(Temp.Label (S.Symbol s))) =
-  emit A.LABEL { A.assem = T.snoc s ':', A.lab = l }
+munchStm (TreeIR.LABEL (l@(Temp.Label (S.Symbol s)), maybeDebug)) = emit
+  A.LABEL
+    { A.assem = T.pack $ (T.unpack s) ++ if isJust maybeDebug
+                  then ":\t\t\t\t## " ++ TreeIR.fmtDebug maybeDebug
+                  else ""
+    , A.lab   = l
+    }
 munchStm (TreeIR.MOVE (TreeIR.TEMP dst, TreeIR.TEMP src)) =
   emit A.MOVE { A.assem = "\tmov `d0, `s0", A.moveDst = dst, A.moveSrc = src }
 munchStm (TreeIR.MOVE (TreeIR.TEMP dst, TreeIR.CONST 0)) = emit A.defaultOper
