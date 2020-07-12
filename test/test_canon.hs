@@ -77,7 +77,9 @@ tempOrMem = do
     _ -> arbMem
 
 arbStm :: Int -> Gen T.Stm
-arbStm 0 = T.LABEL <$> arbitrary
+arbStm 0 = do
+  lab <- arbitrary
+  pure $ T.LABEL (lab, Nothing)
 arbStm sz =
   let sz'    = sz `div` 2
       expGen = arbExp sz'
@@ -106,7 +108,9 @@ arbStm sz =
             s1 <- stmGen
             s2 <- stmGen
             pure $ T.SEQ (s1, s2)
-          5 -> T.LABEL <$> arbitrary
+          5 -> do
+            lab <- arbitrary
+            pure $ T.LABEL (lab, Nothing)
           _ -> error "shouldn't get here"
 
 instance Arbitrary T.Binop where

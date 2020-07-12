@@ -829,9 +829,9 @@ checkDeclNamesDistinctInLet decls letPos =
     in  case Map.lookup name funAndVarSyms of
           Nothing      -> Right (Map.insert name decPos funAndVarSyms, tySyms)
           Just decPos' -> Left SemantError
-            { what = "multiple function or value declarations of symbol "
+            { what = "multiple function or value declarations of symbol `"
                      ++ show name
-                     ++ " in letExp declarations at "
+                     ++ "` in letExp declarations at "
                      ++ show decPos'
                      ++ " and "
                      ++ show decPos
