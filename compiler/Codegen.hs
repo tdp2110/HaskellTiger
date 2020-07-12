@@ -92,8 +92,8 @@ munchStm (TreeIR.EXP e               ) = do
   noop
 munchStm (TreeIR.LABEL (l@(Temp.Label (S.Symbol s)), maybeDebug)) = emit
   A.LABEL
-    { A.assem = T.pack $ T.unpack s ++ if isJust maybeDebug
-                  then ":\t\t\t\t## " ++ TreeIR.fmtDebug maybeDebug
+    { A.assem = T.pack $ T.unpack s ++ ":" ++ if isJust maybeDebug
+                  then "\t\t\t\t## " ++ TreeIR.fmtDebug maybeDebug
                   else ""
     , A.lab   = l
     }
