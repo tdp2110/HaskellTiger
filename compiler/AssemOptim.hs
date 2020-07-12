@@ -7,30 +7,31 @@ where
 import qualified Assem                         as A
 import qualified Flow                          as F
 import qualified Graph                         as G
-import qualified Temp
 
 import qualified Data.Bifunctor
 import           Data.Foldable                  ( foldl' )
 import qualified Data.Map                      as Map
 import qualified Data.Set                      as Set
-import qualified Data.Text                     as Text
 import           Data.List                      ( zip4 )
+
 
 type CFG = ([A.Inst], (F.FlowGraph, [F.Node]))
 type PassKernel = CFG -> [A.Inst]
 type Pass = CFG -> CFG
+
 
 makePass :: PassKernel -> Pass
 makePass kernel input =
   let instrs = kernel input in (instrs, F.instrsToGraph instrs)
 
 optimizePreRegAlloc :: [A.Inst] -> CFG
-optimizePreRegAlloc =
-  optimize $ fmap makePass [pruneDefdButNotUsed, removeTrivialJumps]
+optimizePreRegAlloc = optimize
+  $ fmap makePass [pruneDefdButNotUsed, removeTrivialJumps, eliminateDeadCode]
 
 optimizePostRegAlloc :: [A.Inst] -> CFG
-optimizePostRegAlloc =
-  optimize $ fmap makePass [chaseJumps, removeTrivialJumps]
+optimizePostRegAlloc = optimize $ fmap
+  makePass
+  [chaseJumps, removeTrivialJumps, eliminateDeadCode, removeTrivialJumps]
 
 optimize :: [Pass] -> [A.Inst] -> CFG
 optimize passes insts =
@@ -100,28 +101,43 @@ chaseJumps (insts, (F.FlowGraph { F.control = cfg }, flowNodes)) =
   chase _ _ inst = inst
 
 eliminateDeadCode :: PassKernel
-eliminateDeadCode (insts, (F.FlowGraph { F.control = _ }, nodes)) =
-  let nodesWithNoPred = fmap nodeHasNoPred nodes
-      maybeMains      = fmap instMaybeIsMain insts
-      shouldDeletes =
-          (\(hasNoPred, isLabel, isNotCalled, maybeMain) ->
-              hasNoPred && isLabel && isNotCalled && not maybeMain
+eliminateDeadCode (insts, (F.FlowGraph { F.control = cfg }, nodes)) =
+  case insts of
+    (entryInst : _) ->
+      let nodesWithNoPred = nodeHasNoPred <$> nodes
+          nodeIds         = G.nodeId <$> nodes
+          entryId         = head nodeIds
+          shouldDeletes =
+              (\(hasNoPred, isLabel, isNotCalled, inst) ->
+                  hasNoPred && isLabel && isNotCalled && inst /= entryInst
+                )
+                <$> zip4 nodesWithNoPred labelNodes uncalledNodes insts
+          labelNodesToDelete =
+              Set.fromList $ fst <$> filter snd (zip nodeIds shouldDeletes)
+          topoOrderedNodes = reverse $ G.quasiTopoSort cfg
+          nodesToDelete    = foldl'
+            (\acc node ->
+              let nodeId       = G.nodeId node
+                  predecessors = G.pred node
+                  acc' =
+                      if nodeId
+                           /= entryId
+                           && (not . null) predecessors
+                           && all (`Set.member` acc) predecessors
+                        then Set.insert nodeId acc
+                        else acc
+              in  acc'
             )
-            <$> zip4 nodesWithNoPred labelNodes uncalledNodes maybeMains
-      labsToDelete =
-          (\(inst, shouldDelete) -> case inst of
-              A.LABEL { A.lab = lab } -> [ lab | shouldDelete ]
-              _                       -> []
-            )
-            =<< zip insts shouldDeletes
-  in  error $ show labsToDelete
+            labelNodesToDelete
+            topoOrderedNodes
+          insts' =
+              fmap fst
+                $ filter (\(_, nodeId) -> not $ Set.member nodeId nodesToDelete)
+                $ zip insts nodeIds
+      in  insts'
+    _ -> error $ "malformed insts list: " ++ show insts
  where
   nodeHasNoPred node = null $ G.pred node
-
-  instMaybeIsMain A.LABEL { A.lab = lab } =
-    let labName = Text.unpack $ Temp.name lab
-    in  labName == "main" || labName == "_main"
-  instMaybeIsMain _ = False
 
   labelNodes = fmap
     (\inst -> case inst of
@@ -145,7 +161,6 @@ eliminateDeadCode (insts, (F.FlowGraph { F.control = _ }, nodes)) =
     Set.empty
     insts
 
--- | remove
 removeTrivialJumps :: PassKernel
 removeTrivialJumps (insts, (_, flowNodes)) =
   let nodes           = zip insts $ fmap G.nodeId flowNodes
