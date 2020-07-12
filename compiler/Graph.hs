@@ -96,7 +96,7 @@ dfs g node =
           $ let unvisited' = Set.delete nodeId_ unvisited
             in  do
                   (lift . put) unvisited'
-                  mapM_ (dfs g) $ fmap (nodes g Map.!) $ pred node
+                  mapM_ (dfs g) $ (nodes g Map.!) <$> pred node
                   tell $ singleton nodeId_
                   pure ()
 

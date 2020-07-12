@@ -12,7 +12,7 @@ mkSym :: String -> Symbol
 mkSym = Symbol . T.pack
 
 instance Show Symbol where
-  show (Symbol s) = id T.unpack s
+  show (Symbol s) = T.unpack s
 
 name :: Symbol -> T.Text
 name (Symbol s) = s

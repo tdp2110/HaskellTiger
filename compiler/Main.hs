@@ -125,12 +125,12 @@ dumpCFG text performRegAlloc optimize = case Parser.parse text of
         step1 (insts, g) stm =
           let (insts', g') = Codegen.codegen x64 g stm in (insts ++ insts', g')
 
-        dumpFragCFG insts (Flow.FlowGraph { Flow.control = cfg }) nodes tempMap
+        dumpFragCFG insts Flow.FlowGraph { Flow.control = cfg } nodes tempMap
           = let
               nodeIdInstPairs = zip (fmap Graph.nodeId nodes) insts
               nodeIdToInst    = Map.fromList nodeIdInstPairs
               nodePrinter nodeId =
-                let Just inst = Map.lookup (nodeId) nodeIdToInst
+                let Just inst = Map.lookup nodeId nodeIdToInst
                 in  formatAsm tempMap inst
             in
               Graph.toDot cfg nodePrinter

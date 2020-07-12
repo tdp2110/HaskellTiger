@@ -434,7 +434,7 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) =
           ]
       prologue =
           [ Assem.defaultOper
-              { Assem.assem   = T.pack $ "\tpush `d0"
+              { Assem.assem   = "\tpush `d0"
               , Assem.operDst = [rbp $ x64 frame]
               , Assem.operSrc = [rsp $ x64 frame]
               , Assem.jump    = Nothing
@@ -476,7 +476,7 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) =
                                    , Assem.jump    = Nothing
                                    }
                ]
-      label' = label { Assem.assem = T.pack $ (T.unpack $ Assem.assem label)}
+      label' = label { Assem.assem = T.pack $ T.unpack (Assem.assem label)}
 
       epilogue = epilogue1 ++ epilogue2
   in  [label'] ++ prologue ++ bodyAsm' ++ epilogue

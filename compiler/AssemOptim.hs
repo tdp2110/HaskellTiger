@@ -9,7 +9,6 @@ import qualified Flow                          as F
 import qualified Graph                         as G
 import qualified Temp
 
-import           Control.Monad                  ( join )
 import qualified Data.Bifunctor
 import           Data.Foldable                  ( foldl' )
 import qualified Data.Map                      as Map
@@ -105,24 +104,21 @@ eliminateDeadCode (insts, (F.FlowGraph { F.control = _ }, nodes)) =
   let nodesWithNoPred = fmap nodeHasNoPred nodes
       maybeMains      = fmap instMaybeIsMain insts
       shouldDeletes =
-          fmap
-              (\(hasNoPred, isLabel, isNotCalled, maybeMain) ->
-                hasNoPred && isLabel && isNotCalled && (not maybeMain)
-              )
-            $ zip4 nodesWithNoPred labelNodes uncalledNodes maybeMains
+          (\(hasNoPred, isLabel, isNotCalled, maybeMain) ->
+              hasNoPred && isLabel && isNotCalled && not maybeMain
+            )
+            <$> zip4 nodesWithNoPred labelNodes uncalledNodes maybeMains
       labsToDelete =
-          join
-            $ fmap
-                (\(inst, shouldDelete) -> case inst of
-                  A.LABEL { A.lab = lab } -> if shouldDelete then [lab] else []
-                  _                       -> []
-                )
-            $ zip insts shouldDeletes
+          (\(inst, shouldDelete) -> case inst of
+              A.LABEL { A.lab = lab } -> [ lab | shouldDelete ]
+              _                       -> []
+            )
+            =<< zip insts shouldDeletes
   in  error $ show labsToDelete
  where
   nodeHasNoPred node = null $ G.pred node
 
-  instMaybeIsMain (A.LABEL { A.lab = lab }) =
+  instMaybeIsMain A.LABEL { A.lab = lab } =
     let labName = Text.unpack $ Temp.name lab
     in  labName == "main" || labName == "_main"
   instMaybeIsMain _ = False
