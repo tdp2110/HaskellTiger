@@ -12,7 +12,9 @@ import qualified Data.Bifunctor
 import           Data.Foldable                  ( foldl' )
 import qualified Data.Map                      as Map
 import qualified Data.Set                      as Set
-import           Data.List                      ( zip4 )
+import           Data.List                      ( zip3
+                                                , zip4
+                                                )
 
 
 type CFG = ([A.Inst], (F.FlowGraph, [F.Node]))
@@ -31,7 +33,7 @@ optimizePreRegAlloc = optimize
 optimizePostRegAlloc :: [A.Inst] -> CFG
 optimizePostRegAlloc = optimize $ fmap
   makePass
-  [chaseJumps, removeTrivialJumps, eliminateDeadCode, removeTrivialJumps]
+  [chaseJumps, removeTrivialJumps, eliminateDeadCode, removeUnneededLabels]
 
 optimize :: [Pass] -> [A.Inst] -> CFG
 optimize passes insts =
@@ -192,3 +194,47 @@ removeTrivialJumps (insts, (_, flowNodes)) =
   extractTrivialJumps ((A.OPER { A.jump = Just [lab1], A.operSrc = [], A.operDst = [] }, n1), (A.LABEL { A.lab = lab2 }, n2))
     = [ (n2, n1, lab1) | lab1 == lab2 ]
   extractTrivialJumps _ = []
+
+removeUnneededLabels :: PassKernel
+removeUnneededLabels (insts, _) = case insts of
+  (entry@A.LABEL{} : _) ->
+    let shouldRemoveInst =
+            fmap
+                (\(isUncalled, isNotJumpedTo, inst) ->
+                  isUncalled && isNotJumpedTo && inst /= entry
+                )
+              $ zip3 uncalledNodes unjumpedToNodes insts
+        insts' = fmap fst $ filter (not . snd) $ zip insts shouldRemoveInst
+    in  insts'
+  _ -> error $ "malformed insts list: " ++ show insts
+ where
+  uncalledNodes = fmap
+    (\inst -> case inst of
+      A.LABEL { A.lab = lab } -> not $ Set.member lab callTargetLabs
+      _                       -> False
+    )
+    insts
+
+  callTargetLabs = foldl'
+    (\acc inst -> case inst of
+      A.OPER { A.calls = Just lab } -> Set.insert lab acc
+      _                             -> acc
+    )
+    Set.empty
+    insts
+
+  unjumpedToNodes = fmap
+    (\inst -> case inst of
+      A.LABEL { A.lab = lab } -> not $ Set.member lab jumpTargetLabs
+      _                       -> False
+    )
+    insts
+
+  jumpTargetLabs = foldl'
+    (\acc inst -> case inst of
+      A.OPER { A.jump = Just labs } ->
+        foldl' (\acc2 lab -> Set.insert lab acc2) acc labs
+      _ -> acc
+    )
+    Set.empty
+    insts
