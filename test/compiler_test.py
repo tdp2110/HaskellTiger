@@ -142,6 +142,11 @@ class TestCompiler(unittest.TestCase):
         self.assertIn('## (f,', assem1)
         self.assertNotIn('sub rsp', assem1)
 
+    def test_unused_functions(self):
+        assem = self.check_compiler('examples/unused-funs.tiger', 'hello world\n')
+        assem = assem.decode('utf-8')
+        self.assertNotIn('fact', assem)
+        
     def test_loop_register_allocator(self):
         self.check_compiler('examples/loopRegAllocator.tiger', run=False)
 

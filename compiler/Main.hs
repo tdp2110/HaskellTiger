@@ -16,6 +16,7 @@ import qualified Translate
 import qualified TreeIR
 import qualified X64Frame
 import qualified Data.Text                     as T
+import qualified Data.DList                    as DList
 
 import           Control.Monad.Trans.State      ( runState )
 import           Data.Char                      ( digitToInt )
@@ -26,6 +27,54 @@ import           System.Environment             ( getArgs )
 import           System.Console.GetOpt
 import           Text.Pretty.Simple
 
+
+removeUnneededFrags :: DList.DList X64Frame.Frag -> [X64Frame.Frag]
+removeUnneededFrags frags =
+  let frags' = DList.toList frags in removeUnnededProcFrags frags'
+
+removeUnnededProcFrags :: [X64Frame.Frag] -> [X64Frame.Frag]
+removeUnnededProcFrags frags =
+  let fragAndShouldKeep = fmap shouldKeepFrag $ zip frags (split frags)
+      fragsToKeep       = fmap fst $ filter snd fragAndShouldKeep
+  in  fragsToKeep
+ where
+  shouldKeepFrag :: (X64Frame.Frag, [X64Frame.Frag]) -> (X64Frame.Frag, Bool)
+  shouldKeepFrag (frag@(X64Frame.STRING _), _) = (frag, True)
+  shouldKeepFrag (frag@(X64Frame.PROC { X64Frame.fragFrame = X64Frame.X64Frame { X64Frame.name = lab } }), otherFrags)
+    = let shouldKeep =
+              ((T.unpack $ Temp.name lab) `elem` ["_main"])
+                || any (fragUsesLabel lab) otherFrags
+      in  (frag, shouldKeep)
+
+split :: [a] -> [[a]]
+split frags = go [] frags
+ where
+  go _  []       = [[]]
+  go ys (x : xs) = (ys ++ xs) : (go (x : ys) xs)
+
+fragUsesLabel :: Temp.Label -> X64Frame.Frag -> Bool
+fragUsesLabel _   (X64Frame.STRING _                     ) = False
+fragUsesLabel lab (X64Frame.PROC { X64Frame.body = body }) = stmUsesLab body
+ where
+  stmUsesLab :: TreeIR.Stm -> Bool
+  stmUsesLab (TreeIR.MOVE (dst, src)) = expUsesLab dst || expUsesLab src
+  stmUsesLab (TreeIR.EXP  e         ) = expUsesLab e
+  stmUsesLab (TreeIR.JUMP (e, labs) ) = expUsesLab e || lab `elem` labs
+  stmUsesLab (TreeIR.CJUMP (_, e1, e2, lab1, lab2)) =
+    expUsesLab e1 || expUsesLab e2 || lab == lab1 || lab == lab2
+  stmUsesLab (TreeIR.SEQ   (stm1, stm2)) = stmUsesLab stm1 || stmUsesLab stm2
+  stmUsesLab (TreeIR.LABEL (lab', _   )) = lab == lab'
+
+  expUsesLab :: TreeIR.Exp -> Bool
+  expUsesLab (TreeIR.CONST _            ) = False
+  expUsesLab (TreeIR.NAME  lab'         ) = lab == lab'
+  expUsesLab (TreeIR.TEMP  _            ) = False
+  expUsesLab (TreeIR.BINOP (_, e1, e2)  ) = expUsesLab e1 || expUsesLab e2
+  expUsesLab (TreeIR.MEM   e            ) = expUsesLab e
+  expUsesLab (TreeIR.CALL  (e, es, _, _)) = expUsesLab e || any expUsesLab es
+  expUsesLab (TreeIR.CALLNORETURN (e, es, _)) =
+    expUsesLab e || any expUsesLab es
+  expUsesLab (TreeIR.ESEQ (s, e)) = stmUsesLab s || expUsesLab e
 
 parseToExp :: String -> (Translate.Exp, Semant.FragList)
 parseToExp text =
@@ -125,15 +174,15 @@ dumpCFG text performRegAlloc optimize = case Parser.parse text of
         step1 (insts, g) stm =
           let (insts', g') = Codegen.codegen x64 g stm in (insts ++ insts', g')
 
-        dumpFragCFG insts Flow.FlowGraph { Flow.control = cfg } nodes tempMap
-          = let
-              nodeIdInstPairs = zip (fmap Graph.nodeId nodes) insts
-              nodeIdToInst    = Map.fromList nodeIdInstPairs
-              nodePrinter nodeId =
-                let Just inst = Map.lookup nodeId nodeIdToInst
-                in  formatAsm tempMap inst
-            in
-              Graph.toDot cfg nodePrinter
+        dumpFragCFG insts Flow.FlowGraph { Flow.control = cfg } nodes tempMap =
+          let
+            nodeIdInstPairs = zip (fmap Graph.nodeId nodes) insts
+            nodeIdToInst    = Map.fromList nodeIdInstPairs
+            nodePrinter nodeId =
+              let Just inst = Map.lookup nodeId nodeIdToInst
+              in  formatAsm tempMap inst
+          in
+            Graph.toDot cfg nodePrinter
 
         processFrag
           :: (String, Temp.Generator)
@@ -176,8 +225,11 @@ compileToAsm text performRegAlloc optimize = case Parser.parse text of
   Left  err -> show err
   Right ast -> case Semant.transThunked ast of
     Left err -> show err
-    Right (_, frags, gen, x64) ->
+    Right (_, fragsDList, gen, x64) ->
       let
+        frags = if optimize
+          then removeUnneededFrags fragsDList
+          else DList.toList fragsDList
         header =
           "\t.globl _main\n"
             ++ "\t.section    __TEXT,__text,regular,pure_instructions\n"
