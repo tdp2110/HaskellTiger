@@ -34,27 +34,25 @@ removeUnneededFrags frags =
 
 removeUnnededProcFrags :: [X64Frame.Frag] -> [X64Frame.Frag]
 removeUnnededProcFrags frags =
-  let fragAndShouldKeep = fmap shouldKeepFrag $ zip frags (split frags)
-      fragsToKeep       = fmap fst $ filter snd fragAndShouldKeep
+  let shouldKeep = shouldKeepFrag <$> zip frags (split frags)
+      fragsToKeep       = fmap fst $ filter snd $ zip frags shouldKeep
   in  fragsToKeep
  where
-  shouldKeepFrag :: (X64Frame.Frag, [X64Frame.Frag]) -> (X64Frame.Frag, Bool)
-  shouldKeepFrag (frag@(X64Frame.STRING _), _) = (frag, True)
-  shouldKeepFrag (frag@(X64Frame.PROC { X64Frame.fragFrame = X64Frame.X64Frame { X64Frame.name = lab } }), otherFrags)
-    = let shouldKeep =
-              ((T.unpack $ Temp.name lab) `elem` ["_main"])
+  shouldKeepFrag :: (X64Frame.Frag, [X64Frame.Frag]) -> Bool
+  shouldKeepFrag (X64Frame.STRING _, _) = True
+  shouldKeepFrag (X64Frame.PROC { X64Frame.fragFrame = X64Frame.X64Frame { X64Frame.name = lab } }, otherFrags)
+    = (T.unpack (Temp.name lab) == "_main")
                 || any (fragUsesLabel lab) otherFrags
-      in  (frag, shouldKeep)
 
 split :: [a] -> [[a]]
-split frags = go [] frags
+split  = go []
  where
   go _  []       = [[]]
-  go ys (x : xs) = (ys ++ xs) : (go (x : ys) xs)
+  go ys (x : xs) = (ys ++ xs) : go (x : ys) xs
 
 fragUsesLabel :: Temp.Label -> X64Frame.Frag -> Bool
 fragUsesLabel _   (X64Frame.STRING _                     ) = False
-fragUsesLabel lab (X64Frame.PROC { X64Frame.body = body }) = stmUsesLab body
+fragUsesLabel lab X64Frame.PROC { X64Frame.body = body } = stmUsesLab body
  where
   stmUsesLab :: TreeIR.Stm -> Bool
   stmUsesLab (TreeIR.MOVE (dst, src)) = expUsesLab dst || expUsesLab src
@@ -136,8 +134,11 @@ dumpCFG text performRegAlloc optimize = case Parser.parse text of
   Left  err -> show err
   Right ast -> case Semant.transThunked ast of
     Left err -> show err
-    Right (_, frags, gen, x64) ->
+    Right (_, fragsDList, gen, x64) ->
       let
+        frags = if optimize
+          then removeUnneededFrags fragsDList
+          else DList.toList fragsDList
         emit :: X64Frame.Frag -> Temp.Generator -> (String, Temp.Generator)
         emit X64Frame.PROC { X64Frame.body = bodyStm, X64Frame.fragFrame = frame } gen'
           = let
@@ -197,8 +198,11 @@ showFlatIR text optimize = case Parser.parse text of
   Left  err -> show err
   Right ast -> case Semant.transThunked ast of
     Left err -> show err
-    Right (_, frags, gen, _) ->
+    Right (_, fragsDList, gen, _) ->
       let
+        frags = if optimize
+          then removeUnneededFrags fragsDList
+          else DList.toList fragsDList
         emit :: X64Frame.Frag -> Temp.Generator -> (Canon.Block, Temp.Generator)
         emit X64Frame.PROC { X64Frame.body = bodyStm } gen' =
           let
