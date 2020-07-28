@@ -1,5 +1,6 @@
 # HaskellTiger
-Andrew Appel's _Modern Compiler Implementation in ML_, implemented in Haskell
+Andrew Appel's [_Modern Compiler Implementation in ML_](https://www.cs.princeton.edu/~appel/modern/ml/), implemented in Haskell.
+Here is [a specification of the tiger language](https://www.lrde.epita.fr/~tiger/tiger.html).
 
 Hobby project, work-in-progress: learning Haskell, while working through compiler book.
 
@@ -139,7 +140,7 @@ Usage: tigerc [OPTION...] files...
 ```
 
 Let's explore a few using the hello_world.tiger example from above. 
-`--show-ast` pretty-prints the ast using the (awesome) pretty-simple package (https://hackage.haskell.org/package/pretty-simple).
+`--show-ast` pretty-prints the ast using the (awesome) [pretty-simple package](https://hackage.haskell.org/package/pretty-simple).
 
 ```
 ✗ cabal -v0 new-run tigerc -- examples/hello_world.tiger --show-ast
