@@ -416,39 +416,48 @@ newtype MaxCallArgs = MaxCallArgs (Maybe Int)
 -- of any CALL instruction in the procedure body. Once this is known, the assembly language
 -- for procedure entry, stack pointer adjustment, and procedure exit can be put together;
 -- these are the _prologue_ and _epilogue_.
-procEntryExit3 :: X64Frame -> [Assem.Inst] -> MaxCallArgs -> [Assem.Inst]
-procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) =
+procEntryExit3
+  :: X64Frame
+  -> [Assem.Inst]
+  -> MaxCallArgs
+  -> {-numSpills-}
+     Int
+  -> [Assem.Inst]
+procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) numSpills =
   let (label : bodyAsm') = bodyAsm
+      arch = x64 frame
       stackSize = nextMultipleOf16 $ wordSize * case maxCallArgsOrNothing of
-        Just maxCallArgs -> maxCallArgs + numEscapingLocals
+        Just maxCallArgs ->
+          let stackSpaceForCallArgs =
+                  max 0 $ maxCallArgs - length (paramRegs arch) + numSpills
+          in  stackSpaceForCallArgs + numEscapingLocals
         Nothing -> -- we're in a leaf function (ie it calls no other function. use the 128-byte redzone)
-          max 0 $ numEscapingLocals - 128 `div` 8
+          max 0 $ numSpills + numEscapingLocals - 128 `div` 8
       stackAdjustment =
           [ Assem.defaultOper
               { Assem.assem   = T.pack $ "\tsub `d0, " ++ show stackSize
-              , Assem.operDst = [rsp $ x64 frame]
+              , Assem.operDst = [rsp arch]
               , Assem.operSrc = []
               , Assem.jump    = Nothing
               }
           | stackSize /= 0
           ]
       prologue =
-          [ Assem.defaultOper
-              { Assem.assem   = "\tpush `d0"
-              , Assem.operDst = [rbp $ x64 frame]
-              , Assem.operSrc = [rsp $ x64 frame]
-              , Assem.jump    = Nothing
-              }
+          [ Assem.defaultOper { Assem.assem   = "\tpush `d0"
+                              , Assem.operDst = [rbp arch]
+                              , Assem.operSrc = [rsp arch]
+                              , Assem.jump    = Nothing
+                              }
             , Assem.MOVE { Assem.assem   = "\tmov `d0, `s0"
-                         , Assem.moveDst = rbp $ x64 frame
-                         , Assem.moveSrc = rsp $ x64 frame
+                         , Assem.moveDst = rbp arch
+                         , Assem.moveSrc = rsp arch
                          }
             ]
             ++ stackAdjustment
       epilogue1 =
           [ Assem.defaultOper
               { Assem.assem   = T.pack $ "\tadd `d0, " ++ show stackSize
-              , Assem.operDst = [rsp $ x64 frame]
+              , Assem.operDst = [rsp arch]
               , Assem.operSrc = []
               , Assem.jump    = Nothing
               }
@@ -456,7 +465,7 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) =
           ]
       raxClearOrNil =
           [ Assem.defaultOper { Assem.assem   = "\txor `d0, `d0"
-                              , Assem.operDst = [rax $ x64 frame]
+                              , Assem.operDst = [rax arch]
                               , Assem.operSrc = []
                               , Assem.jump    = Nothing
                               }
@@ -464,19 +473,19 @@ procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) =
           ]
       epilogue2 =
           [ Assem.defaultOper { Assem.assem   = "\tpop `d0"
-                              , Assem.operDst = [rbp $ x64 frame]
+                              , Assem.operDst = [rbp arch]
                               , Assem.operSrc = []
                               , Assem.jump    = Nothing
                               }
             ]
             ++ raxClearOrNil
             ++ [ Assem.defaultOper { Assem.assem   = "\tret"
-                                   , Assem.operDst = [rsp $ x64 frame]
+                                   , Assem.operDst = [rsp arch]
                                    , Assem.operSrc = []
                                    , Assem.jump    = Nothing
                                    }
                ]
-      label' = label { Assem.assem = T.pack $ T.unpack (Assem.assem label)}
+      label'   = label { Assem.assem = T.pack $ T.unpack (Assem.assem label) }
 
       epilogue = epilogue1 ++ epilogue2
   in  [label'] ++ prologue ++ bodyAsm' ++ epilogue

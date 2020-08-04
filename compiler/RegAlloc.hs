@@ -34,6 +34,8 @@ alloc
   -> ( [Assem.Inst]
      , Color.Allocation
      , X64Frame.X64Frame
+     , [ -- spills
+        Int]
      , Temp.Generator
      )
 alloc insts flowGraph frame gen previousSpillTemps =
@@ -50,14 +52,15 @@ alloc insts flowGraph frame gen previousSpillTemps =
           ( filter (not . isRedundant allocations) insts
           , allocations
           , frame
+          , previousSpillTemps
           , gen
           )
         else
-          let (insts', newTemps, frame', gen') =
+          let (insts', newSpillTemps, frame', gen') =
                 rewriteProgram insts frame spills gen
               (flowGraph', _) = Flow.instrsToGraph insts'
           in  alloc insts' flowGraph' frame' gen'
-                $ merge (sort newTemps) (sort previousSpillTemps)
+                $ merge (sort newSpillTemps) (sort previousSpillTemps)
  where
   merge :: Ord a => [a] -> [a] -> [a]
   merge (x : xs) (y : ys) =
@@ -105,9 +108,9 @@ rewriteProgram
 rewriteProgram insts frame spills gen =
   let (accesses, (frame', gen')) =
           runState (mapM allocLocal spills) (frame, gen)
-      (insts', newTemps, gen'') =
+      (insts', newSpillTemps, gen'') =
           foldl' (spillTemp frame') (insts, [], gen') $ zip spills accesses
-  in  (insts', newTemps, frame', gen'')
+  in  (insts', newSpillTemps, frame', gen'')
  where
   allocLocal _ = do
     (frame', gen') <- get
