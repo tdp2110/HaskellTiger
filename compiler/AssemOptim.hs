@@ -15,6 +15,7 @@ import qualified Data.Set                      as Set
 import           Data.List                      ( zip3
                                                 , zip4
                                                 )
+import qualified Data.Text                     as T
 
 
 type CFG = ([A.Inst], (F.FlowGraph, [F.Node]))
@@ -27,8 +28,14 @@ makePass kernel input =
   let instrs = kernel input in (instrs, F.instrsToGraph instrs)
 
 optimizePreRegAlloc :: [A.Inst] -> CFG
-optimizePreRegAlloc = optimize
-  $ fmap makePass [pruneDefdButNotUsed, removeTrivialJumps, eliminateDeadCode]
+optimizePreRegAlloc = optimize $ fmap
+  makePass
+  [ pruneDefdButNotUsed
+  , removeTrivialJumps
+  , eliminateDeadCode
+  , propagateConstants
+  , pruneDefdButNotUsed
+  ]
 
 optimizePostRegAlloc :: [A.Inst] -> CFG
 optimizePostRegAlloc = optimize $ fmap
@@ -101,6 +108,49 @@ chaseJumps (insts, (F.FlowGraph { F.control = cfg }, flowNodes)) =
               _ -> inst
             _ -> inst
   chase _ _ inst = inst
+
+propagateConstants :: PassKernel
+propagateConstants (insts, (F.FlowGraph { F.control = cfg }, nodes)) =
+  let nodeIds                    = G.nodeId <$> nodes
+      topoOrderedNodes           = reverse $ G.quasiTopoSort cfg
+      nodeIdToInst               = Map.fromList $ zip nodeIds insts
+      (_, finalNodeReplacements) = foldl'
+        (\(constMap, nodeReplacements) node -> if length (G.pred node) > 1
+          then (Map.empty, nodeReplacements)
+          else
+            let nodeId = G.nodeId node
+                inst   = nodeIdToInst Map.! nodeId
+            in  case inst of
+                  A.STORECONST { A.strDst = strDst, A.strVal = strVal } ->
+                    (Map.insert strDst strVal constMap, nodeReplacements)
+                  A.MOVE { A.moveDst = moveDst, A.moveSrc = moveSrc } ->
+                    case Map.lookup moveSrc constMap of
+                      Just c ->
+                        ( Map.insert moveDst c constMap
+                        , Map.insert nodeId
+                                     (mkStoreConst moveDst c)
+                                     nodeReplacements
+                        )
+                      Nothing ->
+                        (Map.delete moveDst constMap, nodeReplacements)
+                  _ -> (constMap, nodeReplacements)
+        )
+        (Map.empty, Map.empty)
+        topoOrderedNodes
+      insts' =
+          fmap
+              (\(inst, nodeId) -> case Map.lookup nodeId finalNodeReplacements of
+                Just inst' -> inst'
+                Nothing    -> inst
+              )
+            $ zip insts nodeIds
+  in  insts'
+ where
+  mkStoreConst moveDst c = A.STORECONST
+    { A.assem  = T.pack $ "\tmov `d0, " ++ show c
+    , A.strDst = moveDst
+    , A.strVal = c
+    }
 
 eliminateDeadCode :: PassKernel
 eliminateDeadCode (insts, (F.FlowGraph { F.control = cfg }, nodes)) =
