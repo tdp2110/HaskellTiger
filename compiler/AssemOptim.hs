@@ -138,12 +138,14 @@ propagateConstants (insts, (F.FlowGraph { F.control = cfg }, nodes)) =
         (Map.empty, Map.empty)
         topoOrderedNodes
       insts' =
-          fmap
-              (\(inst, nodeId) -> case Map.lookup nodeId finalNodeReplacements of
-                Just inst' -> inst'
-                Nothing    -> inst
+          (   (   (\(inst, nodeId) -> Data.Maybe.fromMaybe
+                    inst
+                    (Map.lookup nodeId finalNodeReplacements)
+                  )
+              <$> zip insts nodeIds
               )
-            $ zip insts nodeIds
+          <$> zip insts nodeIds
+          )
   in  insts'
  where
   mkStoreConst moveDst c = A.STORECONST
@@ -249,11 +251,11 @@ removeUnneededLabels :: PassKernel
 removeUnneededLabels (insts, _) = case insts of
   (entry@A.LABEL{} : _) ->
     let shouldRemoveInst =
-            fmap
-                (\(isUncalled, isNotJumpedTo, inst) ->
+            (   (\(isUncalled, isNotJumpedTo, inst) ->
                   isUncalled && isNotJumpedTo && inst /= entry
                 )
-              $ zip3 uncalledNodes unjumpedToNodes insts
+            <$> zip3 uncalledNodes unjumpedToNodes insts
+            )
         insts' = fmap fst $ filter (not . snd) $ zip insts shouldRemoveInst
     in  insts'
   _ -> error $ "malformed insts list: " ++ show insts
@@ -282,9 +284,8 @@ removeUnneededLabels (insts, _) = case insts of
 
   jumpTargetLabs = foldl'
     (\acc inst -> case inst of
-      A.OPER { A.jump = Just labs } ->
-        foldl' (\acc2 lab -> Set.insert lab acc2) acc labs
-      _ -> acc
+      A.OPER { A.jump = Just labs } -> foldl' (flip Set.insert) acc labs
+      _                             -> acc
     )
     Set.empty
     insts
