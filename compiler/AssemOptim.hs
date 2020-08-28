@@ -11,6 +11,7 @@ import qualified Graph                         as G
 import qualified Data.Bifunctor
 import           Data.Foldable                  ( foldl' )
 import qualified Data.Map                      as Map
+import qualified Data.Maybe
 import qualified Data.Set                      as Set
 import           Data.List                      ( zip3
                                                 , zip4
@@ -138,11 +139,8 @@ propagateConstants (insts, (F.FlowGraph { F.control = cfg }, nodes)) =
         (Map.empty, Map.empty)
         topoOrderedNodes
       insts' =
-          (   (   (\(inst, nodeId) -> Data.Maybe.fromMaybe
-                    inst
-                    (Map.lookup nodeId finalNodeReplacements)
-                  )
-              <$> zip insts nodeIds
+          (   (\(inst, nodeId) ->
+                Data.Maybe.fromMaybe inst (Map.lookup nodeId finalNodeReplacements)
               )
           <$> zip insts nodeIds
           )
