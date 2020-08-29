@@ -344,15 +344,11 @@ and when optimizations are turned on gives
 _main:                          ## (_main,line -1, col -1)
         push rbp
         mov rbp, rsp
-        sub rsp, 16
-        mov rax, 2
-        xor rax, rax
         lea rax, [rip + _tiger_divByZero]
         call rax
-        add rsp, 16
         pop rbp
         xor rax, rax
         ret
 ```
 
-Even this assembly, however, has some dead code which I'd like to remove :)
+Even this assembly, however, has some dead code which I'd like to remove :). For example, `_tiger_divByZero` is `[[noreturn]]`, so no code needs to follow it.
