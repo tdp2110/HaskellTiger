@@ -47,9 +47,7 @@ uint8_t *tiger_alloc(int64_t const numBytes) {
 void tiger_flush() { std::cout << std::flush; }
 
 TgString *tiger_getchar() {
-  char c;
-  std::cin >> c;
-  std::cin.get();
+  int const c = std::getchar();
   TgString *const res = new (std::nothrow) TgString(std::string(1, c));
   AssertNotNull(res, __FUNCTION__);
   return res;
