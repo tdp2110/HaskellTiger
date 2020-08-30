@@ -9,7 +9,9 @@ import qualified Flow                          as F
 import qualified Graph                         as G
 
 import qualified Data.Bifunctor
-import           Data.Foldable                  ( foldl' )
+import           Data.Foldable                  ( foldl'
+                                                , find
+                                                )
 import qualified Data.Map                      as Map
 import qualified Data.Maybe
 import qualified Data.Set                      as Set
@@ -17,7 +19,6 @@ import           Data.List                      ( zip3
                                                 , zip4
                                                 )
 import qualified Data.Text                     as T
-
 
 type CFG = ([A.Inst], (F.FlowGraph, [F.Node]))
 type PassKernel = CFG -> [A.Inst]
@@ -41,7 +42,12 @@ optimizePreRegAlloc = optimize $ fmap
 optimizePostRegAlloc :: [A.Inst] -> CFG
 optimizePostRegAlloc = optimize $ fmap
   makePass
-  [chaseJumps, removeTrivialJumps, eliminateDeadCode, removeUnneededLabels]
+  [ chaseJumps
+  , removeTrivialJumps
+  , eliminateDeadCode
+  , removeUnneededLabels
+  , eliminateRedundantStores
+  ]
 
 optimize :: [Pass] -> [A.Inst] -> CFG
 optimize passes insts =
@@ -151,6 +157,75 @@ propagateConstants (insts, (F.FlowGraph { F.control = cfg }, nodes)) =
     , A.strDst = moveDst
     , A.strVal = c
     }
+
+eliminateRedundantStores :: PassKernel
+eliminateRedundantStores (insts, (F.FlowGraph { F.control = cfg }, nodes)) =
+  let shouldKeeps = shouldKeep <$> zip insts nodes
+      insts'      = fmap fst $ filter snd $ zip insts shouldKeeps
+  in  insts'
+ where
+  shouldKeep (inst, node) =
+    let nodeIdToInst = Map.fromList $ zip (fmap G.nodeId nodes) insts
+        segment :: [A.Inst]
+        segment = computeSegment nodeIdToInst (inst, node)
+    in  case inst of
+          A.OPER{}                           -> True
+          A.LABEL{}                          -> True
+          A.MOVE { A.moveDst = moveDst }     -> isMaybeUsed moveDst segment
+          A.STORECONST { A.strDst = strDst } -> isMaybeUsed strDst segment
+
+  computeSegment :: Map.Map F.NodeId A.Inst -> (A.Inst, F.Node) -> [A.Inst]
+  computeSegment nodeIdToInst (inst, node) =
+    let (_ : res) = computeSegmentImpl nodeIdToInst
+                                       (inst, node)
+                                       []
+                                       (Set.singleton $ G.nodeId node)
+    in  res
+
+  computeSegmentImpl
+    :: Map.Map F.NodeId A.Inst
+    -> (A.Inst, F.Node)
+    -> [A.Inst]
+    -> Set.Set F.NodeId
+    -> [A.Inst]
+  computeSegmentImpl nodeIdToInst (inst, node) initialSegment visitedIds =
+    let successors = G.succ node
+    in  case successors of
+          [uniqueSucessorId] -> if uniqueSucessorId `Set.member` visitedIds
+            then initialSegment
+            else
+              let successorNode = G.nodes cfg Map.! uniqueSucessorId
+                  successorInst = nodeIdToInst Map.! uniqueSucessorId
+              in  computeSegmentImpl nodeIdToInst
+                                     (successorInst, successorNode)
+                                     (initialSegment ++ [inst])
+                                     (Set.insert uniqueSucessorId visitedIds)
+          _ -> initialSegment
+
+  isMaybeUsed :: Int -> [A.Inst] -> Bool
+  isMaybeUsed reg segment =
+    let uses          = fmap (instUses reg) segment
+        defs          = fmap (instDefs reg) segment
+        maybeFirstUse = fmap fst $ find snd $ zip [0 :: Int ..] uses
+        maybeFirstDef = fmap fst $ find snd $ zip [0 :: Int ..] defs
+    in  case (maybeFirstDef, maybeFirstUse) of
+          (Just firstDef, Just firstUse) -> firstUse <= firstDef
+          (Just _       , Nothing      ) -> False
+          _                              -> True
+
+  instUses :: Int -> A.Inst -> Bool
+  instUses reg inst = case inst of
+    A.OPER { A.operSrc = operSrc } -> reg `elem` operSrc
+    A.LABEL{}                      -> False
+    A.MOVE { A.moveSrc = moveSrc } -> reg == moveSrc
+    A.STORECONST{}                 -> False
+
+  instDefs :: Int -> A.Inst -> Bool
+  instDefs reg inst = case inst of
+    A.OPER { A.operDst = operDst }     -> reg `elem` operDst
+    A.LABEL{}                          -> False
+    A.MOVE { A.moveDst = moveDst }     -> reg == moveDst
+    A.STORECONST { A.strDst = strDst } -> reg == strDst
 
 eliminateDeadCode :: PassKernel
 eliminateDeadCode (insts, (F.FlowGraph { F.control = cfg }, nodes)) =
