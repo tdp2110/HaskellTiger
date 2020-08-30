@@ -575,7 +575,7 @@ doCall callStm maybeMoveStm callArgs escapes returnsOrNot = do
             inst                              = A.defaultOper
               { A.assem         = T.pack
                                   $  "\tmov qword ptr [`s0 - "
-                                  ++ show stackOffset
+                                  ++ show (stackOffset * X64Frame.wordSize)
                                   ++ "], `s1"
               , A.operDst       = []
               , A.operSrc       = [X64Frame.rsp x64, argReg]
