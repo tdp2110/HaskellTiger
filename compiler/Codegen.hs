@@ -332,7 +332,7 @@ munchExp (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s, TreeIR.CONST c))
     [ A.MOVE { A.assem = "\tmov `d0, `s0", A.moveDst = r, A.moveSrc = s }
     , A.defaultOper { A.assem   = T.pack $ "\tsub `d0, " ++ show (-c)
                     , A.operDst = [r]
-                    , A.operSrc = []
+                    , A.operSrc = [r]
                     , A.jump    = Nothing
                     }
     ]
