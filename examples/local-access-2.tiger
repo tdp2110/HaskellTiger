@@ -1,0 +1,17 @@
+let
+    var y := 1337
+    function f() : int =
+        let
+            function g() : int =
+                let
+                    function h() : int = y
+                in
+                    h()
+                end
+        in
+            g()
+        end
+    var res := f()
+in
+    println(itoa(res))
+end

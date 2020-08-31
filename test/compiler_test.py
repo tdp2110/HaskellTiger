@@ -130,6 +130,12 @@ class TestCompiler(unittest.TestCase):
     def test_merge(self):
         self.check_compiler('examples/merge.tiger', run=False)
 
+    def test_local_access_1(self):
+        self.check_compiler('examples/local-access-1.tiger', '1337\n')
+
+    def test_local_access_2(self):
+        self.check_compiler('examples/local-access-2.tiger', '1337\n')
+
     def test_mutual_recursion(self):
         self.check_compiler('examples/mutualRecursion.tiger', '0\n1\n1\n0\n')
         
