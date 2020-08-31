@@ -148,6 +148,10 @@ class TestCompiler(unittest.TestCase):
         self.assertIn('## (f,', assem1)
         self.assertNotIn('sub rsp', assem1)
 
+    def test_dead_stores(self):
+        assem = self.check_compiler('examples/dead-stores.tiger', '42\n')
+        assem = assem.decode('utf-8')
+
     def test_unused_functions(self):
         assem = self.check_compiler('examples/unused-funs.tiger', 'hello world\n')
         assem = assem.decode('utf-8')

@@ -1,0 +1,6 @@
+let
+    var x := 1337
+in
+    x := 42;
+    println(itoa(x))
+end
