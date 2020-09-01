@@ -7,7 +7,7 @@ module X64Frame
   , X64Frame(..)
   , X64Access(..)
   , Register(..)
-  , MaxCallArgs(..)
+  , MaxCallArgsAndEscapes(..)
   , X64Frame.exp
   , frameExp
   , externalCall
@@ -409,7 +409,7 @@ procEntryExit2 frame bodyAsm =
                }
            ]
 
-newtype MaxCallArgs = MaxCallArgs (Maybe Int)
+newtype MaxCallArgsAndEscapes = MaxCallArgsAndEscapes (Maybe (Int, Int))
 
 -- | Creates the procedure prologue and epilogue assembly language. Calculates the size of the
 -- outgoing parameter space in the frame. This is equal to the maximum number of outgoing parameters
@@ -419,76 +419,81 @@ newtype MaxCallArgs = MaxCallArgs (Maybe Int)
 procEntryExit3
   :: X64Frame
   -> [Assem.Inst]
-  -> MaxCallArgs
+  -> MaxCallArgsAndEscapes
   -> {-numSpills-}
      Int
   -> [Assem.Inst]
-procEntryExit3 frame bodyAsm (MaxCallArgs maxCallArgsOrNothing) numSpills =
-  let (label : bodyAsm') = bodyAsm
-      arch = x64 frame
-      stackSize = nextMultipleOf16 $ wordSize * case maxCallArgsOrNothing of
-        Just maxCallArgs ->
-          let stackSpaceForCallArgs =
-                  max 0 $ maxCallArgs - length (paramRegs arch) + numSpills
-          in  stackSpaceForCallArgs + numEscapingLocals
-        Nothing -> -- we're in a leaf function (ie it calls no other function. use the 128-byte redzone)
-          max 0 $ numSpills + numEscapingLocals - 128 `div` 8
+procEntryExit3 frame bodyAsm (MaxCallArgsAndEscapes maybeMaxCallArgsAndEscapes) numSpills
+  = let
+      (label : bodyAsm') = bodyAsm
+      arch               = x64 frame
+      stackSize =
+        nextMultipleOf16 $ wordSize * case maybeMaxCallArgsAndEscapes of
+          Just (maxCallArgs, maxEscapingParams) ->
+            let stackSpaceForCallArgs =
+                    max 0 (maxCallArgs - length (paramRegs arch))
+                      + numSpills
+                      + maxEscapingParams
+            in  stackSpaceForCallArgs + numEscapingLocals
+          Nothing -> -- we're in a leaf function (ie it calls no other function. use the 128-byte redzone)
+            max 0 $ numSpills + numEscapingLocals - 128 `div` 8
       stackAdjustment =
-          [ Assem.defaultOper
-              { Assem.assem   = T.pack $ "\tsub `d0, " ++ show stackSize
-              , Assem.operDst = [rsp arch]
-              , Assem.operSrc = []
-              , Assem.jump    = Nothing
-              }
-          | stackSize /= 0
-          ]
+        [ Assem.defaultOper
+            { Assem.assem   = T.pack $ "\tsub `d0, " ++ show stackSize
+            , Assem.operDst = [rsp arch]
+            , Assem.operSrc = []
+            , Assem.jump    = Nothing
+            }
+        | stackSize /= 0
+        ]
       prologue =
-          [ Assem.defaultOper { Assem.assem   = "\tpush `d0"
-                              , Assem.operDst = [rbp arch]
-                              , Assem.operSrc = [rsp arch]
-                              , Assem.jump    = Nothing
-                              }
-            , Assem.MOVE { Assem.assem   = "\tmov `d0, `s0"
-                         , Assem.moveDst = rbp arch
-                         , Assem.moveSrc = rsp arch
-                         }
-            ]
-            ++ stackAdjustment
+        [ Assem.defaultOper { Assem.assem   = "\tpush `d0"
+                            , Assem.operDst = [rbp arch]
+                            , Assem.operSrc = [rsp arch]
+                            , Assem.jump    = Nothing
+                            }
+          , Assem.MOVE { Assem.assem   = "\tmov `d0, `s0"
+                       , Assem.moveDst = rbp arch
+                       , Assem.moveSrc = rsp arch
+                       }
+          ]
+          ++ stackAdjustment
       epilogue1 =
-          [ Assem.defaultOper
-              { Assem.assem   = T.pack $ "\tadd `d0, " ++ show stackSize
-              , Assem.operDst = [rsp arch]
-              , Assem.operSrc = []
-              , Assem.jump    = Nothing
-              }
-          | stackSize /= 0
-          ]
+        [ Assem.defaultOper
+            { Assem.assem   = T.pack $ "\tadd `d0, " ++ show stackSize
+            , Assem.operDst = [rsp arch]
+            , Assem.operSrc = []
+            , Assem.jump    = Nothing
+            }
+        | stackSize /= 0
+        ]
       raxClearOrNil =
-          [ Assem.defaultOper { Assem.assem   = "\txor `d0, `d0"
-                              , Assem.operDst = [rax arch]
-                              , Assem.operSrc = []
-                              , Assem.jump    = Nothing
-                              }
-          | isMain frame
-          ]
+        [ Assem.defaultOper { Assem.assem   = "\txor `d0, `d0"
+                            , Assem.operDst = [rax arch]
+                            , Assem.operSrc = []
+                            , Assem.jump    = Nothing
+                            }
+        | isMain frame
+        ]
       epilogue2 =
-          [ Assem.defaultOper { Assem.assem   = "\tpop `d0"
-                              , Assem.operDst = [rbp arch]
-                              , Assem.operSrc = []
-                              , Assem.jump    = Nothing
-                              }
-            ]
-            ++ raxClearOrNil
-            ++ [ Assem.defaultOper { Assem.assem   = "\tret"
-                                   , Assem.operDst = [rsp arch]
-                                   , Assem.operSrc = []
-                                   , Assem.jump    = Nothing
-                                   }
-               ]
+        [ Assem.defaultOper { Assem.assem   = "\tpop `d0"
+                            , Assem.operDst = [rbp arch]
+                            , Assem.operSrc = []
+                            , Assem.jump    = Nothing
+                            }
+          ]
+          ++ raxClearOrNil
+          ++ [ Assem.defaultOper { Assem.assem   = "\tret"
+                                 , Assem.operDst = [rsp arch]
+                                 , Assem.operSrc = []
+                                 , Assem.jump    = Nothing
+                                 }
+             ]
       label'   = label { Assem.assem = T.pack $ T.unpack (Assem.assem label) }
 
       epilogue = epilogue1 ++ epilogue2
-  in  [label'] ++ prologue ++ bodyAsm' ++ epilogue
+    in
+      [label'] ++ prologue ++ bodyAsm' ++ epilogue
  where
   nextMultipleOf16 :: Int -> Int
   nextMultipleOf16 n = 16 * ((n + 15) `div` 16)

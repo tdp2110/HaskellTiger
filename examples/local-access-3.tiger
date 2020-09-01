@@ -1,0 +1,11 @@
+let
+    function f(x: int) : int =
+        let
+            function g() : int = x
+        in
+            g()
+        end
+    var res := f(42)
+in
+    println(itoa(res))
+end

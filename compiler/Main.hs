@@ -250,7 +250,7 @@ compileToAsm text performRegAlloc optimize = case Parser.parse text of
               (stmts', gen4) = runState (Canon.traceSchedule blocks' lab) gen3
               (insts , gen5)            = foldl' step1 ([], gen4) stmts'
               insts'                    = X64Frame.procEntryExit2 frame insts
-              maxCallArgs               = TreeIR.maxCallArgsStm bodyStm
+              maxCallArgs               = TreeIR.maxCallArgsAndEscapesStm bodyStm
               tempMap                   = X64Frame.tempMap x64
               (insts'', (flowGraph, _)) = if optimize
                 then AssemOptim.optimizePreRegAlloc insts'
@@ -267,7 +267,7 @@ compileToAsm text performRegAlloc optimize = case Parser.parse text of
               insts4 = X64Frame.procEntryExit3
                 frame'
                 insts'''
-                (X64Frame.MaxCallArgs maxCallArgs)
+                (X64Frame.MaxCallArgsAndEscapes maxCallArgs)
                 (length spills)
               insts5 = filter notEmptyInst insts4 -- an empty instr is appended to function bodies
                                                   -- in order to communicate some liveness info to regalloc

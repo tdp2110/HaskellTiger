@@ -136,6 +136,12 @@ class TestCompiler(unittest.TestCase):
     def test_local_access_2(self):
         self.check_compiler('examples/local-access-2.tiger', '1337\n')
 
+    def test_local_access_3(self):
+        self.check_compiler('examples/local-access-3.tiger', '42\n')
+
+    def test_local_access_4(self):
+        self.check_compiler('examples/local-access-4.tiger', '42\n')
+
     def test_mutual_recursion(self):
         self.check_compiler('examples/mutualRecursion.tiger', '0\n1\n1\n0\n')
         

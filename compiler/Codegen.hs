@@ -574,7 +574,7 @@ doCall callStm maybeMoveStm callArgs escapes returnsOrNot = do
         let (stackOffset : nextStackOffsets') = nextStackOffsets
             inst                              = A.defaultOper
               { A.assem         = T.pack
-                                  $  "\tmov qword ptr [`s0 - "
+                                  $  "\tmov qword ptr [`s0 + "
                                   ++ show (stackOffset * X64Frame.wordSize)
                                   ++ "], `s1"
               , A.operDst       = []

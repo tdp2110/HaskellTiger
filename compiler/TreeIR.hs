@@ -7,7 +7,7 @@ module TreeIR
   , Relop(..)
   , makeSeq
   , notRel
-  , maxCallArgsStm
+  , maxCallArgsAndEscapesStm
   , fmtDebug
   )
 where
@@ -260,38 +260,43 @@ relop ULE = putStrW "ULE"
 relop UGT = putStrW "UGT"
 relop UGE = putStrW "UGE"
 
-maxCallArgsStm :: Stm -> Maybe Int
-maxCallArgsStm (MOVE (e1, e2)) =
-  nullableMax (maxCallArgsExp e1) (maxCallArgsExp e2)
-maxCallArgsStm (EXP  e     ) = maxCallArgsExp e
-maxCallArgsStm (JUMP (e, _)) = maxCallArgsExp e
-maxCallArgsStm (CJUMP (_, e1, e2, _, _)) =
-  nullableMax (maxCallArgsExp e1) (maxCallArgsExp e2)
-maxCallArgsStm (SEQ   (s1, s2)) = max (maxCallArgsStm s1) (maxCallArgsStm s2)
-maxCallArgsStm (LABEL _       ) = Nothing
+-- | Max call args and escaping params to any functions in the stm
+maxCallArgsAndEscapesStm :: Stm -> Maybe (Int, Int)
+maxCallArgsAndEscapesStm (MOVE (e1, e2)) =
+  nullableMax (maxCallArgsAndEscapesExp e1) (maxCallArgsAndEscapesExp e2)
+maxCallArgsAndEscapesStm (EXP  e     ) = maxCallArgsAndEscapesExp e
+maxCallArgsAndEscapesStm (JUMP (e, _)) = maxCallArgsAndEscapesExp e
+maxCallArgsAndEscapesStm (CJUMP (_, e1, e2, _, _)) =
+  nullableMax (maxCallArgsAndEscapesExp e1) (maxCallArgsAndEscapesExp e2)
+maxCallArgsAndEscapesStm (SEQ   (s1, s2)) = nullableMax (maxCallArgsAndEscapesStm s1) (maxCallArgsAndEscapesStm s2)
+maxCallArgsAndEscapesStm (LABEL _       ) = Nothing
 
-maxCallArgsExp :: Exp -> Maybe Int
-maxCallArgsExp (CONST _) = Nothing
-maxCallArgsExp (NAME  _) = Nothing
-maxCallArgsExp (TEMP  _) = Nothing
-maxCallArgsExp (BINOP (_, e1, e2)) =
-  nullableMax (maxCallArgsExp e1) (maxCallArgsExp e2)
-maxCallArgsExp (MEM  e                    ) = maxCallArgsExp e
-maxCallArgsExp (CALL (funcExp, args, _, _)) = nullableMaximum
-  [ maxCallArgsExp funcExp
-  , nullableMaximum $ fmap maxCallArgsExp args
-  , Just $ fromIntegral $ length args
+maxCallArgsAndEscapesExp :: Exp -> Maybe (Int, Int)
+maxCallArgsAndEscapesExp (CONST _) = Nothing
+maxCallArgsAndEscapesExp (NAME  _) = Nothing
+maxCallArgsAndEscapesExp (TEMP  _) = Nothing
+maxCallArgsAndEscapesExp (BINOP (_, e1, e2)) =
+  nullableMax (maxCallArgsAndEscapesExp e1) (maxCallArgsAndEscapesExp e2)
+maxCallArgsAndEscapesExp (MEM  e                    ) = maxCallArgsAndEscapesExp e
+maxCallArgsAndEscapesExp (CALL (funcExp, args, escapes, _)) = nullableMaximum
+  [ maxCallArgsAndEscapesExp funcExp
+  , nullableMaximum $ fmap maxCallArgsAndEscapesExp args
+  , Just (fromIntegral $ length args, fromIntegral $ length $ filter isEscape escapes)
   ]
-maxCallArgsExp (CALLNORETURN (funcExp, args, esc)) =
-  maxCallArgsExp (CALL (funcExp, args, esc, False))
-maxCallArgsExp (ESEQ (s, e)) =
-  nullableMax (maxCallArgsStm s) (maxCallArgsExp e)
+maxCallArgsAndEscapesExp (CALLNORETURN (funcExp, args, esc)) =
+  maxCallArgsAndEscapesExp (CALL (funcExp, args, esc, False))
+maxCallArgsAndEscapesExp (ESEQ (s, e)) =
+  nullableMax (maxCallArgsAndEscapesStm s) (maxCallArgsAndEscapesExp e)
 
-nullableMax :: Maybe Int -> Maybe Int -> Maybe Int
-nullableMax (  Just x) (Just y)   = Just $ max x y
+nullableMax :: Maybe (Int, Int) -> Maybe (Int, Int) -> Maybe (Int, Int)
+nullableMax (  Just (x1, x2)) (Just (y1, y2))   = Just (max x1 y1, max x2 y2)
 nullableMax j@(Just _) Nothing    = j
 nullableMax Nothing    j@(Just _) = j
 nullableMax _          _          = Nothing
 
-nullableMaximum :: [Maybe Int] -> Maybe Int
+nullableMaximum :: [Maybe (Int, Int)] -> Maybe (Int, Int)
 nullableMaximum = foldr nullableMax Nothing
+
+isEscape :: Frame.EscapesOrNot -> Bool
+isEscape Frame.Escapes = True
+isEscape Frame.DoesNotEscape = False
