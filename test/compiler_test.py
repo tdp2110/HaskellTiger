@@ -103,6 +103,9 @@ class TestCompiler(unittest.TestCase):
     def test_fact(self):
         self.check_compiler('examples/fact.tiger', str(math.factorial(10))+'\n')
         
+    def test_fib(self):
+        self.check_compiler('examples/fibonacci.tiger', '75025\n')
+        
     def test_pair(self):
         self.check_compiler('examples/pair.tiger', '3\n')
         
