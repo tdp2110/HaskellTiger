@@ -49,9 +49,30 @@ simplifyBinops = fmap simplifyBinopStm
   simplifyBinopExp (T.BINOP (T.PLUS , T.CONST 0, e        )) = e
   simplifyBinopExp (T.BINOP (T.MINUS, e        , T.CONST 0)) = e
   simplifyBinopExp sub@(T.BINOP (T.MINUS, e1, e2)) =
-    if e1 == e2 then T.CONST 0 else sub
+    if isPureExp e1 && isPureExp e2 && e1 == e2 then T.CONST 0 else sub
   simplifyBinopExp e = e
 
+  isPureExp :: T.Exp -> Bool
+  isPureExp e = case e of
+    T.CONST        _           -> True
+    T.NAME         _           -> True
+    T.TEMP         _           -> True
+    T.BINOP        (_, e1, e2) -> isPureExp e1 && isPureExp e2
+    T.MEM          expr        -> isPureExp expr
+    T.CALL         _           -> False -- overly conservative
+    T.CALLNORETURN _           -> False -- overly conservative
+    T.ESEQ         (stm, expr) -> isPureStm stm && isPureExp expr
+
+  isPureStm :: T.Stm -> Bool
+  isPureStm s = case s of
+    T.MOVE  (T.TEMP _, _)     -> False
+    T.MOVE  (T.MEM  _, _)     -> False
+    T.MOVE  (_       , _)     -> error "malformed move exp"
+    T.EXP   e                 -> isPureExp e
+    T.JUMP  (e, _)            -> isPureExp e
+    T.CJUMP (_, e1, e2, _, _) -> isPureExp e1 && isPureExp e2
+    T.SEQ   (s1, s2)          -> isPureStm s1 && isPureStm s2
+    T.LABEL _                 -> True
 
 foldConstants :: Canon.Block -> Canon.Block
 foldConstants bb = evalState (mapM foldConstantsM bb) Map.empty
