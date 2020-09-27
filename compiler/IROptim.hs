@@ -22,8 +22,36 @@ import           Data.Bits                      ( shiftL
 
 optimizeBasicBlock :: Canon.Block -> Canon.Block
 optimizeBasicBlock bb =
-  let bb' = (foldConstants . propagateConstants) bb
+  let bb' = (foldConstants . propagateConstants . simplifyBinops) bb
   in  if bb' == bb then bb else optimizeBasicBlock bb'
+
+simplifyBinops :: Canon.Block -> Canon.Block
+simplifyBinops = fmap simplifyBinopStm
+ where
+  simplifyBinopStm :: T.Stm -> T.Stm
+  simplifyBinopStm (T.MOVE (e1, e2)) =
+    T.MOVE (simplifyBinopExp e1, simplifyBinopExp e2)
+  simplifyBinopStm (T.EXP  e        ) = T.EXP $ simplifyBinopExp e
+  simplifyBinopStm (T.JUMP (e, labs)) = T.JUMP (simplifyBinopExp e, labs)
+  simplifyBinopStm (T.CJUMP (op, e1, e2, lab1, lab2)) =
+    (T.CJUMP (op, simplifyBinopExp e1, simplifyBinopExp e2, lab1, lab2))
+  simplifyBinopStm (T.SEQ (s1, s2)) =
+    T.SEQ (simplifyBinopStm s1, simplifyBinopStm s2)
+  simplifyBinopStm lab@(T.LABEL _) = lab
+
+  simplifyBinopExp :: T.Exp -> T.Exp
+  simplifyBinopExp (T.BINOP (T.DIV  , e        , T.CONST 1)) = e
+  simplifyBinopExp (T.BINOP (T.MUL  , _        , T.CONST 0)) = T.CONST 0
+  simplifyBinopExp (T.BINOP (T.MUL  , T.CONST 0, _        )) = T.CONST 0
+  simplifyBinopExp (T.BINOP (T.MUL  , e        , T.CONST 1)) = e
+  simplifyBinopExp (T.BINOP (T.MUL  , T.CONST 1, e        )) = e
+  simplifyBinopExp (T.BINOP (T.PLUS , e        , T.CONST 0)) = e
+  simplifyBinopExp (T.BINOP (T.PLUS , T.CONST 0, e        )) = e
+  simplifyBinopExp (T.BINOP (T.MINUS, e        , T.CONST 0)) = e
+  simplifyBinopExp sub@(T.BINOP (T.MINUS, e1, e2)) =
+    if e1 == e2 then T.CONST 0 else sub
+  simplifyBinopExp e = e
+
 
 foldConstants :: Canon.Block -> Canon.Block
 foldConstants bb = evalState (mapM foldConstantsM bb) Map.empty
