@@ -34,7 +34,22 @@ simplifyBinops = fmap simplifyBinopStm
   simplifyBinopStm (T.EXP  e        ) = T.EXP $ simplifyBinopExp e
   simplifyBinopStm (T.JUMP (e, labs)) = T.JUMP (simplifyBinopExp e, labs)
   simplifyBinopStm (T.CJUMP (op, e1, e2, lab1, lab2)) =
-    (T.CJUMP (op, simplifyBinopExp e1, simplifyBinopExp e2, lab1, lab2))
+    let e1' = simplifyBinopExp e1
+        e2' = simplifyBinopExp e2
+        j   = T.CJUMP (op, e1', e2', lab1, lab2)
+    in  if isPureExp e1' && isPureExp e2' && e1 == e2
+          then
+            let trueJump  = T.JUMP (T.NAME lab1, [lab1])
+                falseJump = T.JUMP (T.NAME lab2, [lab2])
+            in  case op of
+                  T.EQ -> trueJump
+                  T.NE -> falseJump
+                  T.LT -> falseJump
+                  T.GT -> falseJump
+                  T.LE -> trueJump
+                  T.GE -> trueJump
+                  _    -> j
+          else j
   simplifyBinopStm (T.SEQ (s1, s2)) =
     T.SEQ (simplifyBinopStm s1, simplifyBinopStm s2)
   simplifyBinopStm lab@(T.LABEL _) = lab
