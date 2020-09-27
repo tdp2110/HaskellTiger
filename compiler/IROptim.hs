@@ -22,20 +22,19 @@ import           Data.Bits                      ( shiftL
 
 optimizeBasicBlock :: Canon.Block -> Canon.Block
 optimizeBasicBlock bb =
-  let bb' = (foldConstants . propagateConstants . simplifyBinops) bb
+  let bb' = (foldConstants . propagateConstants . simplifyStms) bb
   in  if bb' == bb then bb else optimizeBasicBlock bb'
 
-simplifyBinops :: Canon.Block -> Canon.Block
-simplifyBinops = fmap simplifyBinopStm
+simplifyStms :: Canon.Block -> Canon.Block
+simplifyStms = fmap simplifyStm
  where
-  simplifyBinopStm :: T.Stm -> T.Stm
-  simplifyBinopStm (T.MOVE (e1, e2)) =
-    T.MOVE (simplifyBinopExp e1, simplifyBinopExp e2)
-  simplifyBinopStm (T.EXP  e        ) = T.EXP $ simplifyBinopExp e
-  simplifyBinopStm (T.JUMP (e, labs)) = T.JUMP (simplifyBinopExp e, labs)
-  simplifyBinopStm (T.CJUMP (op, e1, e2, lab1, lab2)) =
-    let e1' = simplifyBinopExp e1
-        e2' = simplifyBinopExp e2
+  simplifyStm :: T.Stm -> T.Stm
+  simplifyStm (T.MOVE (e1, e2) ) = T.MOVE (simplifyExp e1, simplifyExp e2)
+  simplifyStm (T.EXP  e        ) = T.EXP $ simplifyExp e
+  simplifyStm (T.JUMP (e, labs)) = T.JUMP (simplifyExp e, labs)
+  simplifyStm (T.CJUMP (op, e1, e2, lab1, lab2)) =
+    let e1' = simplifyExp e1
+        e2' = simplifyExp e2
         j   = T.CJUMP (op, e1', e2', lab1, lab2)
     in  if isPureExp e1' && isPureExp e2' && e1 == e2
           then
@@ -50,22 +49,30 @@ simplifyBinops = fmap simplifyBinopStm
                   T.GE -> trueJump
                   _    -> j
           else j
-  simplifyBinopStm (T.SEQ (s1, s2)) =
-    T.SEQ (simplifyBinopStm s1, simplifyBinopStm s2)
-  simplifyBinopStm lab@(T.LABEL _) = lab
+  simplifyStm (T.SEQ (s1, s2)) =
+    let s1'  = simplifyStm s1
+        s2'  = simplifyStm s2
+        seq' = T.SEQ (s1', s2')
+    in  if isPureStm s1' then s2 else seq'
+  simplifyStm lab@(T.LABEL _) = lab
 
-  simplifyBinopExp :: T.Exp -> T.Exp
-  simplifyBinopExp (T.BINOP (T.DIV  , e        , T.CONST 1)) = e
-  simplifyBinopExp (T.BINOP (T.MUL  , _        , T.CONST 0)) = T.CONST 0
-  simplifyBinopExp (T.BINOP (T.MUL  , T.CONST 0, _        )) = T.CONST 0
-  simplifyBinopExp (T.BINOP (T.MUL  , e        , T.CONST 1)) = e
-  simplifyBinopExp (T.BINOP (T.MUL  , T.CONST 1, e        )) = e
-  simplifyBinopExp (T.BINOP (T.PLUS , e        , T.CONST 0)) = e
-  simplifyBinopExp (T.BINOP (T.PLUS , T.CONST 0, e        )) = e
-  simplifyBinopExp (T.BINOP (T.MINUS, e        , T.CONST 0)) = e
-  simplifyBinopExp sub@(T.BINOP (T.MINUS, e1, e2)) =
+  simplifyExp :: T.Exp -> T.Exp
+  simplifyExp (T.BINOP (T.DIV  , e        , T.CONST 1)) = e
+  simplifyExp (T.BINOP (T.MUL  , _        , T.CONST 0)) = T.CONST 0
+  simplifyExp (T.BINOP (T.MUL  , T.CONST 0, _        )) = T.CONST 0
+  simplifyExp (T.BINOP (T.MUL  , e        , T.CONST 1)) = e
+  simplifyExp (T.BINOP (T.MUL  , T.CONST 1, e        )) = e
+  simplifyExp (T.BINOP (T.PLUS , e        , T.CONST 0)) = e
+  simplifyExp (T.BINOP (T.PLUS , T.CONST 0, e        )) = e
+  simplifyExp (T.BINOP (T.MINUS, e        , T.CONST 0)) = e
+  simplifyExp sub@(T.BINOP (T.MINUS, e1, e2)) =
     if isPureExp e1 && isPureExp e2 && e1 == e2 then T.CONST 0 else sub
-  simplifyBinopExp e = e
+  simplifyExp (T.ESEQ (s, e)) =
+    let s'    = simplifyStm s
+        e'    = simplifyExp e
+        eseq' = T.ESEQ (s', e')
+    in  if isPureStm s' then e' else eseq'
+  simplifyExp e = e
 
   isPureExp :: T.Exp -> Bool
   isPureExp e = case e of
