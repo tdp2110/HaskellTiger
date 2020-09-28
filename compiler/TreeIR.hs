@@ -77,6 +77,7 @@ data Binop =
   | MINUS
   | MUL
   | DIV
+  | MOD
   | AND
   | OR
   | LSHIFT
@@ -241,6 +242,7 @@ binop PLUS    = putStrW "PLUS"
 binop MINUS   = putStrW "MINUS"
 binop MUL     = putStrW "MUL"
 binop DIV     = putStrW "DIV"
+binop MOD     = putStrW "MOD"
 binop AND     = putStrW "AND"
 binop OR      = putStrW "OR"
 binop LSHIFT  = putStrW "LSHIFT"

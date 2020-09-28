@@ -262,6 +262,7 @@ isArith A.PlusOp   = True
 isArith A.MinusOp  = True
 isArith A.TimesOp  = True
 isArith A.DivideOp = True
+isArith A.ModOp    = True
 isArith _          = False
 
 isCmp :: A.Oper -> Bool
@@ -1035,18 +1036,15 @@ transDec (A.FunctionDec fundecs) = do
       case runTransT st { level = funLevel } bodyEnv (transExp funBody) of
         Left err -> throwErr err
         Right ((ExpTy { exp = bodyExp, ty = bodyTy }, state'), frags) ->
-          if resultTy
-             /= Types.UNIT
-             && not (typesAreCompatible resultTy bodyTy)
-          then
-            throwT funPos
-            $  "computed type of function body "
-            ++ show bodyTy
-            ++ " and annotated type "
-            ++ show resultTy
-            ++ " do not match"
-          else
-            do
+          if resultTy /= Types.UNIT && not (typesAreCompatible resultTy bodyTy)
+            then
+              throwT funPos
+              $  "computed type of function body "
+              ++ show bodyTy
+              ++ " and annotated type "
+              ++ show resultTy
+              ++ " do not match"
+            else do
               put st { generator = generator state'
                      , counter'  = counter' state'
                      }

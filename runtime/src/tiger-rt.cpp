@@ -4,6 +4,7 @@
 #include <cstring>
 #include <iostream>
 #include <new>
+#include <random>
 #include <string>
 #include <utility>
 #include <vector>
@@ -199,5 +200,12 @@ int64_t tiger_strCmp(TgString const *s1, TgString const *s2) {
   AssertNotNull(s2, __FUNCTION__);
 
   return std::strcmp(s1->impl.c_str(), s2->impl.c_str());
+}
+
+int64_t tiger_rand(int64_t const lo, int64_t const hi) {
+  std::random_device device;
+  std::mt19937 generator(device());
+  std::uniform_int_distribution<int64_t> distribution(lo, hi);
+  return distribution(generator);
 }
 } // extern "C"

@@ -85,7 +85,7 @@ data Ty = NameTy (Symbol, Pos)
         deriving (Eq, Show)
 
 data Oper = PlusOp | MinusOp | TimesOp | DivideOp
-          | EqOp | NeqOp | LtOp | LeOp | GtOp | GeOp
+          | EqOp | NeqOp | LtOp | LeOp | GtOp | GeOp | ModOp
           deriving (Eq, Show)
 
 data Field = Field { fieldName :: Symbol

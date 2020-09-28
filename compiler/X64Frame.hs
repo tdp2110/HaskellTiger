@@ -72,6 +72,7 @@ data X64 = X64 { rax :: Int
                , r14 :: Int
                , r15 :: Int
                , dividendRegister :: Int
+               , remainderRegister :: Int
                , multiplicandRegister :: Int
                , divideDests :: [Int]
                , multiplyDests :: [Int]
@@ -186,6 +187,7 @@ initX64 gen =
       , r14                  = r14Id
       , r15                  = r15Id
       , dividendRegister     = raxId
+      , remainderRegister    = rdxId
       , multiplicandRegister = raxId
       , divideDests          = [raxId, rdxId]
       , multiplyDests        = [raxId, rdxId]

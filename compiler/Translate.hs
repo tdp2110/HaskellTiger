@@ -291,6 +291,7 @@ binOp expLeft expRight op gen =
         Absyn.MinusOp  -> TreeIR.MINUS
         Absyn.TimesOp  -> TreeIR.MUL
         Absyn.DivideOp -> TreeIR.DIV
+        Absyn.ModOp    -> TreeIR.MOD
         _              -> error "shouldn't get here"
       binOpExp       = TreeIR.BINOP (op', expLeft', expRight')
       (resExp, gen3) = case op of

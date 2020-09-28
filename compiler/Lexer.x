@@ -64,6 +64,7 @@ state:-
 <0>             \<\>         { mkL NEQ }
 <0>             \=           { mkL EQ }
 <0>             \/           { mkL DIVIDE }
+<0>             \%           { mkL MOD }
 <0>             \*           { mkL TIMES }
 <0>             \-           { mkL MINUS }
 <0>             \+           { mkL PLUS }
@@ -146,6 +147,7 @@ data LexemeClass =
       | GE
       | AND
       | OR
+      | MOD
       | ASSIGN
       | ARRAY
       | IF

@@ -55,6 +55,7 @@ baseVEnv x64 gen =
           , ("concat"   , [STRING, STRING]  , STRING)
           , ("not"      , [INT]             , INT)
           , ("exit"     , [INT]             , UNIT)
+          , ("rand"     , [INT, INT]        , INT)
           ]
       (builtinList, gen') = foldl' enterBuiltin ([], gen) signatures
       builtinMap          = Map.fromList builtinList

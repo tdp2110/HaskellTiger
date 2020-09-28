@@ -32,6 +32,7 @@ import Symbol
   '-'       { L.Lexeme _ L.MINUS _ }
   '*'       { L.Lexeme _ L.TIMES _ }
   '/'       { L.Lexeme _ L.DIVIDE _ }
+  '%'       { L.Lexeme _ L.MOD _ }
   nil       { L.Lexeme _ L.NIL _ }
   '>='      { L.Lexeme _ L.GE _ }
   '<='      { L.Lexeme _ L.LE _ }
@@ -68,7 +69,7 @@ import Symbol
 %left '&'
 %nonassoc '>=' '<=' '=' '<>' '<' '>'
 %left '+' '-'
-%left '*' '/'
+%left '*' '/' '%'
 %left UMINUS
 
 %%
@@ -89,6 +90,7 @@ exp :: { A.Exp }
   | exp '-' exp                    { opExp $1 A.MinusOp $3 $2 }
   | exp '*' exp                    { opExp $1 A.TimesOp $3 $2 }
   | exp '/' exp                    { opExp $1 A.DivideOp $3 $2 }
+  | exp '%' exp                    { opExp $1 A.ModOp $3 $2 }
   | exp '>=' exp                   { opExp $1 A.GeOp $3 $2 }
   | exp '<=' exp                   { opExp $1 A.LeOp $3 $2 }
   | exp '=' exp                    { opExp $1 A.EqOp $3 $2 }

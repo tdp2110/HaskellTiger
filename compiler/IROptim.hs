@@ -67,6 +67,11 @@ simplifyStms = fmap simplifyStm
   simplifyExp (T.BINOP (T.MINUS, e        , T.CONST 0)) = e
   simplifyExp sub@(T.BINOP (T.MINUS, e1, e2)) =
     if isPureExp e1 && isPureExp e2 && e1 == e2 then T.CONST 0 else sub
+  simplifyExp (T.MEM e) = T.MEM $ simplifyExp e
+  simplifyExp (T.CALL (func, args, escapes, hasResult)) =
+    T.CALL (simplifyExp func, fmap simplifyExp args, escapes, hasResult)
+  simplifyExp (T.CALLNORETURN (func, args, escapes)) =
+    T.CALLNORETURN (simplifyExp func, fmap simplifyExp args, escapes)
   simplifyExp (T.ESEQ (s, e)) =
     let s'    = simplifyStm s
         e'    = simplifyExp e
@@ -163,6 +168,7 @@ foldConstants bb = evalState (mapM foldConstantsM bb) Map.empty
   convertOp T.MINUS   = (-)
   convertOp T.MUL     = (*)
   convertOp T.DIV     = div
+  convertOp T.MOD     = mod
   convertOp T.AND     = (.&.)
   convertOp T.OR      = (.|.)
   convertOp T.LSHIFT  = shiftL

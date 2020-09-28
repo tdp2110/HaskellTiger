@@ -28,6 +28,7 @@ int64_t tiger_getItem(void const *arr, int64_t index);
 void tiger_setItem(void *arr, int64_t index, int64_t value);
 TgString *tiger_chr(int64_t);
 int64_t tiger_strCmp(TgString const *s1, TgString const *s2);
+int64_t tiger_rand(int64_t lo, int64_t hi);
 
 } // extern "C"
 
