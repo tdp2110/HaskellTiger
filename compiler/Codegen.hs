@@ -364,8 +364,22 @@ munchExp (TreeIR.BINOP (TreeIR.PLUS, e1, e2)) = result $ \r -> do
                     , A.jump    = Nothing
                     }
     ]
-munchExp (TreeIR.BINOP (op, e1, e2)) = if op == TreeIR.DIV
-  then result $ \r -> do
+munchExp (TreeIR.BINOP (op, e1, e2))
+  | op == TreeIR.DIV = generateDiv X64Frame.dividendRegister
+  | op == TreeIR.MOD = generateDiv X64Frame.remainderRegister
+  | otherwise = result $ \r -> do
+    src1 <- munchExp e1
+    src2 <- munchExp e2
+    pure
+      [ A.MOVE { A.assem = "\tmov `d0, `s0", A.moveDst = r, A.moveSrc = src1 }
+      , A.defaultOper { A.assem   = T.pack $ "\t" ++ convertOp op ++ " `d0, `s0"
+                      , A.operDst = [r]
+                      , A.operSrc = [src2, r]
+                      , A.jump    = Nothing
+                      }
+      ]
+ where
+  generateDiv divDestRegister = result $ \r -> do
     src1 <- munchExp e1
     src2 <- munchExp e2
     x64  <- getArch
@@ -389,49 +403,10 @@ munchExp (TreeIR.BINOP (op, e1, e2)) = if op == TreeIR.DIV
                       }
       , A.MOVE { A.assem   = "\tmov `d0, `s0"
                , A.moveDst = r
-               , A.moveSrc = X64Frame.dividendRegister x64
+               , A.moveSrc = divDestRegister x64
                }
       ]
-  else if op == TreeIR.MOD
-    then result $ \r -> do
-      src1 <- munchExp e1
-      src2 <- munchExp e2
-      x64  <- getArch
-      let divideDests = X64Frame.divideDests x64
-      pure
-        [ A.MOVE { A.assem   = "\tmov `d0, `s0"
-                 , A.moveDst = X64Frame.dividendRegister x64
-                 , A.moveSrc = src1
-                 }
-        , A.defaultOper { A.assem         = "\tcqo"
-                        , A.operDst       = [X64Frame.rdx x64]
-                        , A.operSrc       = [X64Frame.rax x64]
-                        , A.hasSideEffect = True
-                        , A.jump          = Nothing
-                        }
-        , A.defaultOper { A.assem         = "\tidiv `s0"
-                        , A.operDst       = divideDests
-                        , A.operSrc       = src2 : divideDests
-                        , A.hasSideEffect = True
-                        , A.jump          = Nothing
-                        }
-        , A.MOVE { A.assem   = "\tmov `d0, `s0"
-                 , A.moveDst = r
-                 , A.moveSrc = X64Frame.remainderRegister x64
-                 }
-        ]
-    else result $ \r -> do
-      src1 <- munchExp e1
-      src2 <- munchExp e2
-      pure
-        [ A.MOVE { A.assem = "\tmov `d0, `s0", A.moveDst = r, A.moveSrc = src1 }
-        , A.defaultOper { A.assem = T.pack $ "\t" ++ convertOp op ++ " `d0, `s0"
-                        , A.operDst = [r]
-                        , A.operSrc = [src2, r]
-                        , A.jump    = Nothing
-                        }
-        ]
- where
+
   convertOp :: TreeIR.Binop -> String
   convertOp oper = case oper of
     TreeIR.PLUS   -> "add"
