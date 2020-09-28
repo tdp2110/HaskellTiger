@@ -365,7 +365,28 @@ munchExp (TreeIR.BINOP (TreeIR.PLUS, e1, e2)) = result $ \r -> do
                     }
     ]
 munchExp (TreeIR.BINOP (op, e1, e2))
-  | op == TreeIR.DIV = generateDiv X64Frame.dividendRegister
+  | op == TreeIR.DIV = case e2 of
+    TreeIR.CONST 2 -> result $ \r -> do
+      dividend <- munchExp e1
+      pure
+        [ A.MOVE { A.assem   = "\tmov `d0, `s0"
+                 , A.moveDst = r
+                 , A.moveSrc = dividend
+                 }
+        , A.defaultOper { A.assem   = "\tshr `d0, 63"
+                        , A.operDst = [r]
+                        , A.operSrc = [r]
+                        }
+        , A.defaultOper { A.assem   = "\tadd `d0, `s0"
+                        , A.operDst = [r]
+                        , A.operSrc = [dividend, r]
+                        }
+        , A.defaultOper { A.assem   = "\tsar `d0"
+                        , A.operDst = [r]
+                        , A.operSrc = [r]
+                        }
+        ]
+    _ -> generateDiv X64Frame.dividendRegister
   | op == TreeIR.MOD = generateDiv X64Frame.remainderRegister
   | otherwise = result $ \r -> do
     src1 <- munchExp e1
