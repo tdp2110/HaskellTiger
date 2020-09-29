@@ -102,8 +102,6 @@ munchStm (TreeIR.MOVE (TreeIR.TEMP dst, TreeIR.TEMP src)) =
 munchStm (TreeIR.MOVE (TreeIR.TEMP dst, TreeIR.CONST 0)) = emit A.defaultOper
   { A.assem   = "\txor `d0, `d1"
   , A.operDst = [dst, dst]
-  , A.operSrc = []
-  , A.jump    = Nothing
   }
 munchStm (TreeIR.MOVE (TreeIR.TEMP dst, TreeIR.CONST c)) = emit A.STORECONST
   { A.assem  = T.pack $ "\tmov `d0, " ++ show c
@@ -115,7 +113,6 @@ munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, Tre
     { A.assem   = T.pack $ "\tmov `d0, qword ptr [`s0" ++ plusMinusInt c ++ "]"
     , A.operDst = [d]
     , A.operSrc = [s]
-    , A.jump    = Nothing
     }
 munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.CONST c, TreeIR.TEMP s))))
   = munchStm
@@ -128,7 +125,6 @@ munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, Tre
   = emit A.defaultOper { A.assem   = "\tmov `d0, [`s0 + `s1]"
                        , A.operDst = [d]
                        , A.operSrc = [s0, s1]
-                       , A.jump    = Nothing
                        }
 munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.MINUS, TreeIR.TEMP s, TreeIR.CONST c))))
   = munchStm $ TreeIR.MOVE
@@ -138,19 +134,15 @@ munchStm (TreeIR.MOVE (TreeIR.TEMP d, TreeIR.MEM (TreeIR.BINOP (TreeIR.MINUS, Tr
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.TEMP d), e)) = do
   eReg <- munchExp e
   emit A.defaultOper { A.assem         = "\tmov qword ptr [`s0], `s1"
-                     , A.operDst       = []
                      , A.operSrc       = [d, eReg]
                      , A.hasSideEffect = True
-                     , A.jump          = Nothing
                      }
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP d0, TreeIR.TEMP d1)), e))
   = do
     eReg <- munchExp e
     emit A.defaultOper { A.assem         = "\tmov qword ptr [`s0+`s1], `s2"
-                       , A.operDst       = []
                        , A.operSrc       = [d0, d1, eReg]
                        , A.hasSideEffect = True
-                       , A.jump          = Nothing
                        }
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.CONST c1, TreeIR.TEMP d)), TreeIR.CONST c2))
   = emit A.defaultOper
@@ -160,20 +152,16 @@ munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.CONST c1, T
                         ++ "], "
                         ++ show c2
                         ++ ""
-    , A.operDst       = []
     , A.operSrc       = [d]
     , A.hasSideEffect = True
-    , A.jump          = Nothing
     }
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.CONST c, TreeIR.TEMP d)), e))
   = do
     eReg <- munchExp e
     emit A.defaultOper
       { A.assem = T.pack $ "\tmov qword ptr [`s0" ++ plusMinusInt c ++ "], `s1"
-      , A.operDst       = []
       , A.operSrc       = [d, eReg]
       , A.hasSideEffect = True
-      , A.jump          = Nothing
       }
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP d, TreeIR.CONST c1)), TreeIR.CONST c2))
   = emit A.defaultOper
@@ -183,20 +171,16 @@ munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP d, Tre
                         ++ "], "
                         ++ show c2
                         ++ ""
-    , A.operDst       = []
     , A.operSrc       = [d]
     , A.hasSideEffect = True
-    , A.jump          = Nothing
     }
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP d, TreeIR.CONST c)), e))
   = do
     eReg <- munchExp e
     emit A.defaultOper
       { A.assem = T.pack $ "\tmov qword ptr [`s0" ++ plusMinusInt c ++ "], `s1"
-      , A.operDst       = []
       , A.operSrc       = [d, eReg]
       , A.hasSideEffect = True
-      , A.jump          = Nothing
       }
 munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.MINUS, TreeIR.TEMP d, TreeIR.CONST c)), e))
   = do
@@ -206,19 +190,15 @@ munchStm (TreeIR.MOVE (TreeIR.MEM (TreeIR.BINOP (TreeIR.MINUS, TreeIR.TEMP d, Tr
                           $  "\tmov qword ptr [`s0"
                           ++ plusMinusInt (-c)
                           ++ "], `s1"
-      , A.operDst       = []
       , A.operSrc       = [d, eReg]
       , A.hasSideEffect = True
-      , A.jump          = Nothing
       }
 munchStm (TreeIR.MOVE (TreeIR.MEM e1, e2)) = do
   src <- munchExp e2
   dst <- munchExp e1
   emit A.defaultOper { A.assem         = "\tmov [`s0], `s1"
-                     , A.operDst       = []
                      , A.operSrc       = [dst, src]
                      , A.hasSideEffect = True
-                     , A.jump          = Nothing
                      }
 munchStm (TreeIR.MOVE (TreeIR.TEMP t, e2)) = do
   src <- munchExp e2
@@ -226,15 +206,12 @@ munchStm (TreeIR.MOVE (TreeIR.TEMP t, e2)) = do
 munchStm m@(TreeIR.MOVE _) = error $ "codegen can't handle move: " ++ show m
 munchStm (TreeIR.JUMP (TreeIR.NAME lab, _)) = emit A.defaultOper
   { A.assem         = "\tjmp `j0"
-  , A.operDst       = []
-  , A.operSrc       = []
   , A.hasSideEffect = True
   , A.jump          = Just [lab]
   }
 munchStm (TreeIR.JUMP (e, labels)) = do
   src <- munchExp e
   emit A.defaultOper { A.assem         = "\tjmp `s0"
-                     , A.operDst       = []
                      , A.operSrc       = [src]
                      , A.hasSideEffect = True
                      , A.jump          = Just labels
@@ -242,10 +219,8 @@ munchStm (TreeIR.JUMP (e, labels)) = do
 munchStm (TreeIR.CJUMP (op, e1, TreeIR.CONST i, t, f)) = do
   src1 <- munchExp e1
   emit A.defaultOper { A.assem         = T.pack $ "\tcmp `s0, " ++ show i
-                     , A.operDst       = []
                      , A.operSrc       = [src1]
                      , A.hasSideEffect = True
-                     , A.jump          = Nothing
                      }
   emit A.OPER { A.assem          = T.pack $ "\t" ++ opToJump op ++ " `j0"
               , A.operDst        = []
@@ -257,8 +232,6 @@ munchStm (TreeIR.CJUMP (op, e1, TreeIR.CONST i, t, f)) = do
               , A.jump           = Just [t]
               }
   emit A.defaultOper { A.assem         = T.pack "\tjmp `j0"
-                     , A.operDst       = []
-                     , A.operSrc       = []
                      , A.hasSideEffect = True
                      , A.jump          = Just [f]
                      }
@@ -266,10 +239,8 @@ munchStm (TreeIR.CJUMP (op, e1, e2, t, f)) = do
   src1 <- munchExp e1
   src2 <- munchExp e2
   emit A.defaultOper { A.assem         = T.pack "\tcmp `s0, `s1"
-                     , A.operDst       = []
                      , A.operSrc       = [src1, src2]
                      , A.hasSideEffect = True
-                     , A.jump          = Nothing
                      }
   emit A.OPER { A.assem          = T.pack $ "\t" ++ opToJump op ++ " `j0"
               , A.operDst        = []
@@ -281,8 +252,6 @@ munchStm (TreeIR.CJUMP (op, e1, e2, t, f)) = do
               , A.jump           = Just [t]
               }
   emit A.defaultOper { A.assem         = T.pack "\tjmp `j0"
-                     , A.operDst       = []
-                     , A.operSrc       = []
                      , A.hasSideEffect = True
                      , A.jump          = Just [f]
                      }
@@ -315,7 +284,6 @@ munchExp (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP src1, TreeIR.TEMP src2)) =
     [ A.defaultOper { A.assem   = "\tlea `d0, [`s0+`s1]"
                     , A.operDst = [r]
                     , A.operSrc = [src1, src2]
-                    , A.jump    = Nothing
                     }
     ]
 munchExp (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s, TreeIR.CONST c))
@@ -325,7 +293,6 @@ munchExp (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s, TreeIR.CONST c))
     [ A.defaultOper { A.assem   = T.pack $ "\tlea `d0, [`s0+" ++ show c ++ "]"
                     , A.operDst = [r]
                     , A.operSrc = [s]
-                    , A.jump    = Nothing
                     }
     ]
   | otherwise = result $ \r -> pure
@@ -333,7 +300,6 @@ munchExp (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s, TreeIR.CONST c))
     , A.defaultOper { A.assem   = T.pack $ "\tsub `d0, " ++ show (-c)
                     , A.operDst = [r]
                     , A.operSrc = [r]
-                    , A.jump    = Nothing
                     }
     ]
 munchExp (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s0, TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s1, TreeIR.CONST c))))
@@ -342,7 +308,6 @@ munchExp (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s0, TreeIR.MEM (TreeIR.BINOP (T
     , A.defaultOper { A.assem   = T.pack $ "\tadd `d0, [`s0+" ++ show c ++ "]"
                     , A.operDst = [r]
                     , A.operSrc = [s1, r]
-                    , A.jump    = Nothing
                     }
     ]
 munchExp (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s0, TreeIR.MEM (TreeIR.BINOP (TreeIR.MINUS, TreeIR.TEMP s1, TreeIR.CONST c))))
@@ -351,7 +316,6 @@ munchExp (TreeIR.BINOP (TreeIR.PLUS, TreeIR.TEMP s0, TreeIR.MEM (TreeIR.BINOP (T
     , A.defaultOper { A.assem   = T.pack $ "\tadd `d0, [`s0-" ++ show c ++ "]"
                     , A.operDst = [r]
                     , A.operSrc = [s1, r]
-                    , A.jump    = Nothing
                     }
     ]
 munchExp (TreeIR.BINOP (TreeIR.PLUS, e1, e2)) = result $ \r -> do
@@ -361,7 +325,6 @@ munchExp (TreeIR.BINOP (TreeIR.PLUS, e1, e2)) = result $ \r -> do
     [ A.defaultOper { A.assem   = "\tlea `d0, [`s0+`s1]"
                     , A.operDst = [r]
                     , A.operSrc = [src1, src2]
-                    , A.jump    = Nothing
                     }
     ]
 munchExp (TreeIR.BINOP (op, e1, e2))
@@ -396,7 +359,6 @@ munchExp (TreeIR.BINOP (op, e1, e2))
       , A.defaultOper { A.assem   = T.pack $ "\t" ++ convertOp op ++ " `d0, `s0"
                       , A.operDst = [r]
                       , A.operSrc = [src2, r]
-                      , A.jump    = Nothing
                       }
       ]
  where
@@ -414,13 +376,11 @@ munchExp (TreeIR.BINOP (op, e1, e2))
                       , A.operDst       = [X64Frame.rdx x64]
                       , A.operSrc       = [X64Frame.rax x64]
                       , A.hasSideEffect = True
-                      , A.jump          = Nothing
                       }
       , A.defaultOper { A.assem         = "\tidiv `s0"
                       , A.operDst       = divideDests
                       , A.operSrc       = src2 : divideDests
                       , A.hasSideEffect = True
-                      , A.jump          = Nothing
                       }
       , A.MOVE { A.assem   = "\tmov `d0, `s0"
                , A.moveDst = r
@@ -451,7 +411,6 @@ munchExp (TreeIR.CALL (expr@(TreeIR.NAME callTarget), args, escapes, hasRet)) =
         , A.operSrc = exprReg : X64Frame.rsp x64 : X64Frame.rbp x64 : argRegs
         , A.hasSideEffect = True
         , A.calls         = Just callTarget
-        , A.jump          = Nothing
         }
       )
       (if hasRet
@@ -477,7 +436,6 @@ munchExp (TreeIR.CALLNORETURN (expr@(TreeIR.NAME callTarget), args, escapes)) =
                      , A.hasSideEffect = True
                      , A.noreturn      = True
                      , A.calls         = Just callTarget
-                     , A.jump          = Nothing
                      }
       )
       Nothing
@@ -493,7 +451,6 @@ munchExp (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, e, TreeIR.CONST c))) =
           { A.assem   = T.pack $ "\tmov `d0, [`s0" ++ plusMinusInt c ++ "]"
           , A.operDst = [r]
           , A.operSrc = [src]
-          , A.jump    = Nothing
           }
       ]
 munchExp (TreeIR.MEM (TreeIR.BINOP (TreeIR.PLUS, TreeIR.CONST c, e))) =
@@ -503,8 +460,6 @@ munchExp (TreeIR.MEM (TreeIR.BINOP (TreeIR.MINUS, e, TreeIR.CONST c))) =
 munchExp (TreeIR.MEM (TreeIR.CONST c)) = result $ \r -> pure
   [ A.defaultOper { A.assem   = T.pack $ "\tmov `d0, [" ++ show c ++ "]"
                   , A.operDst = [r]
-                  , A.operSrc = []
-                  , A.jump    = Nothing
                   }
   ]
 munchExp (TreeIR.MEM expr) = result $ \r -> do
@@ -513,14 +468,11 @@ munchExp (TreeIR.MEM expr) = result $ \r -> do
     [ A.defaultOper { A.assem   = "\tmov `d0, [`s0]"
                     , A.operDst = [r]
                     , A.operSrc = [exprReg]
-                    , A.jump    = Nothing
                     }
     ]
 munchExp (TreeIR.NAME (Temp.Label (S.Symbol s))) = result $ \r -> pure
   [ A.defaultOper { A.assem = T.pack $ "\tlea `d0, [rip + " ++ T.unpack s ++ "]"
                   , A.operDst = [r]
-                  , A.operSrc = []
-                  , A.jump    = Nothing
                   }
   ]
 
@@ -600,10 +552,8 @@ doCall callStm maybeMoveStm callArgs escapes returnsOrNot = do
                                   $  "\tmov qword ptr [`s0 + "
                                   ++ show (stackOffset * X64Frame.wordSize)
                                   ++ "], `s1"
-              , A.operDst       = []
               , A.operSrc       = [X64Frame.rsp x64, argReg]
               , A.hasSideEffect = True
-              , A.jump          = Nothing
               }
         in  (paramRegs, argMap, nextStackOffsets', acc ++ [inst])
       Frame.DoesNotEscape -> case paramRegs of
