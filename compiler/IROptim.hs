@@ -57,16 +57,33 @@ simplifyStms = fmap simplifyStm
   simplifyStm lab@(T.LABEL _) = lab
 
   simplifyExp :: T.Exp -> T.Exp
-  simplifyExp (T.BINOP (T.DIV  , e        , T.CONST 1)) = e
-  simplifyExp (T.BINOP (T.MUL  , _        , T.CONST 0)) = T.CONST 0
-  simplifyExp (T.BINOP (T.MUL  , T.CONST 0, _        )) = T.CONST 0
-  simplifyExp (T.BINOP (T.MUL  , e        , T.CONST 1)) = e
-  simplifyExp (T.BINOP (T.MUL  , T.CONST 1, e        )) = e
-  simplifyExp (T.BINOP (T.PLUS , e        , T.CONST 0)) = e
-  simplifyExp (T.BINOP (T.PLUS , T.CONST 0, e        )) = e
-  simplifyExp (T.BINOP (T.MINUS, e        , T.CONST 0)) = e
-  simplifyExp sub@(T.BINOP (T.MINUS, e1, e2)) =
-    if isPureExp e1 && isPureExp e2 && e1 == e2 then T.CONST 0 else sub
+  simplifyExp (T.BINOP (T.DIV , e        , T.CONST 1)) = e
+  simplifyExp (T.BINOP (T.MUL , _        , T.CONST 0)) = T.CONST 0
+  simplifyExp (T.BINOP (T.MUL , T.CONST 0, _        )) = T.CONST 0
+  simplifyExp (T.BINOP (T.MUL , e        , T.CONST 1)) = e
+  simplifyExp (T.BINOP (T.MUL , T.CONST 1, e        )) = e
+  simplifyExp (T.BINOP (T.PLUS, e        , T.CONST 0)) = e
+  simplifyExp (T.BINOP (T.PLUS, T.CONST 0, e        )) = e
+  simplifyExp (T.BINOP (T.PLUS, e1, T.BINOP (T.MINUS, e2, e3))) =
+    let e1' = simplifyExp e1
+        e2' = simplifyExp e2
+        e3' = simplifyExp e3
+    in  if isPureExp e1' && isPureExp e3' && e1' == e3'
+          then e2'
+          else T.BINOP (T.PLUS, e1', T.BINOP (T.MINUS, e2', e3'))
+  simplifyExp (T.BINOP (T.PLUS, T.BINOP (T.MINUS, e1, e2), e3)) =
+    simplifyExp $ T.BINOP (T.PLUS, e3, T.BINOP (T.MINUS, e1, e2))
+  simplifyExp (T.BINOP (T.MINUS, e, T.CONST 0)) = e
+  simplifyExp (T.BINOP (T.MINUS, e1, e2)) =
+    let e1' = simplifyExp e1
+        e2' = simplifyExp e2
+    in  if isPureExp e1' && isPureExp e2' && e1' == e2'
+          then T.CONST 0
+          else T.BINOP (T.MINUS, e1', e2')
+  simplifyExp (T.BINOP (op, e1, e2)) =
+    let e1' = simplifyExp e1
+        e2' = simplifyExp e2
+    in  T.BINOP (op, e1', e2')
   simplifyExp (T.MEM e) = T.MEM $ simplifyExp e
   simplifyExp (T.CALL (func, args, escapes, hasResult)) =
     T.CALL (simplifyExp func, fmap simplifyExp args, escapes, hasResult)
