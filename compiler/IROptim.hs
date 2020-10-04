@@ -58,6 +58,7 @@ simplifyStms = fmap simplifyStm
 
   simplifyExp :: T.Exp -> T.Exp
   simplifyExp (T.BINOP (T.DIV , e        , T.CONST 1)) = e
+  simplifyExp (T.BINOP (T.MOD , _        , T.CONST 1)) = T.CONST 0
   simplifyExp (T.BINOP (T.MUL , _        , T.CONST 0)) = T.CONST 0
   simplifyExp (T.BINOP (T.MUL , T.CONST 0, _        )) = T.CONST 0
   simplifyExp (T.BINOP (T.MUL , e        , T.CONST 1)) = e
