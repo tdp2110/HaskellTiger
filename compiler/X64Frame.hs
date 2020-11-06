@@ -39,7 +39,6 @@ import           Data.Map                       ( Map )
 import qualified Data.Map                      as Map
 import           Prelude                 hiding ( exp )
 
-
 data X64Access = InFrame Int | InReg Int
   deriving (Show)
 
@@ -91,7 +90,8 @@ data X64Frame = X64Frame { name :: Temp.Label
                          , locals :: [X64Access]
                          , x64 :: X64
                          , frameDebug :: Maybe (Symbol.Symbol, Absyn.Pos)
-                         , viewShift :: [TreeIR.Stm] }
+                         , viewShift :: [TreeIR.Stm]
+                         , inFrameCount :: Int }
 
 instance Show X64Frame where
   show f =
@@ -227,12 +227,13 @@ initX64 gen =
     )
 
 freshFrame :: Temp.Label -> X64 -> Maybe (Symbol.Symbol, Absyn.Pos) -> X64Frame
-freshFrame frameName x64Inst maybeDebug = X64Frame { name       = frameName
-                                                   , formals    = []
-                                                   , locals     = []
-                                                   , x64        = x64Inst
-                                                   , frameDebug = maybeDebug
-                                                   , viewShift  = []
+freshFrame frameName x64Inst maybeDebug = X64Frame { name         = frameName
+                                                   , formals      = []
+                                                   , locals       = []
+                                                   , x64          = x64Inst
+                                                   , frameDebug   = maybeDebug
+                                                   , viewShift    = []
+                                                   , inFrameCount = 0
                                                    }
 
 data Register = RAX | RBX | RCX | RDX | RBP | RSI | RDI | RSP
@@ -302,11 +303,8 @@ newFrame x64Inst frameName maybeDebug gen escapes =
         [] ->
           step (gen', frame, numEscapesSeen, paramRegsRemaining) Frame.Escapes
       Frame.Escapes ->
-        ( gen'
-        , frame { formals = formals frame ++ [InFrame $ numEscapesSeen + 2] } -- +2 to bypass pushed rbp on
-                                                                           -- on function entry and
-                                                                           -- implicitly-pushed rip from
-                                                                           -- call instr.
+        ( gen'  {- +2 to bypass pushed rbp on on function entry and implicitly-pushed rip from call instr. -}
+        , frame { formals = formals frame ++ [InFrame $ numEscapesSeen + 2] }
         , numEscapesSeen + 1
         , paramRegsRemaining
         )
@@ -320,7 +318,12 @@ allocLocal gen frame escapesOrNot = case escapesOrNot of
   Frame.Escapes ->
     let numLocals = length $ filter isInFrame $ locals frame
         access    = InFrame $ -1 - numLocals
-    in  (gen, frame { locals = locals frame ++ [access] }, access)
+    in  ( gen
+        , frame { locals       = locals frame ++ [access]
+                , inFrameCount = 1 + inFrameCount frame
+                }
+        , access
+        )
   Frame.DoesNotEscape ->
     let (regLabel, gen') = Temp.newtemp gen
         access           = InReg regLabel
@@ -419,13 +422,8 @@ newtype MaxCallArgsAndEscapes = MaxCallArgsAndEscapes (Maybe (Int, Int))
 -- for procedure entry, stack pointer adjustment, and procedure exit can be put together;
 -- these are the _prologue_ and _epilogue_.
 procEntryExit3
-  :: X64Frame
-  -> [Assem.Inst]
-  -> MaxCallArgsAndEscapes
-  -> {-numSpills-}
-     Int
-  -> [Assem.Inst]
-procEntryExit3 frame bodyAsm (MaxCallArgsAndEscapes maybeMaxCallArgsAndEscapes) numSpills
+  :: X64Frame -> [Assem.Inst] -> MaxCallArgsAndEscapes -> [Assem.Inst]
+procEntryExit3 frame bodyAsm (MaxCallArgsAndEscapes maybeMaxCallArgsAndEscapes)
   = let
       (label : bodyAsm') = bodyAsm
       arch               = x64 frame
@@ -435,9 +433,9 @@ procEntryExit3 frame bodyAsm (MaxCallArgsAndEscapes maybeMaxCallArgsAndEscapes) 
             let stackSpaceForCallArgs =
                     max 0 (maxCallArgs - length (paramRegs arch)) --
                       + maxEscapingParams
-            in  numSpills + stackSpaceForCallArgs + numEscapingLocals
+            in  stackSpaceForCallArgs + inFrameCount frame
           Nothing -> -- we're in a leaf function (ie it calls no other function. use the 128-byte redzone)
-            max 0 $ numSpills + numEscapingLocals - 128 `div` 8
+            max 0 $ (inFrameCount frame) - 128 `div` 8
       stackAdjustment =
         [ Assem.defaultOper
             { Assem.assem   = T.pack $ "\tsub `d0, " ++ show stackSize
@@ -498,6 +496,3 @@ procEntryExit3 frame bodyAsm (MaxCallArgsAndEscapes maybeMaxCallArgsAndEscapes) 
  where
   nextMultipleOf16 :: Int -> Int
   nextMultipleOf16 n = 16 * ((n + 15) `div` 16)
-
-  numEscapingLocals :: Int
-  numEscapingLocals = length $ filter isInFrame $ locals frame

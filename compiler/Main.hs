@@ -255,20 +255,19 @@ compileToAsm text performRegAlloc optimize = case Parser.parse text of
               (insts'', (flowGraph, _)) = if optimize
                 then AssemOptim.optimizePreRegAlloc insts'
                 else (insts', Flow.instrsToGraph insts')
-              (insts''', alloc, frame', spills, gen6) = if performRegAlloc
+              (insts''', alloc, frame', gen6) = if performRegAlloc
                 then
-                  let (instsAlloc, allocs, frameAlloc, spills', genAlloc) =
+                  let (instsAlloc, allocs, frameAlloc, _, genAlloc) =
                         RegAlloc.alloc insts'' flowGraph frame gen5 []
                       (instsAllocOpt, _) = if optimize
                         then AssemOptim.optimizePostRegAlloc instsAlloc
                         else (instsAlloc, undefined)
-                  in  (instsAllocOpt, allocs, frameAlloc, spills', genAlloc)
-                else (insts'', tempMap, frame, [], gen5)
+                  in  (instsAllocOpt, allocs, frameAlloc, genAlloc)
+                else (insts'', tempMap, frame, gen5)
               insts4 = X64Frame.procEntryExit3
                 frame'
                 insts'''
                 (X64Frame.MaxCallArgsAndEscapes maxCallArgs)
-                (length spills)
               insts5 = filter notEmptyInst insts4 -- an empty instr is appended to function bodies
                                                   -- in order to communicate some liveness info to regalloc
             in

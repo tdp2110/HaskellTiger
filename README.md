@@ -65,23 +65,21 @@ hello_world.s will look something like
         .globl _main
         .section    __TEXT,__text,regular,pure_instructions
         .intel_syntax noprefix
-.L15:
+.L16:
         .asciz  "hello world"
-_main:
-        push rbp                 ## ("_main",line -1, col -1)
+_main:                          ## (_main,line -1, col -1)
+        push rbp
         mov rbp, rsp
-        sub rsp, 32
-        lea rbx, [rip + .L15]
+        sub rsp, 16
+        lea rbx, [rip + .L16]
         mov qword ptr [rbp-8], rbx
-        mov rbx, 11
-        mov qword ptr [rbp-16], rbx
         lea r15, [rip + _tiger_allocString]
         mov r14, rax            ## caller saves
         mov r13, rdx            ## caller saves
         mov r12, rsi            ## caller saves
         mov rbx, rdi            ## caller saves
         mov rdi, qword ptr [rbp-8]
-        mov rsi, qword ptr [rbp-16]
+        mov rsi, 11
         call r15
         mov r15, rax
         mov rax, r14            ## caller restores
@@ -98,9 +96,9 @@ _main:
         mov rdx, r12            ## caller restores
         mov rdi, rbx            ## caller restores
         mov rax, rbp
-        add rsp, 32
+        add rsp, 16
         pop rbp
-        mov rax, 0
+        xor rax, rax
         ret
 ```
 
@@ -124,7 +122,7 @@ python3 test/compiler_test.py
 
 ## tigerc options
 
-tigerc has a few options to show various stages of compilation. 
+tigerc has a few options to show various stages of compilation.
 
 ```
 ✗ cabal -v0 new-run tigerc -- --help
@@ -139,7 +137,7 @@ Usage: tigerc [OPTION...] files...
   -h  --help          show help
 ```
 
-Let's explore a few using the hello_world.tiger example from above. 
+Let's explore a few using the hello_world.tiger example from above.
 `--show-ast` pretty-prints the ast using the (awesome) [pretty-simple package](https://hackage.haskell.org/package/pretty-simple).
 
 ```
@@ -199,68 +197,68 @@ LABEL .L16
 To see instruction selection before register allocation, use `--noreg`
 
 ```
-	.globl _main
-	.section    __TEXT,__text,regular,pure_instructions
-	.intel_syntax noprefix
+    .globl _main
+    .section    __TEXT,__text,regular,pure_instructions
+    .intel_syntax noprefix
 .L15:
-	.asciz	"hello world"
+    .asciz	"hello world"
 _main:				## (_main,line -1, col -1)
-	push rbp
-	mov rbp, rsp
-	sub rsp, 16
-	lea t52, [rip + .L15]
-	mov t53, 11
-	lea t54, [rip + _tiger_allocString]
-	mov t55, rax		## caller saves
-	mov t56, rcx		## caller saves
-	mov t57, rdx		## caller saves
-	mov t58, rsi		## caller saves
-	mov t59, rdi		## caller saves
-	mov t60, r8		## caller saves
-	mov t61, r9		## caller saves
-	mov t62, r10		## caller saves
-	mov t63, r11		## caller saves
-	mov rdi, t52
-	mov rsi, t53
-	call t54
-	mov t51, rax
-	mov rax, t55		## caller restores
-	mov rcx, t56		## caller restores
-	mov rdx, t57		## caller restores
-	mov rsi, t58		## caller restores
-	mov rdi, t59		## caller restores
-	mov r8, t60		## caller restores
-	mov r9, t61		## caller restores
-	mov r10, t62		## caller restores
-	mov r11, t63		## caller restores
-	mov t44, t51
-	lea t65, [rip + _tiger_println]
-	mov t66, rax		## caller saves
-	mov t67, rcx		## caller saves
-	mov t68, rdx		## caller saves
-	mov t69, rsi		## caller saves
-	mov t70, rdi		## caller saves
-	mov t71, r8		## caller saves
-	mov t72, r9		## caller saves
-	mov t73, r10		## caller saves
-	mov t74, r11		## caller saves
-	mov rdi, t44
-	call t65
-	mov rax, t66		## caller restores
-	mov rcx, t67		## caller restores
-	mov rdx, t68		## caller restores
-	mov rsi, t69		## caller restores
-	mov rdi, t70		## caller restores
-	mov r8, t71		## caller restores
-	mov r9, t72		## caller restores
-	mov r10, t73		## caller restores
-	mov r11, t74		## caller restores
-	mov t45, t64
-	mov rax, t45
-	add rsp, 16
-	pop rbp
-	xor rax, rax
-	ret
+    push rbp
+    mov rbp, rsp
+    sub rsp, 16
+    lea t52, [rip + .L15]
+    mov t53, 11
+    lea t54, [rip + _tiger_allocString]
+    mov t55, rax		## caller saves
+    mov t56, rcx		## caller saves
+    mov t57, rdx		## caller saves
+    mov t58, rsi		## caller saves
+    mov t59, rdi		## caller saves
+    mov t60, r8		## caller saves
+    mov t61, r9		## caller saves
+    mov t62, r10		## caller saves
+    mov t63, r11		## caller saves
+    mov rdi, t52
+    mov rsi, t53
+    call t54
+    mov t51, rax
+    mov rax, t55		## caller restores
+    mov rcx, t56		## caller restores
+    mov rdx, t57		## caller restores
+    mov rsi, t58		## caller restores
+    mov rdi, t59		## caller restores
+    mov r8, t60		## caller restores
+    mov r9, t61		## caller restores
+    mov r10, t62		## caller restores
+    mov r11, t63		## caller restores
+    mov t44, t51
+    lea t65, [rip + _tiger_println]
+    mov t66, rax		## caller saves
+    mov t67, rcx		## caller saves
+    mov t68, rdx		## caller saves
+    mov t69, rsi		## caller saves
+    mov t70, rdi		## caller saves
+    mov t71, r8		## caller saves
+    mov t72, r9		## caller saves
+    mov t73, r10		## caller saves
+    mov t74, r11		## caller saves
+    mov rdi, t44
+    call t65
+    mov rax, t66		## caller restores
+    mov rcx, t67		## caller restores
+    mov rdx, t68		## caller restores
+    mov rsi, t69		## caller restores
+    mov rdi, t70		## caller restores
+    mov r8, t71		## caller restores
+    mov r9, t72		## caller restores
+    mov r10, t73		## caller restores
+    mov r11, t74		## caller restores
+    mov t45, t64
+    mov rax, t45
+    add rsp, 16
+    pop rbp
+    xor rax, rax
+    ret
 
 ```
 
