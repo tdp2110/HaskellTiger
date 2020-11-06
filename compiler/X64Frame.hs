@@ -435,7 +435,7 @@ procEntryExit3 frame bodyAsm (MaxCallArgsAndEscapes maybeMaxCallArgsAndEscapes)
                       + maxEscapingParams
             in  stackSpaceForCallArgs + inFrameCount frame
           Nothing -> -- we're in a leaf function (ie it calls no other function. use the 128-byte redzone)
-            max 0 $ (inFrameCount frame) - 128 `div` 8
+            max 0 $ inFrameCount frame - 128 `div` 8
       stackAdjustment =
         [ Assem.defaultOper
             { Assem.assem   = T.pack $ "\tsub `d0, " ++ show stackSize
