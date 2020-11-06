@@ -90,7 +90,8 @@ data X64Frame = X64Frame { name :: Temp.Label
                          , locals :: [X64Access]
                          , x64 :: X64
                          , frameDebug :: Maybe (Symbol.Symbol, Absyn.Pos)
-                         , viewShift :: [TreeIR.Stm] }
+                         , viewShift :: [TreeIR.Stm]
+                         , inFrameCount :: Int }
 
 instance Show X64Frame where
   show f =
@@ -226,12 +227,13 @@ initX64 gen =
     )
 
 freshFrame :: Temp.Label -> X64 -> Maybe (Symbol.Symbol, Absyn.Pos) -> X64Frame
-freshFrame frameName x64Inst maybeDebug = X64Frame { name       = frameName
-                                                   , formals    = []
-                                                   , locals     = []
-                                                   , x64        = x64Inst
-                                                   , frameDebug = maybeDebug
-                                                   , viewShift  = []
+freshFrame frameName x64Inst maybeDebug = X64Frame { name         = frameName
+                                                   , formals      = []
+                                                   , locals       = []
+                                                   , x64          = x64Inst
+                                                   , frameDebug   = maybeDebug
+                                                   , viewShift    = []
+                                                   , inFrameCount = 0
                                                    }
 
 data Register = RAX | RBX | RCX | RDX | RBP | RSI | RDI | RSP
@@ -316,7 +318,12 @@ allocLocal gen frame escapesOrNot = case escapesOrNot of
   Frame.Escapes ->
     let numLocals = length $ filter isInFrame $ locals frame
         access    = InFrame $ -1 - numLocals
-    in  (gen, frame { locals = locals frame ++ [access] }, access)
+    in  ( gen
+        , frame { locals       = locals frame ++ [access]
+                , inFrameCount = 1 + inFrameCount frame
+                }
+        , access
+        )
   Frame.DoesNotEscape ->
     let (regLabel, gen') = Temp.newtemp gen
         access           = InReg regLabel
@@ -426,9 +433,9 @@ procEntryExit3 frame bodyAsm (MaxCallArgsAndEscapes maybeMaxCallArgsAndEscapes)
             let stackSpaceForCallArgs =
                     max 0 (maxCallArgs - length (paramRegs arch)) --
                       + maxEscapingParams
-            in  stackSpaceForCallArgs + inFrameCount
+            in  stackSpaceForCallArgs + inFrameCount frame
           Nothing -> -- we're in a leaf function (ie it calls no other function. use the 128-byte redzone)
-            max 0 $ inFrameCount - 128 `div` wordSize
+            max 0 $ (inFrameCount frame) - 128 `div` 8
       stackAdjustment =
         [ Assem.defaultOper
             { Assem.assem   = T.pack $ "\tsub `d0, " ++ show stackSize
@@ -489,6 +496,3 @@ procEntryExit3 frame bodyAsm (MaxCallArgsAndEscapes maybeMaxCallArgsAndEscapes)
  where
   nextMultipleOf16 :: Int -> Int
   nextMultipleOf16 n = 16 * ((n + 15) `div` 16)
-
-  inFrameCount :: Int
-  inFrameCount = length $ fmap isInFrame $ locals frame
