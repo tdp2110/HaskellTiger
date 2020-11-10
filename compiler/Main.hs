@@ -270,10 +270,11 @@ compileToAsm text performRegAlloc optimize = case Parser.parse text of
                 (X64Frame.MaxCallArgsAndEscapes maxCallArgs)
               insts5 = filter notEmptyInst insts4 -- an empty instr is appended to function bodies
                                                   -- in order to communicate some liveness info to regalloc
+              insts6 = AssemOptim.trimNoReturns insts5
             in
               ( intercalate
                   "\n"
-                  (fmap (formatAsm (alloc `Map.union` tempMap)) insts5)
+                  (fmap (formatAsm (alloc `Map.union` tempMap)) insts6)
                 ++ "\n"
               , gen6
               )

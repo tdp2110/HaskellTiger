@@ -115,7 +115,6 @@ instrsToGraph insts =
           A.OPER { A.jump = Just _, A.hasFallthrough = True } ->
             G.addEdge n1 n2
           A.OPER { A.jump = Just _ }   -> pure ()
-          A.OPER { A.noreturn = True } -> pure ()
           _                            -> G.addEdge n1 n2
         )
       $ zip nodes

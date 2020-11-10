@@ -26,7 +26,7 @@ class TestCompiler(unittest.TestCase):
     def assem_file(self):
         return os.path.join(self.temp_dir.name, 'source.s')
 
-    def check_compiler(self, source_file, expected_output=None, run=True):
+    def check_compiler(self, source_file, expected_output=None, run=True, expected_retcode=0):
         base_compile_command = ['cabal', '-v0', 'new-run', 'tigerc', '--',
                                 source_file]
 
@@ -62,7 +62,7 @@ class TestCompiler(unittest.TestCase):
 
                 binary_process.wait()
 
-                self.assertEqual(binary_process.returncode, 0, (out, err))
+                self.assertEqual(binary_process.returncode, expected_retcode, (out, err))
                 self.assertEqual(out.decode('utf-8'), expected_output)
 
             return assem
@@ -171,6 +171,11 @@ class TestCompiler(unittest.TestCase):
 
     def test_divs(self):
         self.check_compiler('examples/divs.tiger', '2\n1\n')
+        
+    def test_call_noreturn(self):
+        assem = self.check_compiler('examples/constexpr-div.tiger', run=False, expected_retcode=1)
+        assem = assem.decode('utf-8')
+        self.assertEqual(assem.strip().splitlines()[-1].strip().split(), ['call', 'rax'])
         
 if __name__ == '__main__':
     unittest.main()

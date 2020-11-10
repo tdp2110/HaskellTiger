@@ -1,6 +1,7 @@
 module AssemOptim
   ( optimizePreRegAlloc
   , optimizePostRegAlloc
+  , trimNoReturns
   )
 where
 
@@ -30,6 +31,10 @@ makePass :: PassKernel -> Pass
 makePass kernel input =
   let instrs = kernel input in (instrs, F.instrsToGraph instrs)
 
+trimNoReturns :: [A.Inst] -> [A.Inst]
+trimNoReturns insts =
+  fst $ makePass trimNoReturnsKernel (insts, F.instrsToGraph insts)
+
 optimizePreRegAlloc :: [A.Inst] -> CFG
 optimizePreRegAlloc = optimize $ fmap
   makePass
@@ -58,6 +63,34 @@ optimize passes insts =
  where
   applyPass :: CFG -> Pass -> CFG
   applyPass input pass = pass input
+
+trimNoReturnsKernel :: PassKernel
+trimNoReturnsKernel (insts, (F.FlowGraph { F.control = cfg }, flowNodes)) =
+  let
+    inst2nodeId      = zip insts $ fmap G.nodeId flowNodes
+    noReturnNodes    = snd <$> filter (isNoReturn . fst) inst2nodeId
+    topoOrderedNodes = reverse $ G.quasiTopoSort cfg
+    toDelete         = foldl'
+      (\acc node -> case G.pred node of
+        [] -> acc
+        predecessors ->
+          let markedDeleted predecessor =
+                  predecessor `elem` noReturnNodes || predecessor `elem` acc
+          in  if all markedDeleted predecessors
+                then G.nodeId node : acc
+                else acc
+      )
+      []
+      topoOrderedNodes
+    inst2nodeId' =
+      filter (\(_, nodeId) -> nodeId `notElem` toDelete) inst2nodeId
+    insts' = fmap fst inst2nodeId'
+  in
+    insts'
+ where
+  isNoReturn :: A.Inst -> Bool
+  isNoReturn A.OPER { A.noreturn = isnoreturn } = isnoreturn
+  isNoReturn _ = False
 
 pruneDefdButNotUsed :: PassKernel
 pruneDefdButNotUsed (insts, (F.FlowGraph { F.control = control, F.use = use }, _))
@@ -144,7 +177,7 @@ propagateConstants (insts, (F.FlowGraph { F.control = cfg }, nodes)) =
                 A.OPER { A.operDst = operDsts } ->
                   let
                     constMap' =
-                      foldl' (\acc reg -> Map.delete reg acc) constMap operDsts
+                      foldl' (flip Map.delete) constMap operDsts
                   in  (constMap', nodeReplacements)
                 _ -> (constMap, nodeReplacements)
       )

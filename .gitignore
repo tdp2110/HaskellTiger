@@ -6,3 +6,4 @@ cabal.project.local
 *.s
 *.ir
 *.prof
+__pycache__

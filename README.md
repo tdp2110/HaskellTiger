@@ -344,9 +344,4 @@ _main:                          ## (_main,line -1, col -1)
         mov rbp, rsp
         lea rax, [rip + _tiger_divByZero]
         call rax
-        pop rbp
-        xor rax, rax
-        ret
 ```
-
-Even this assembly, however, has some dead code which I'd like to remove :). For example, `_tiger_divByZero` is `[[noreturn]]`, so no code needs to follow it.
