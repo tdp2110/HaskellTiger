@@ -20,6 +20,7 @@ import           Data.List                      ( zip3
                                                 )
 import qualified Data.Text                     as T
 
+
 type CFG = ([A.Inst], (F.FlowGraph, [F.Node]))
 type PassKernel = CFG -> [A.Inst]
 type Pass = CFG -> CFG
@@ -118,39 +119,45 @@ chaseJumps (insts, (F.FlowGraph { F.control = cfg }, flowNodes)) =
 
 propagateConstants :: PassKernel
 propagateConstants (insts, (F.FlowGraph { F.control = cfg }, nodes)) =
-  let nodeIds                    = G.nodeId <$> nodes
-      topoOrderedNodes           = reverse $ G.quasiTopoSort cfg
-      nodeIdToInst               = Map.fromList $ zip nodeIds insts
-      (_, finalNodeReplacements) = foldl'
-        (\(constMap, nodeReplacements) node -> if length (G.pred node) > 1
-          then (Map.empty, nodeReplacements)
-          else
-            let nodeId = G.nodeId node
-                inst   = nodeIdToInst Map.! nodeId
-            in  case inst of
-                  A.STORECONST { A.strDst = strDst, A.strVal = strVal } ->
-                    (Map.insert strDst strVal constMap, nodeReplacements)
-                  A.MOVE { A.moveDst = moveDst, A.moveSrc = moveSrc } ->
-                    case Map.lookup moveSrc constMap of
-                      Just c ->
-                        ( Map.insert moveDst c constMap
-                        , Map.insert nodeId
-                                     (mkStoreConst moveDst c)
-                                     nodeReplacements
-                        )
-                      Nothing ->
-                        (Map.delete moveDst constMap, nodeReplacements)
-                  _ -> (constMap, nodeReplacements)
-        )
-        (Map.empty, Map.empty)
-        topoOrderedNodes
-      insts' =
-          (   (\(inst, nodeId) ->
-                Data.Maybe.fromMaybe inst (Map.lookup nodeId finalNodeReplacements)
-              )
-          <$> zip insts nodeIds
+  let
+    nodeIds                    = G.nodeId <$> nodes
+    topoOrderedNodes           = reverse $ G.quasiTopoSort cfg
+    nodeIdToInst               = Map.fromList $ zip nodeIds insts
+    (_, finalNodeReplacements) = foldl'
+      (\(constMap, nodeReplacements) node -> if length (G.pred node) > 1
+        then (Map.empty, nodeReplacements)
+        else
+          let nodeId = G.nodeId node
+              inst   = nodeIdToInst Map.! nodeId
+          in  case inst of
+                A.STORECONST { A.strDst = strDst, A.strVal = strVal } ->
+                  (Map.insert strDst strVal constMap, nodeReplacements)
+                A.MOVE { A.moveDst = moveDst, A.moveSrc = moveSrc } ->
+                  case Map.lookup moveSrc constMap of
+                    Just c ->
+                      ( Map.insert moveDst c constMap
+                      , Map.insert nodeId
+                                   (mkStoreConst moveDst c)
+                                   nodeReplacements
+                      )
+                    Nothing -> (Map.delete moveDst constMap, nodeReplacements)
+                A.OPER { A.operDst = operDsts } ->
+                  let
+                    constMap' =
+                      foldl' (\acc reg -> Map.delete reg acc) constMap operDsts
+                  in  (constMap', nodeReplacements)
+                _ -> (constMap, nodeReplacements)
+      )
+      (Map.empty, Map.empty)
+      topoOrderedNodes
+    insts' =
+      (   (\(inst, nodeId) ->
+            Data.Maybe.fromMaybe inst (Map.lookup nodeId finalNodeReplacements)
           )
-  in  insts'
+      <$> zip insts nodeIds
+      )
+  in
+    insts'
  where
   mkStoreConst moveDst c = A.STORECONST
     { A.assem  = T.pack $ "\tmov `d0, " ++ show c
