@@ -34,24 +34,24 @@ removeUnneededFrags frags =
 
 removeUnnededProcFrags :: [X64Frame.Frag] -> [X64Frame.Frag]
 removeUnnededProcFrags frags =
-  let shouldKeep = shouldKeepFrag <$> zip frags (split frags)
-      fragsToKeep       = fmap fst $ filter snd $ zip frags shouldKeep
+  let shouldKeep  = shouldKeepFrag <$> zip frags (split frags)
+      fragsToKeep = fmap fst $ filter snd $ zip frags shouldKeep
   in  fragsToKeep
  where
   shouldKeepFrag :: (X64Frame.Frag, [X64Frame.Frag]) -> Bool
   shouldKeepFrag (X64Frame.STRING _, _) = True
   shouldKeepFrag (X64Frame.PROC { X64Frame.fragFrame = X64Frame.X64Frame { X64Frame.name = lab } }, otherFrags)
     = (T.unpack (Temp.name lab) == "_main")
-                || any (fragUsesLabel lab) otherFrags
+      || any (fragUsesLabel lab) otherFrags
 
 split :: [a] -> [[a]]
-split  = go []
+split = go []
  where
   go _  []       = [[]]
   go ys (x : xs) = (ys ++ xs) : go (x : ys) xs
 
 fragUsesLabel :: Temp.Label -> X64Frame.Frag -> Bool
-fragUsesLabel _   (X64Frame.STRING _                     ) = False
+fragUsesLabel _   (X64Frame.STRING _)                    = False
 fragUsesLabel lab X64Frame.PROC { X64Frame.body = body } = stmUsesLab body
  where
   stmUsesLab :: TreeIR.Stm -> Bool
@@ -191,7 +191,7 @@ dumpCFG text performRegAlloc optimize = case Parser.parse text of
           -> (String, Temp.Generator)
         processFrag (s, g) f = let (s', g') = emit f g in (s ++ s', g')
       in
-        fst (foldl' processFrag ([], gen) frags)
+        fst $ foldl' processFrag ([], gen) frags
 
 showFlatIR :: String -> Bool -> String
 showFlatIR text optimize = case Parser.parse text of
@@ -248,10 +248,10 @@ compileToAsm text performRegAlloc optimize = case Parser.parse text of
                 then fmap IROptim.optimizeBasicBlock blocks
                 else blocks
               (stmts', gen4) = runState (Canon.traceSchedule blocks' lab) gen3
-              (insts , gen5)            = foldl' step1 ([], gen4) stmts'
-              insts'                    = X64Frame.procEntryExit2 frame insts
-              maxCallArgs               = TreeIR.maxCallArgsAndEscapesStm bodyStm
-              tempMap                   = X64Frame.tempMap x64
+              (insts, gen5) = foldl' step1 ([], gen4) stmts'
+              insts' = X64Frame.procEntryExit2 frame insts
+              maxCallArgs = TreeIR.maxCallArgsAndEscapesStm bodyStm
+              tempMap = X64Frame.tempMap x64
               (insts'', (flowGraph, _)) = if optimize
                 then AssemOptim.optimizePreRegAlloc insts'
                 else (insts', Flow.instrsToGraph insts')

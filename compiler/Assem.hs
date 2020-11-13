@@ -25,9 +25,9 @@ data Inst = OPER { assem :: T.Text
           | MOVE { assem :: T.Text
                  , moveDst :: Int
                  , moveSrc :: Int }
-        | STORECONST { assem :: T.Text
-                     , strDst :: Int
-                     , strVal :: Int }
+          | STORECONST { assem :: T.Text
+                       , strDst :: Int
+                       , strVal :: Int }
   deriving (Eq, Show)
 
 defaultOper :: Inst
