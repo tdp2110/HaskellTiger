@@ -8,6 +8,7 @@ import qualified Flow
 import qualified Graph
 import qualified IROptim
 import qualified Lexer
+import qualified LLVMCodegen
 import qualified Parser
 import qualified RegAlloc
 import qualified Semant

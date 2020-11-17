@@ -6,3 +6,6 @@ I've benefitted from the following ML implementations:
 and the following Haskell implementations:
     https://github.com/svenpanne/tiger/
     https://github.com/unnohideyuki/Tiger-in-Haskell/
+
+The LLVM codegen module is built closely following Stephen Diehl's
+Kaleidoscope tutorial for llvm-hs.
