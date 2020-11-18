@@ -1,17 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module LLVMCodegen
-  ( codegen
-  , SemantError
-  )
-where
-
-import qualified Absyn
+module LLVMCodegen where
 
 import           Data.Word
 import           Data.String
-import           Data.ByteString.Char8 hiding (reverse, count)
+import           Data.ByteString.Char8   hiding ( reverse
+                                                , count
+                                                )
 import           Data.ByteString.Short
 import           Data.List
 import           Data.Function
@@ -21,7 +17,7 @@ import           Control.Monad.State
 import           Control.Applicative
 
 import           LLVM.AST
-import           LLVM.AST.Type
+import qualified LLVM.AST.Type                 as T
 import           LLVM.AST.Global
 import qualified LLVM.AST                      as AST
 
@@ -45,14 +41,14 @@ uniqueName nm ns = case Map.lookup nm ns of
   Nothing -> (nm, Map.insert nm 1 ns)
   Just ix -> (nm ++ show ix, Map.insert nm (ix + 1) ns)
 
-local ::  Name -> Operand
-local = LocalReference i64
+local :: Name -> Operand
+local = LocalReference T.i64
 
-global ::  Name -> C.Constant
-global = C.GlobalReference i64
+global :: Name -> C.Constant
+global = C.GlobalReference T.i64
 
 extern :: Name -> Operand
-extern = ConstantOperand . C.GlobalReference i64
+extern = ConstantOperand . C.GlobalReference T.i64
 
 newtype LLVM a = LLVM (State AST.Module a)
   deriving (Functor, Applicative, Monad, MonadState AST.Module )
@@ -94,12 +90,12 @@ addBlock bname = do
   ix  <- gets blockCount
   nms <- gets names
 
-  let new = emptyBlock ix
+  let new             = emptyBlock ix
       (qname, supply) = uniqueName bname nms
 
-  modify $ \s -> s { blocks = Map.insert (mkName qname) new bls
+  modify $ \s -> s { blocks     = Map.insert (mkName qname) new bls
                    , blockCount = ix + 1
-                   , names = supply
+                   , names      = supply
                    }
   return (mkName qname)
 
@@ -118,10 +114,10 @@ modifyBlock new = do
 
 current :: Codegen BlockState
 current = do
-  c <- gets currentBlock
+  c    <- gets currentBlock
   blks <- gets blocks
   case Map.lookup c blks of
-    Just x -> return x
+    Just x  -> return x
     Nothing -> error $ "No such block: " ++ show c
 
 type SymbolTable = [(String, Operand)]
@@ -155,11 +151,6 @@ data BlockState
   , term  :: Maybe (Named Terminator)       -- Block terminator
   } deriving Show
 
-data SemantError = SemantError{what :: String, at :: Absyn.Pos} deriving (Eq)
-instance Show SemantError where
-  show (SemantError err pos) =
-    "semantic issue at " ++ show pos ++ ": " ++ show err
-
 newtype Codegen a = Codegen { runCodegen :: State CodegenState a }
   deriving (Functor, Applicative, Monad, MonadState CodegenState )
 
@@ -171,9 +162,9 @@ createBlocks m = fmap makeBlock $ sortBlocks $ Map.toList (blocks m)
 
 makeBlock :: (Name, BlockState) -> BasicBlock
 makeBlock (l, (BlockState _ s t)) = BasicBlock l (reverse s) (maketerm t)
-  where
-    maketerm (Just x) = x
-    maketerm Nothing = error $ "Block has no terminator: " ++ (show l)
+ where
+  maketerm (Just x) = x
+  maketerm Nothing  = error $ "Block has no terminator: " ++ (show l)
 
 entryBlockName :: String
 entryBlockName = "entry"
@@ -199,7 +190,7 @@ instr ins = do
   let ref = (UnName n)
   blk <- current
   let i = stack blk
-  modifyBlock (blk { stack = (ref := ins) : i } )
+  modifyBlock (blk { stack = (ref := ins) : i })
   return $ local ref
 
 terminator :: Named Terminator -> Codegen (Named Terminator)
@@ -208,5 +199,54 @@ terminator trm = do
   modifyBlock (blk { term = Just trm })
   return trm
 
-codegen :: Absyn.Exp -> Either SemantError String
-codegen = undefined
+add :: Operand -> Operand -> Codegen Operand
+add a b = instr $ Add { nsw          = False
+                      , nuw          = False
+                      , operand0     = a
+                      , operand1     = b
+                      , AST.metadata = []
+                      }
+
+sub :: Operand -> Operand -> Codegen Operand
+sub a b = instr $ Sub { nsw          = False
+                      , nuw          = False
+                      , operand0     = a
+                      , operand1     = b
+                      , AST.metadata = []
+                      }
+
+mul :: Operand -> Operand -> Codegen Operand
+mul a b = instr $ Mul { nsw          = False
+                      , nuw          = False
+                      , operand0     = a
+                      , operand1     = b
+                      , AST.metadata = []
+                      }
+
+div :: Operand -> Operand -> Codegen Operand
+div a b =
+  instr $ SDiv { exact = True, operand0 = a, operand1 = b, AST.metadata = [] }
+
+br :: Name -> Codegen (Named Terminator)
+br val = terminator $ Do $ Br val []
+
+cbr :: Operand -> Name -> Name -> Codegen (Named Terminator)
+cbr cond tr fl = terminator $ Do $ CondBr cond tr fl []
+
+ret :: Operand -> Codegen (Named Terminator)
+ret val = terminator $ Do $ Ret (Just val) []
+
+call :: Operand -> [Operand] -> Codegen Operand
+call fn args = instr $ Call Nothing CC.C [] (Right fn) (toArgs args) [] []
+
+alloca :: Type -> Codegen Operand
+alloca ty = instr $ Alloca ty Nothing 0 []
+
+store :: Operand -> Operand -> Codegen Operand
+store ptr val = instr $ Store False ptr val Nothing 0 []
+
+load :: Operand -> Codegen Operand
+load ptr = instr $ Load False ptr Nothing 0 []
+
+toArgs :: [Operand] -> [(Operand, [A.ParameterAttribute])]
+toArgs = fmap $ \x -> (x, [])
