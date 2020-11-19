@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module LLVMCodegen where
+module LLVMTranslate where
 
 import           Data.Word
 import           Data.String
@@ -250,3 +250,6 @@ load ptr = instr $ Load False ptr Nothing 0 []
 
 toArgs :: [Operand] -> [(Operand, [A.ParameterAttribute])]
 toArgs = fmap $ \x -> (x, [])
+
+cons :: C.Constant -> Operand
+cons = ConstantOperand
