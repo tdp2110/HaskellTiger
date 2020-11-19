@@ -10,10 +10,10 @@ import           LLVM.Module
 import           LLVM.Context
 
 import qualified LLVM.AST                      as AST
+import qualified LLVM.AST.Type                 as T
 import qualified LLVM.AST.Constant             as C
 import qualified LLVM.AST.Float                as F
-import qualified LLVM.AST.FloatingPointPredicate
-                                               as FP
+import qualified LLVM.AST.IntegerPredicate     as IP
 
 import           Data.Word
 import           Data.Int
@@ -21,10 +21,11 @@ import           Control.Monad.Except
 import           Control.Applicative
 import qualified Data.Map                      as Map
 
+toConstI64 :: Int -> C.Constant
+toConstI64 i = C.Int { C.integerBits = 64, C.integerValue = toInteger i }
 
 cgen :: A.Exp -> T.Codegen AST.Operand
-cgen (A.IntExp i) =
-  pure $ T.cons $ C.Int { C.integerBits = 64, C.integerValue = toInteger i }
+cgen (A.IntExp i             ) = pure $ T.cons $ toConstI64 i
 cgen (A.OpExp left op right _) = do
   leftOperand  <- cgen left
   rightOperand <- cgen right
@@ -35,7 +36,35 @@ cgen (A.OpExp left op right _) = do
         A.DivideOp -> T.div
         _          -> error $ "unsupported operand " <> show op
   f leftOperand rightOperand
+cgen (A.IfExp test then' (Just else') _) = do
+  ifThen <- addBlock "if.then"
+  ifElse <- addBlock "if.else"
+  ifExit <- addBlock "if.exit"
 
+  -- %entry
+  ----------
+  cond   <- cgen test
+  test   <- T.icmp IP.NE cond $ T.cons $ toConstI64 0
+  cbr test ifThen ifElse
+
+  -- if.then
+  ------------------
+  setBlock ifThen
+  trval <- cgen then'
+  br ifExit
+  ifThen <- getBlock
+
+  -- if.else
+  ------------------
+  setBlock ifElse
+  flval <- cgen else'
+  br ifExit
+  ifElse <- getBlock
+
+  -- if.exit
+  ------------------
+  setBlock ifExit
+  T.phi T.i64 [(trval, ifThen), (flval, ifElse)]
 
 cgenDecl :: A.Dec -> T.LLVM ()
 cgenDecl (A.FunctionDec [funDec]) = cgenFunDec funDec

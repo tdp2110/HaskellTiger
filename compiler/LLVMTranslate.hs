@@ -25,8 +25,7 @@ import qualified LLVM.AST.Linkage              as L
 import qualified LLVM.AST.Constant             as C
 import qualified LLVM.AST.Attribute            as A
 import qualified LLVM.AST.CallingConvention    as CC
-import qualified LLVM.AST.FloatingPointPredicate
-                                               as FP
+import qualified LLVM.AST.IntegerPredicate     as IP
 
 charToWord8 :: Char -> Word8
 charToWord8 = toEnum . fromEnum
@@ -233,6 +232,9 @@ br val = terminator $ Do $ Br val []
 cbr :: Operand -> Name -> Name -> Codegen (Named Terminator)
 cbr cond tr fl = terminator $ Do $ CondBr cond tr fl []
 
+phi :: Type -> [(Operand, Name)] -> Codegen Operand
+phi ty incoming = instr $ Phi ty incoming []
+
 ret :: Operand -> Codegen (Named Terminator)
 ret val = terminator $ Do $ Ret (Just val) []
 
@@ -247,6 +249,9 @@ store ptr val = instr $ Store False ptr val Nothing 0 []
 
 load :: Operand -> Codegen Operand
 load ptr = instr $ Load False ptr Nothing 0 []
+
+icmp :: IP.IntegerPredicate -> Operand -> Operand -> Codegen Operand
+icmp cond a b = instr $ ICmp cond a b []
 
 toArgs :: [Operand] -> [(Operand, [A.ParameterAttribute])]
 toArgs = fmap $ \x -> (x, [])
