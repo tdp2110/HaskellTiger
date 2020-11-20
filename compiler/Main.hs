@@ -9,6 +9,7 @@ import qualified Graph
 import qualified IROptim
 import qualified Lexer
 import qualified LLVMSemant
+import qualified LLVMTranslate
 import qualified Parser
 import qualified RegAlloc
 import qualified Semant
@@ -17,7 +18,10 @@ import qualified Translate
 import qualified TreeIR
 import qualified X64Frame
 import qualified Data.Text                     as T
+import qualified Data.Text.Lazy                as LT
 import qualified Data.DList                    as DList
+
+import           LLVM.Pretty
 
 import           Control.Monad.Trans.State      ( runState )
 import           Data.Char                      ( digitToInt )
@@ -315,6 +319,7 @@ data Clopts = Clopts {
   , optShowFlatIR :: Bool
   , optDumpCFG :: Bool
   , optO0 :: Bool
+  , optEmitLLVM :: Bool
   } deriving Show
 
 defaultClopts :: Clopts
@@ -326,6 +331,7 @@ defaultClopts = Clopts { optShowTokens = False
                        , optShowFlatIR = False
                        , optDumpCFG    = False
                        , optO0         = False
+                       , optEmitLLVM   = False
                        }
 
 options :: [OptDescr (Clopts -> Clopts)]
@@ -357,6 +363,10 @@ options =
   , Option []
            ["O0"]
            (NoArg (\opts -> opts { optO0 = True }))
+           "optimization level 0 (no optimization)"
+  , Option []
+           ["emit-llvm"]
+           (NoArg (\opts -> opts { optEmitLLVM = True }))
            "optimization level 0 (no optimization)"
   , Option ['h']
            ["help"]
@@ -413,8 +423,18 @@ main = do
                 putStrLn $ dumpCFG str
                                    (not $ optNoRegAlloc clopts)
                                    (not $ optO0 clopts)
-              else do
-                str <- readFile $ head args'
-                putStrLn $ compileToAsm str
-                                        (not $ optNoRegAlloc clopts)
-                                        (not $ optO0 clopts)
+              else if optEmitLLVM clopts
+                then do
+                  str <- readFile $ head args'
+                  case Parser.parse str of
+                    Left  err  -> error err
+                    Right expr -> do
+                      let m    = LLVMTranslate.emptyModule "llvm-test"
+                      let llvm = LLVMSemant.codegenTop expr
+                      let m'   = LLVMTranslate.runLLVM m llvm
+                      putStrLn $ LT.unpack $ ppllvm m'
+                else do
+                  str <- readFile $ head args'
+                  putStrLn $ compileToAsm str
+                                          (not $ optNoRegAlloc clopts)
+                                          (not $ optO0 clopts)

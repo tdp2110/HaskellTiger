@@ -75,6 +75,7 @@ cgen (A.IfExp test then' (Just else') _) = do
   ------------------
   setBlock ifExit
   T.phi T.i64 [(trval, ifThen), (flval, ifElse)]
+cgen e = error $ "unimplemented cgen alternative: " <> show e
 
 cgenDecl :: A.Dec -> T.LLVM ()
 cgenDecl (A.FunctionDec [funDec]) = cgenFunDec funDec
