@@ -4,17 +4,12 @@
 module LLVMTranslate where
 
 import           Data.Word
-import           Data.String
-import           Data.ByteString.Char8   hiding ( reverse
-                                                , count
-                                                )
 import           Data.ByteString.Short
 import           Data.List
 import           Data.Function
 import qualified Data.Map                      as Map
 
 import           Control.Monad.State
-import           Control.Applicative
 
 import           LLVM.AST
 import qualified LLVM.AST.Type                 as T
@@ -53,7 +48,7 @@ newtype LLVM a = LLVM (State AST.Module a)
   deriving (Functor, Applicative, Monad, MonadState AST.Module )
 
 runLLVM :: AST.Module -> LLVM a -> AST.Module
-runLLVM mod (LLVM m) = execState m mod
+runLLVM mod'' (LLVM m) = execState m mod''
 
 emptyModule :: String -> AST.Module
 emptyModule label = defaultModule { moduleName = toShortBS label }
@@ -189,7 +184,7 @@ instr ins = do
   let ref = (UnName n)
   blk <- current
   let i = stack blk
-  modifyBlock (blk { stack = (ref := ins) : i })
+  modifyBlock $ blk { stack = (ref := ins) : i }
   return $ local ref
 
 terminator :: Named Terminator -> Codegen (Named Terminator)
@@ -239,16 +234,16 @@ ret :: Operand -> Codegen (Named Terminator)
 ret val = terminator $ Do $ Ret (Just val) []
 
 call :: Operand -> [Operand] -> Codegen Operand
-call fn args = instr $ Call Nothing CC.C [] (Right fn) (toArgs args) [] []
+call fn params = instr $ Call Nothing CC.C [] (Right fn) (toArgs params) [] []
 
 alloca :: Type -> Codegen Operand
-alloca ty = instr $ Alloca ty Nothing 0 []
+alloca ty = instr $ Alloca ty Nothing 4 []
 
 store :: Operand -> Operand -> Codegen Operand
-store ptr val = instr $ Store False ptr val Nothing 0 []
+store ptr val = instr $ Store False ptr val Nothing 4 []
 
 load :: Operand -> Codegen Operand
-load ptr = instr $ Load False ptr Nothing 0 []
+load ptr = instr $ Load False ptr Nothing 4 []
 
 icmp :: IP.IntegerPredicate -> Operand -> Operand -> Codegen Operand
 icmp cond a b = instr $ ICmp cond a b []
