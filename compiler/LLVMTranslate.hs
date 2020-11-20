@@ -176,16 +176,23 @@ fresh :: Codegen Word
 fresh = do
   i <- gets count
   modify $ \s -> s { count = 1 + i }
-  return $ i + 1
+  return i
 
-instr :: Instruction -> Codegen (Operand)
-instr ins = do
-  n <- fresh
-  let ref = (UnName n)
+instr :: Type -> Instruction -> Codegen (Operand)
+instr retty ins = do
+  n   <- fresh
+  blk <- current
+  let ref = UnName n
+  let i   = stack blk
+  modifyBlock $ blk { stack = (ref := ins) : i }
+  return $ LocalReference retty ref
+
+instrVoid :: Instruction -> Codegen ()
+instrVoid ins = do
   blk <- current
   let i = stack blk
-  modifyBlock $ blk { stack = (ref := ins) : i }
-  return $ local ref
+  modifyBlock $ blk { stack = (Do ins) : i }
+  return ()
 
 terminator :: Named Terminator -> Codegen (Named Terminator)
 terminator trm = do
@@ -194,32 +201,32 @@ terminator trm = do
   return trm
 
 add :: Operand -> Operand -> Codegen Operand
-add a b = instr $ Add { nsw          = False
-                      , nuw          = False
-                      , operand0     = a
-                      , operand1     = b
-                      , AST.metadata = []
-                      }
+add a b = instr T.i64 $ Add { nsw          = False
+                            , nuw          = False
+                            , operand0     = a
+                            , operand1     = b
+                            , AST.metadata = []
+                            }
 
 sub :: Operand -> Operand -> Codegen Operand
-sub a b = instr $ Sub { nsw          = False
-                      , nuw          = False
-                      , operand0     = a
-                      , operand1     = b
-                      , AST.metadata = []
-                      }
+sub a b = instr T.i64 $ Sub { nsw          = False
+                            , nuw          = False
+                            , operand0     = a
+                            , operand1     = b
+                            , AST.metadata = []
+                            }
 
 mul :: Operand -> Operand -> Codegen Operand
-mul a b = instr $ Mul { nsw          = False
-                      , nuw          = False
-                      , operand0     = a
-                      , operand1     = b
-                      , AST.metadata = []
-                      }
+mul a b = instr T.i64 $ Mul { nsw          = False
+                            , nuw          = False
+                            , operand0     = a
+                            , operand1     = b
+                            , AST.metadata = []
+                            }
 
 div :: Operand -> Operand -> Codegen Operand
-div a b =
-  instr $ SDiv { exact = True, operand0 = a, operand1 = b, AST.metadata = [] }
+div a b = instr T.i64
+  $ SDiv { exact = True, operand0 = a, operand1 = b, AST.metadata = [] }
 
 br :: Name -> Codegen (Named Terminator)
 br val = terminator $ Do $ Br val []
@@ -228,25 +235,26 @@ cbr :: Operand -> Name -> Name -> Codegen (Named Terminator)
 cbr cond tr fl = terminator $ Do $ CondBr cond tr fl []
 
 phi :: Type -> [(Operand, Name)] -> Codegen Operand
-phi ty incoming = instr $ Phi ty incoming []
+phi ty incoming = instr ty $ Phi ty incoming []
 
 ret :: Operand -> Codegen (Named Terminator)
 ret val = terminator $ Do $ Ret (Just val) []
 
 call :: Operand -> [Operand] -> Codegen Operand
-call fn params = instr $ Call Nothing CC.C [] (Right fn) (toArgs params) [] []
+call fn params =
+  instr T.i64 $ Call Nothing CC.C [] (Right fn) (toArgs params) [] []
 
 alloca :: Type -> Codegen Operand
-alloca ty = instr $ Alloca ty Nothing 4 []
+alloca ty = instr (T.ptr ty) $ Alloca ty Nothing 4 []
 
-store :: Operand -> Operand -> Codegen Operand
-store ptr val = instr $ Store False ptr val Nothing 4 []
+store :: Operand -> Operand -> Codegen ()
+store ptr val = instrVoid $ Store False ptr val Nothing 4 []
 
 load :: Operand -> Codegen Operand
-load ptr = instr $ Load False ptr Nothing 4 []
+load ptr = instr T.i64 $ Load False ptr Nothing 4 []
 
 icmp :: IP.IntegerPredicate -> Operand -> Operand -> Codegen Operand
-icmp cond a b = instr $ ICmp cond a b []
+icmp cond a b = instr T.i64 $ ICmp cond a b []
 
 toArgs :: [Operand] -> [(Operand, [A.ParameterAttribute])]
 toArgs = fmap $ \x -> (x, [])

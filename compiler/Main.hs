@@ -433,6 +433,7 @@ main = do
                       let llvm = LLVMSemant.codegenTop expr
                       let m'   = LLVMTranslate.runLLVM m llvm
                       putStrLn $ LT.unpack $ ppllvm m'
+                      --pPrint m'
                 else do
                   str <- readFile $ head args'
                   putStrLn $ compileToAsm str
