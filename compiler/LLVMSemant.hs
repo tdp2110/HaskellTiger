@@ -24,6 +24,16 @@ import qualified Data.Map                      as Map
 toConstI64 :: Int -> C.Constant
 toConstI64 i = C.Int { C.integerBits = 64, C.integerValue = toInteger i }
 
+codegenTop :: A.Exp -> T.LLVM ()
+codegenTop (A.LetExp decs body _) = do
+  forM decs cgenDecl
+  define T.i64 "main" [] blks
+ where
+  blks = createBlocks $ execCodegen $ do
+    entry <- addBlock entryBlockName
+    setBlock entry
+    cgen body >>= ret
+
 cgen :: A.Exp -> T.Codegen AST.Operand
 cgen (A.IntExp i             ) = pure $ T.cons $ toConstI64 i
 cgen (A.OpExp left op right _) = do
@@ -71,5 +81,19 @@ cgenDecl (A.FunctionDec [funDec]) = cgenFunDec funDec
 cgenDecl _                        = undefined
 
 cgenFunDec :: A.FunDec -> T.LLVM ()
-cgenFunDec A.FunDec { A.fundecName = _, A.params = _, A.result = _, A.funBody = _, A.funPos = _ }
-  = undefined
+cgenFunDec A.FunDec { A.fundecName = name, A.params = params, A.funBody = body }
+  = define T.i64 (show name) fnargs blks
+ where
+  fnargs = toSig params
+  blks   = createBlocks $ execCodegen $ do
+    entry <- addBlock entryBlockName
+    setBlock entry
+    forM params $ \p -> do
+      let pname = show $ A.fieldName p
+      var <- alloca T.i64
+      store var $ local $ AST.Name $ toShortBS $ pname
+      assign pname var
+    cgen body >>= ret
+
+toSig :: [A.Field] -> [(AST.Type, AST.Name)]
+toSig = fmap (\f -> (T.i64, AST.Name $ toShortBS $ show $ A.fieldName f))
