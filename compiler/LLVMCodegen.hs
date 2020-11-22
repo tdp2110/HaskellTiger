@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RecursiveDo #-}
 
 module LLVMCodegen where
 
@@ -59,6 +60,29 @@ codegenExp (A.OpExp left oper right _) = do
         A.DivideOp -> L.sdiv
         _          -> error $ "unsupported operand " <> show oper
   f leftOperand rightOperand
+codegenExp (A.IfExp test then' (Just else') _) = mdo
+  -- %entry
+  ---------
+  testOp <- codegenExp test
+  test' <- L.icmp AST.NE testOp (L.int64 0)
+  L.condBr test' ifThen ifElse
+
+  -- %if.then
+  -----------
+  ifThen <- L.block `L.named` "if.then"
+  ifThenOp <- codegenExp then'
+  L.br ifExit
+
+  -- %if.else
+  -----------
+  ifElse <- L.block `L.named` "if.else"
+  ifElseOp <- codegenExp else'
+  L.br ifExit
+
+  -- %if.exit
+  -----------
+  ifExit <- L.block `L.named` "if.exit"
+  L.phi [(ifThenOp, ifThen), (ifElseOp, ifElse)]
 codegenExp e = error $ "unimplemented alternative in codegenExp: " <> show e
 
 emptyModule :: String -> AST.Module
