@@ -8,8 +8,7 @@ import qualified Flow
 import qualified Graph
 import qualified IROptim
 import qualified Lexer
-import qualified LLVMSemant
-import qualified LLVMTranslate
+import qualified LLVMCodegen
 import qualified Parser
 import qualified RegAlloc
 import qualified Semant
@@ -429,11 +428,8 @@ main = do
                   case Parser.parse str of
                     Left  err  -> error err
                     Right expr -> do
-                      let m    = LLVMTranslate.emptyModule "llvm-test"
-                      let llvm = LLVMSemant.codegenTop expr
-                      let m'   = LLVMTranslate.runLLVM m llvm
-                      putStrLn $ LT.unpack $ ppllvm m'
-                      --pPrint m'
+                      let m = LLVMCodegen.codegenLLVM expr
+                      putStrLn $ LT.unpack $ ppllvm m
                 else do
                   str <- readFile $ head args'
                   putStrLn $ compileToAsm str

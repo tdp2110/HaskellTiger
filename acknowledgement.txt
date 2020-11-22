@@ -7,5 +7,5 @@ and the following Haskell implementations:
     https://github.com/svenpanne/tiger/
     https://github.com/unnohideyuki/Tiger-in-Haskell/
 
-The LLVM codegen module is built closely following Stephen Diehl's
-Kaleidoscope tutorial for llvm-hs.
+The LLVM codegen module is built with help from Joseph Morag's MicroC Haskell implementation:
+https://github.com/jmorag/mcc
