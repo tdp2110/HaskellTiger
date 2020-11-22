@@ -9,7 +9,6 @@ import qualified Symbol                        as S
 
 import qualified LLVM.AST                      as AST
 import qualified LLVM.AST.Type                 as AST
-import qualified LLVM.AST.Constant             as AST
 import qualified LLVM.AST.IntegerPredicate     as AST
 
 import qualified LLVM.IRBuilder.Module         as L
@@ -21,10 +20,7 @@ import           Data.Word
 import           Data.ByteString.Short
 import qualified Data.Map                      as M
 import           Control.Monad.State
-import           Data.String                    ( fromString )
-import qualified Data.Text                     as T
 import           Data.Text                      ( Text )
-import           Control.Monad
 
 
 charToWord8 :: Char -> Word8
@@ -33,7 +29,7 @@ charToWord8 = toEnum . fromEnum
 toShortBS :: String -> ShortByteString
 toShortBS s = Data.ByteString.Short.pack $ fmap charToWord8 s
 
-data Env = Env { operands :: M.Map Text AST.Operand }
+newtype Env = Env { operands :: M.Map Text AST.Operand }
         deriving (Eq, Show)
 
 registerOperand :: MonadState Env m => Text -> AST.Operand -> m ()
@@ -44,14 +40,15 @@ type LLVM = L.ModuleBuilderT (State Env)
 type Codegen = L.IRBuilderT LLVM
 
 codegenExp :: A.Exp -> Codegen AST.Operand
-codegenExp (A.IntExp i) = pure $ L.int64 $ toInteger i
+codegenExp (A.IntExp i                    ) = pure $ L.int64 $ toInteger i
 codegenExp (A.VarExp (A.SimpleVar sym pos)) = do
   operandEnv <- gets operands
   case M.lookup (S.name sym) operandEnv of
     Just op -> L.load op 8
-    Nothing -> error $ "use of undefined variable "  <> show sym <> " at " <> show pos
+    Nothing ->
+      error $ "use of undefined variable " <> show sym <> " at " <> show pos
 codegenExp (A.OpExp left oper right _) = do
-  leftOperand <- codegenExp left
+  leftOperand  <- codegenExp left
   rightOperand <- codegenExp right
   let f = case oper of
         A.PlusOp   -> L.add
@@ -64,18 +61,18 @@ codegenExp (A.IfExp test then' (Just else') _) = mdo
   -- %entry
   ---------
   testOp <- codegenExp test
-  test' <- L.icmp AST.NE testOp (L.int64 0)
+  test'  <- L.icmp AST.NE testOp (L.int64 0)
   L.condBr test' ifThen ifElse
 
   -- %if.then
   -----------
-  ifThen <- L.block `L.named` "if.then"
+  ifThen   <- L.block `L.named` "if.then"
   ifThenOp <- codegenExp then'
   L.br ifExit
 
   -- %if.else
   -----------
-  ifElse <- L.block `L.named` "if.else"
+  ifElse   <- L.block `L.named` "if.else"
   ifElseOp <- codegenExp else'
   L.br ifExit
 
@@ -89,9 +86,7 @@ emptyModule :: String -> AST.Module
 emptyModule label = AST.defaultModule { AST.moduleName = toShortBS label }
 
 codegenTop :: A.Exp -> LLVM ()
-codegenTop (A.LetExp decs _ _) = do
-  _ <- forM decs codegenDecl
-  pure ()
+codegenTop (A.LetExp decs _ _) = forM_ decs codegenDecl
 
 codegenTop e = error $ "implemented alternative in codegenTop: " <> show e
 
@@ -122,9 +117,6 @@ codegenFunDec A.FunDec { A.fundecName = name, A.params = params, A.funBody = bod
 
 codegenLLVM :: A.Exp -> AST.Module
 codegenLLVM e =
-  let
-      res =
-          flip evalState (Env { operands = M.empty })
-            $ L.buildModuleT "llvm-test"
-            $ codegenTop e
-  in  res
+  flip evalState (Env { operands = M.empty })
+    $ L.buildModuleT "llvm-test"
+    $ codegenTop e
