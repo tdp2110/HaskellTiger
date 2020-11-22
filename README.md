@@ -15,7 +15,7 @@ Linux System V x86_86 wouldn't be much of a change, nor would 64 bit Windows.
 2. ~~Hook everything up~~
 3. ~~Test for real, and fix the bugs! ☜(⌒▽⌒)☞~~ (started Feb, 2020, good enough progress at end of March 2020 -- eight queens and merge examples both work!)
 4. ~~Optimizer! Jul 2020: going to do a few more, then call it quits~~
-5. LLVM backend! Starting in Fall 2020 (hopefully!)
+5. LLVM backend! Started Fall 2020.
 6. Implement real GC.
 7. Abstract frame to different OS: AMD64 Linux, 64-bit Windows (why not), ARM something ʘ‿ʘ
 

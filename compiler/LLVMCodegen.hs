@@ -39,7 +39,11 @@ registerOperand name op =
 type LLVM = L.ModuleBuilderT (State Env)
 type Codegen = L.IRBuilderT LLVM
 
+zero :: AST.Operand
+zero = L.int64 $ (0 :: Integer)
+
 codegenExp :: A.Exp -> Codegen AST.Operand
+codegenExp A.NilExp                         = pure zero
 codegenExp (A.IntExp i                    ) = pure $ L.int64 $ toInteger i
 codegenExp (A.VarExp (A.SimpleVar sym pos)) = do
   operandEnv <- gets operands
@@ -80,13 +84,26 @@ codegenExp (A.IfExp test then' (Just else') _) = mdo
   -----------
   ifExit <- L.block `L.named` "if.exit"
   L.phi [(ifThenOp, ifThen), (ifElseOp, ifElse)]
+codegenExp (A.SeqExp expAndPosns) = do
+  exps <- forM expAndPosns (\(e, _) -> codegenExp e)
+  case exps of
+    [] -> codegenExp A.NilExp
+    _  -> pure $ last exps
 codegenExp e = error $ "unimplemented alternative in codegenExp: " <> show e
 
 emptyModule :: String -> AST.Module
 emptyModule label = AST.defaultModule { AST.moduleName = toShortBS label }
 
 codegenTop :: A.Exp -> LLVM ()
-codegenTop (A.LetExp decs _ _) = forM_ decs codegenDecl
+codegenTop (A.LetExp decs body _) = do
+  forM_ decs codegenDecl
+  codegenFunDec $ A.FunDec
+    { A.fundecName = S.Symbol "main"
+    , A.params     = []
+    , A.result     = Nothing
+    , A.funBody    = body
+    , A.funPos     = A.Pos { A.absChrOffset = -1, A.lineno = -1, A.colno = -1 }
+    }
 
 codegenTop e = error $ "implemented alternative in codegenTop: " <> show e
 
