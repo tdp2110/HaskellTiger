@@ -65,7 +65,7 @@ codegenExp (A.OpExp left oper right _) = do
         A.LeOp     -> L.icmp AST.SLE
         A.GtOp     -> L.icmp AST.SGT
         A.GeOp     -> L.icmp AST.SGE
-        _          -> error $ "unsupported operand " <> show oper
+        A.ModOp    -> L.srem
   f leftOperand rightOperand
 codegenExp (A.IfExp test then' (Just else') _) = mdo
   -- %entry
