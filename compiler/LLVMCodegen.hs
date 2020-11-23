@@ -103,24 +103,40 @@ codegenExp (A.CallExp funcSym args _) = do
   case M.lookup (S.name funcSym) operandEnv of
     Just funcOp -> L.call funcOp argOps
     Nothing     -> error $ "use of undeclared function " <> show funcSym
+codegenExp (A.LetExp decs body _) = do
+  lift $ forM_ decs codegenDecl
+  codegenExp body
 codegenExp e = error $ "unimplemented alternative in codegenExp: " <> show e
 
 emptyModule :: String -> AST.Module
 emptyModule label = AST.defaultModule { AST.moduleName = toShortBS label }
 
 codegenTop :: A.Exp -> LLVM ()
-codegenTop (A.LetExp decs body _) = do
-  forM_ decs codegenDecl
-  let pos = A.Pos { A.absChrOffset = -1, A.lineno = -1, A.colno = -1 }
-  codegenFunDec $ A.FunDec
-    { A.fundecName = S.Symbol "main"
-    , A.params     = []
-    , A.result     = Nothing
-    , A.funBody    = A.SeqExp [(body, pos), (A.IntExp 0, pos)]
-    , A.funPos     = pos
-    }
-
-codegenTop e = error $ "implemented alternative in codegenTop: " <> show e
+codegenTop e =
+  let nilPos       = A.Pos { A.absChrOffset = -1, A.lineno = -1, A.colno = -1 }
+      tigerMainSym = S.Symbol "__tiger_main"
+      tigerMain    = A.FunDec
+        { A.fundecName = tigerMainSym
+        , A.params     = []
+        , A.result     = Nothing
+        , A.funBody    = A.SeqExp [(e, nilPos), (A.IntExp 0, nilPos)]
+        , A.funPos     = nilPos
+        }
+      mainBody = A.SeqExp
+        [ ( A.CallExp { A.func = tigerMainSym, A.args = [], A.pos = nilPos }
+          , nilPos
+          )
+        , (A.IntExp 0, nilPos)
+        ]
+      mainFn = A.FunDec { A.fundecName = S.Symbol "main"
+                        , A.params     = []
+                        , A.result     = Nothing
+                        , A.funBody    = mainBody
+                        , A.funPos     = nilPos
+                        }
+  in  do
+        codegenFunDec tigerMain
+        codegenFunDec mainFn
 
 codegenDecl :: A.Dec -> LLVM ()
 codegenDecl (A.FunctionDec [funDec]) = codegenFunDec funDec
