@@ -59,6 +59,12 @@ codegenExp (A.OpExp left oper right _) = do
         A.MinusOp  -> L.sub
         A.TimesOp  -> L.mul
         A.DivideOp -> L.sdiv
+        A.EqOp     -> L.icmp AST.EQ
+        A.NeqOp    -> L.icmp AST.NE
+        A.LtOp     -> L.icmp AST.SLT
+        A.LeOp     -> L.icmp AST.SLE
+        A.GtOp     -> L.icmp AST.SGT
+        A.GeOp     -> L.icmp AST.SGE
         _          -> error $ "unsupported operand " <> show oper
   f leftOperand rightOperand
 codegenExp (A.IfExp test then' (Just else') _) = mdo
@@ -122,9 +128,10 @@ codegenDecl _                        = undefined
 
 codegenFunDec :: A.FunDec -> LLVM ()
 codegenFunDec A.FunDec { A.fundecName = name, A.params = params, A.funBody = body }
-  = do
-    fun <- L.function (AST.Name $ toShortBS $ show name) args AST.i64 genBody
+  = mdo
     registerOperand (S.name name) fun
+    fun <- L.function (AST.Name $ toShortBS $ show name) args AST.i64 genBody
+    pure ()
  where
   args = toSig params
 
