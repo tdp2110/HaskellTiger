@@ -43,7 +43,6 @@ zero :: AST.Operand
 zero = L.int64 $ (0 :: Integer)
 
 codegenExp :: A.Exp -> Codegen AST.Operand
-codegenExp A.NilExp                         = pure zero
 codegenExp (A.IntExp i                    ) = pure $ L.int64 $ toInteger i
 codegenExp (A.VarExp (A.SimpleVar sym pos)) = do
   operandEnv <- gets operands
@@ -87,8 +86,16 @@ codegenExp (A.IfExp test then' (Just else') _) = mdo
 codegenExp (A.SeqExp expAndPosns) = do
   exps <- forM expAndPosns (\(e, _) -> codegenExp e)
   case exps of
-    [] -> codegenExp A.NilExp
+    [] -> pure zero
     _  -> pure $ last exps
+codegenExp (A.CallExp funcSym args _) = do
+  argOps <- forM args $ \arg -> do
+    argOp <- codegenExp arg
+    pure (argOp, [])
+  operandEnv <- gets operands
+  case M.lookup (S.name funcSym) operandEnv of
+    Just funcOp -> L.call funcOp argOps
+    Nothing     -> error $ "use of undeclared function " <> show funcSym
 codegenExp e = error $ "unimplemented alternative in codegenExp: " <> show e
 
 emptyModule :: String -> AST.Module
@@ -97,12 +104,13 @@ emptyModule label = AST.defaultModule { AST.moduleName = toShortBS label }
 codegenTop :: A.Exp -> LLVM ()
 codegenTop (A.LetExp decs body _) = do
   forM_ decs codegenDecl
+  let pos = A.Pos { A.absChrOffset = -1, A.lineno = -1, A.colno = -1 }
   codegenFunDec $ A.FunDec
     { A.fundecName = S.Symbol "main"
     , A.params     = []
     , A.result     = Nothing
-    , A.funBody    = body
-    , A.funPos     = A.Pos { A.absChrOffset = -1, A.lineno = -1, A.colno = -1 }
+    , A.funBody    = A.SeqExp [(body, pos), (A.IntExp 0, pos)]
+    , A.funPos     = pos
     }
 
 codegenTop e = error $ "implemented alternative in codegenTop: " <> show e
