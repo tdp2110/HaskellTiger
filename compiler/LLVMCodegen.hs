@@ -20,6 +20,7 @@ import           Data.Word
 import           Data.ByteString.Short
 import qualified Data.Map                      as M
 import           Control.Monad.State
+import qualified Data.Text                     as T
 import           Data.Text                      ( Text )
 
 
@@ -140,8 +141,26 @@ codegenFunDec A.FunDec { A.fundecName = name, A.params = params, A.funBody = bod
       registerOperand (S.name $ A.fieldName field) addr
     codegenExp body >>= L.ret
 
+newtype InternalName = InternalName String
+newtype ExternalName = ExternalName String
+
+builtins :: [(InternalName, ExternalName, [AST.Type], AST.Type)]
+builtins =
+  [ ( InternalName "print_int"
+    , ExternalName "tiger_printintln"
+    , [AST.i64]
+    , AST.void
+    )
+  ]
+
+emitBuiltin :: (InternalName, ExternalName, [AST.Type], AST.Type) -> LLVM ()
+emitBuiltin (InternalName internalName, ExternalName externalName, argtys, retty)
+  = do
+    func <- L.extern (AST.mkName externalName) argtys retty
+    registerOperand (T.pack internalName) func
+
 codegenLLVM :: A.Exp -> AST.Module
 codegenLLVM e =
-  flip evalState (Env { operands = M.empty })
-    $ L.buildModuleT "llvm-test"
-    $ codegenTop e
+  flip evalState (Env { operands = M.empty }) $ L.buildModuleT "llvm-test" $ do
+    mapM_ emitBuiltin builtins
+    codegenTop e
