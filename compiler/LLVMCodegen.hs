@@ -104,7 +104,7 @@ codegenExp (A.CallExp funcSym args _) = do
     Just funcOp -> L.call funcOp argOps
     Nothing     -> error $ "use of undeclared function " <> show funcSym
 codegenExp (A.LetExp decs body _) = do
-  lift $ forM_ decs codegenDecl
+  forM_ decs codegenDecl
   codegenExp body
 codegenExp e = error $ "unimplemented alternative in codegenExp: " <> show e
 
@@ -123,9 +123,15 @@ codegenTop e =
         }
   in  codegenFunDec mainFn
 
-codegenDecl :: A.Dec -> LLVM ()
-codegenDecl (A.FunctionDec [funDec]) = codegenFunDec funDec
-codegenDecl _                        = undefined
+codegenDecl :: A.Dec -> Codegen ()
+codegenDecl (A.FunctionDec [funDec]     ) = lift $ codegenFunDec funDec
+codegenDecl (A.VarDec name _ _ initExp _) = do
+  initOp <- codegenExp initExp
+  addr   <- L.alloca AST.i64 Nothing 8
+  L.store addr 8 initOp
+  registerOperand (S.name name) addr
+  pure ()
+codegenDecl _ = undefined
 
 codegenFunDec :: A.FunDec -> LLVM ()
 codegenFunDec A.FunDec { A.fundecName = name, A.params = params, A.funBody = body }
