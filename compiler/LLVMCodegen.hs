@@ -67,6 +67,15 @@ codegenExp (A.OpExp left oper right _) = do
         A.GeOp     -> L.icmp AST.SGE
         A.ModOp    -> L.srem
   f leftOperand rightOperand
+codegenExp (A.AssignExp (A.SimpleVar var _) rhs pos) = do
+  rhsOp      <- codegenExp rhs
+  operandEnv <- gets operands
+  case M.lookup (S.name var) operandEnv of
+    Just lhsOp -> do
+      L.store lhsOp 8 rhsOp
+      pure zero
+    Nothing ->
+      error $ "use of undefined variable " <> show var <> " at " <> show pos
 codegenExp (A.IfExp test then' (Just else') _) = mdo
   -- %entry
   ---------
