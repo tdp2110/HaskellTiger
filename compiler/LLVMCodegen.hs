@@ -113,30 +113,15 @@ emptyModule label = AST.defaultModule { AST.moduleName = toShortBS label }
 
 codegenTop :: A.Exp -> LLVM ()
 codegenTop e =
-  let nilPos       = A.Pos { A.absChrOffset = -1, A.lineno = -1, A.colno = -1 }
-      tigerMainSym = S.Symbol "__tiger_main"
-      tigerMain    = A.FunDec
-        { A.fundecName = tigerMainSym
+  let nilPos = A.Pos { A.absChrOffset = -1, A.lineno = -1, A.colno = -1 }
+      mainFn = A.FunDec
+        { A.fundecName = S.Symbol "main"
         , A.params     = []
         , A.result     = Nothing
         , A.funBody    = A.SeqExp [(e, nilPos), (A.IntExp 0, nilPos)]
         , A.funPos     = nilPos
         }
-      mainBody = A.SeqExp
-        [ ( A.CallExp { A.func = tigerMainSym, A.args = [], A.pos = nilPos }
-          , nilPos
-          )
-        , (A.IntExp 0, nilPos)
-        ]
-      mainFn = A.FunDec { A.fundecName = S.Symbol "main"
-                        , A.params     = []
-                        , A.result     = Nothing
-                        , A.funBody    = mainBody
-                        , A.funPos     = nilPos
-                        }
-  in  do
-        codegenFunDec tigerMain
-        codegenFunDec mainFn
+  in  codegenFunDec mainFn
 
 codegenDecl :: A.Dec -> LLVM ()
 codegenDecl (A.FunctionDec [funDec]) = codegenFunDec funDec
