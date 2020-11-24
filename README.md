@@ -345,3 +345,69 @@ _main:                          ## (_main,line -1, col -1)
         lea rax, [rip + _tiger_divByZero]
         call rax
 ```
+
+## LLVM Backend
+
+Starting in Nov 2020, we've begun an LLVM backend using the *awesome*
+[llvm-hs project](https://github.com/llvm-hs/llvm-hs). To start,
+we're assuming everything is `int`. As an example, consider examples/fib-llvm.tiger:
+
+```
+$ cat examples/fib-llvm.tiger
+let
+    function fib(n: int) : int =
+        if n < 2 then
+            n
+        else
+            fib(n - 1) + fib(n - 2)
+in
+    print_int(fib(25))
+end
+```
+
+We can compile this to LLVM IR with
+
+```
+$ cabal -v0 new-run tigerc examples/fib-llvm.tiger -- --emit-llvm
+; ModuleID = 'llvm-test'
+
+
+
+
+
+declare external ccc  void @tiger_printintln(i64)
+
+
+define external ccc  i64 @fib(i64  %n_0)    {
+entry_0:
+  %0 = alloca i64, align 8
+  store  i64 %n_0, i64* %0, align 8
+  %1 = load  i64, i64* %0, align 8
+  %2 = icmp slt i64 %1, 2
+  %3 = icmp ne i1 %2, 0
+  br i1 %3, label %if.then_0, label %if.else_0
+if.then_0:
+  %4 = load  i64, i64* %0, align 8
+  br label %if.exit_0
+if.else_0:
+  %5 = load  i64, i64* %0, align 8
+  %6 = sub   i64 %5, 1
+  %7 =  call ccc  i64  @fib(i64  %6)
+  %8 = load  i64, i64* %0, align 8
+  %9 = sub   i64 %8, 2
+  %10 =  call ccc  i64  @fib(i64  %9)
+  %11 = add   i64 %7, %10
+  br label %if.exit_0
+if.exit_0:
+  %12 = phi i64 [%4, %if.then_0], [%11, %if.else_0]
+  ret i64 %12
+}
+
+
+define external ccc  i64 @main()    {
+entry_0:
+  %0 =  call ccc  i64  @fib(i64  25)
+   call ccc  void  @tiger_printintln(i64  %0)
+  ret i64 0
+}
+```
