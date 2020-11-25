@@ -132,7 +132,7 @@ toEscape :: Bool -> Frame.EscapesOrNot
 toEscape True = Frame.Escapes
 toEscape _    = Frame.DoesNotEscape
 
-data SemantEnv = SemantEnv { venv'::Env.VEnv
+data SemantEnv = SemantEnv { venv' :: Env.VEnv
                            , tenv2 :: Env.TEnv
                            , x64 :: X64Frame.X64 }
 data SemantState = SemantState { level :: Level
