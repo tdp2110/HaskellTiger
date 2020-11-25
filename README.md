@@ -411,3 +411,40 @@ entry_0:
   ret i64 0
 }
 ```
+
+We can run the llvm optimizer on this IR by invoking `opt` (which may not be in your path):
+
+```
+$ cabal -v0 new-run tigerc examples/fib-llvm.tiger -- --emit-llvm | opt -S -O2
+; ModuleID = '<stdin>'
+source_filename = "<stdin>"
+
+declare void @tiger_printintln(i64) local_unnamed_addr
+
+; Function Attrs: nounwind readnone
+define i64 @fib(i64 %n_0) local_unnamed_addr #0 {
+entry_0:
+  %0 = icmp slt i64 %n_0, 2
+  br i1 %0, label %if.exit_0, label %if.else_0
+
+if.else_0:                                        ; preds = %entry_0
+  %1 = add nsw i64 %n_0, -1
+  %2 = tail call i64 @fib(i64 %1)
+  %3 = add nsw i64 %n_0, -2
+  %4 = tail call i64 @fib(i64 %3)
+  %5 = add i64 %4, %2
+  ret i64 %5
+
+if.exit_0:                                        ; preds = %entry_0
+  ret i64 %n_0
+}
+
+define i64 @main() local_unnamed_addr {
+entry_0:
+  %0 = tail call i64 @fib(i64 25)
+  tail call void @tiger_printintln(i64 %0)
+  ret i64 0
+}
+
+attributes #0 = { nounwind readnone }
+```
