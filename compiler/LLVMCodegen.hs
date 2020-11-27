@@ -65,7 +65,7 @@ codegenExp (A.OpExp left oper right pos) = do
         A.PlusOp   -> IRB.add
         A.MinusOp  -> IRB.sub
         A.TimesOp  -> IRB.mul
-        A.DivideOp -> IRB.sdiv -- TODO need to check for division by zero
+        A.DivideOp -> codegenIntDiv
         A.EqOp     -> IRB.icmp LL.EQ
         A.NeqOp    -> IRB.icmp LL.NE
         A.LtOp     -> IRB.icmp LL.SLT
@@ -207,6 +207,24 @@ codegenTop e =
         }
   in  codegenFunDec mainFn
 
+codegenIntDiv :: LL.Operand -> LL.Operand -> Codegen LL.Operand
+codegenIntDiv dividend divisor = mdo
+  testNonzero <- IRB.icmp LL.NE divisor zero
+  IRB.condBr testNonzero divisorIsNonZero divisorIsZero
+
+  divisorIsNonZero <- IRB.block `IRB.named` "divisor_is_nonzero"
+  quotient         <- IRB.sdiv dividend divisor
+  IRB.br exit
+
+  divisorIsZero <- IRB.block `IRB.named` "divisor_is_zero"
+  operandEnv    <- gets operands
+  let (divByZeroFn, _) = operandEnv M.! (Text.pack "tiger_divByZero")
+  _    <- IRB.call divByZeroFn []
+  _    <- IRB.unreachable
+
+  exit <- IRB.block `IRB.named` "exit"
+  pure quotient
+
 codegenDecl :: A.Dec -> Codegen ()
 codegenDecl (A.FunctionDec [funDec]     ) = lift $ codegenFunDec funDec
 codegenDecl (A.VarDec name _ _ initExp _) = do
@@ -248,6 +266,11 @@ builtins =
   [ ( InternalName "print_int"
     , ExternalName "tiger_printintln"
     , [LL.i64]
+    , LL.void
+    )
+  , ( InternalName "tiger_divByZero"
+    , ExternalName "tiger_divByZero"
+    , []
     , LL.void
     )
   ]
