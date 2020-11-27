@@ -65,14 +65,14 @@ codegenExp (A.OpExp left oper right pos) = do
         A.PlusOp   -> IRB.add
         A.MinusOp  -> IRB.sub
         A.TimesOp  -> IRB.mul
-        A.DivideOp -> codegenIntDiv
+        A.DivideOp -> codegenDivOrModulo DivOp
         A.EqOp     -> IRB.icmp LL.EQ
         A.NeqOp    -> IRB.icmp LL.NE
         A.LtOp     -> IRB.icmp LL.SLT
         A.LeOp     -> IRB.icmp LL.SLE
         A.GtOp     -> IRB.icmp LL.SGT
         A.GeOp     -> IRB.icmp LL.SGE
-        A.ModOp    -> IRB.srem -- TODO need to check for division by zero
+        A.ModOp    -> codegenDivOrModulo ModOp
   if leftTy /= Types.INT
     then
       error
@@ -207,13 +207,18 @@ codegenTop e =
         }
   in  codegenFunDec mainFn
 
-codegenIntDiv :: LL.Operand -> LL.Operand -> Codegen LL.Operand
-codegenIntDiv dividend divisor = mdo
+data DivOrMod = DivOp | ModOp
+
+codegenDivOrModulo :: DivOrMod -> LL.Operand -> LL.Operand -> Codegen LL.Operand
+codegenDivOrModulo divOrMod dividend divisor = mdo
   testNonzero <- IRB.icmp LL.NE divisor zero
   IRB.condBr testNonzero divisorIsNonZero divisorIsZero
 
   divisorIsNonZero <- IRB.block `IRB.named` "divisor_is_nonzero"
-  quotient         <- IRB.sdiv dividend divisor
+  let op = case divOrMod of
+        DivOp -> IRB.sdiv
+        ModOp -> IRB.srem
+  quotient <- op dividend divisor
   IRB.br exit
 
   divisorIsZero <- IRB.block `IRB.named` "divisor_is_zero"
