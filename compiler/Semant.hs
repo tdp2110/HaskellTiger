@@ -384,6 +384,10 @@ transExp (A.OpExp _ A.DivideOp (A.IntExp 0) pos) =
   throwT pos "Integer division by zero detected"
 transExp (A.OpExp (A.IntExp i1) A.DivideOp (A.IntExp i2) _) =
   transExp $ A.IntExp $ i1 `div` i2
+transExp (A.OpExp _ A.ModOp (A.IntExp 0) pos) =
+  throwT pos "Integer modulo by zero detected"
+transExp (A.OpExp (A.IntExp i1) A.ModOp (A.IntExp i2) pos) =
+  transExp $ A.IntExp $ i1 `mod` i2
 transExp (A.OpExp (A.IntExp i1) A.EqOp (A.IntExp i2) _) =
   transExp $ A.IntExp $ fromEnum $ i1 == i2
 transExp (A.OpExp (A.IntExp i1) A.NeqOp (A.IntExp i2) _) =

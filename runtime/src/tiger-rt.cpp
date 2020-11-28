@@ -149,7 +149,7 @@ void tiger_nullRecordDereference() {
 }
 
 void tiger_divByZero() {
-  std::cerr << "FATAL TIGER ERROR: division by zero\n";
+  std::cerr << "FATAL TIGER ERROR: division or modulo by zero\n";
   std::terminate();
 }
 
