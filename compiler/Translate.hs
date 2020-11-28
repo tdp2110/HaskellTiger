@@ -301,27 +301,36 @@ binOp expLeft expRight op gen =
           c@(TreeIR.CONST _) ->
             let opExp = TreeIR.BINOP (TreeIR.DIV, expLeft', c)
             in  (Ex opExp, gen'')
-          _ ->
-            let (testExp, gen''') = relOp expRight zeroExp Absyn.NeqOp gen''
-                testExpGen        = unCx testExp
-                (t, gen4)         = Temp.newlabel gen'''
-                (f, gen5)         = Temp.newlabel gen4
-                onDivByZero       = TreeIR.EXP $ X64Frame.externalCallNoReturn
-                  (Temp.Label $ Symbol.Symbol "tiger_divByZero")
-                  []
-            in  ( Ex $ TreeIR.ESEQ
-                  ( TreeIR.makeSeq
-                    [ testExpGen t f
-                    , TreeIR.LABEL (f, Nothing)
-                    , onDivByZero
-                    , TreeIR.LABEL (t, Nothing)
-                    ]
-                  , binOpExp
-                  )
-                , gen5
-                )
+          _ -> guardDivByZero binOpExp gen''
+        Absyn.ModOp -> case expRight' of
+          TreeIR.CONST 0 ->
+            error "shouldn't get here with (const) zero dividend"
+          c@(TreeIR.CONST _) ->
+            let opExp = TreeIR.BINOP (TreeIR.MOD, expLeft', c)
+            in  (Ex opExp, gen'')
+          _ -> guardDivByZero binOpExp gen''
         _ -> (Ex binOpExp, gen'')
   in  (resExp, gen3)
+ where
+  guardDivByZero binOpExp gen'' =
+    let (testExp, gen''') = relOp expRight zeroExp Absyn.NeqOp gen''
+        testExpGen        = unCx testExp
+        (t, gen4)         = Temp.newlabel gen'''
+        (f, gen5)         = Temp.newlabel gen4
+        onDivByZero       = TreeIR.EXP $ X64Frame.externalCallNoReturn
+          (Temp.Label $ Symbol.Symbol "tiger_divByZero")
+          []
+    in  ( Ex $ TreeIR.ESEQ
+          ( TreeIR.makeSeq
+            [ testExpGen t f
+            , TreeIR.LABEL (f, Nothing)
+            , onDivByZero
+            , TreeIR.LABEL (t, Nothing)
+            ]
+          , binOpExp
+          )
+        , gen5
+        )
 
 ifThen :: Exp -> Exp -> Temp.Generator -> (Exp, Temp.Generator)
 ifThen testExpE thenExpE gen =
