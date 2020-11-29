@@ -6,9 +6,10 @@ module LLVMCodegen where
 
 import qualified Absyn                         as A
 import qualified Symbol                        as S
-import qualified Types                         as Types
+import qualified Types
 
 import qualified LLVM.AST                      as LL
+import qualified LLVM.AST.Constant             as LL
 import qualified LLVM.AST.Type                 as LL
 import qualified LLVM.AST.IntegerPredicate     as LL
 
@@ -45,9 +46,19 @@ type Codegen = IRB.IRBuilderT LLVM
 zero :: LL.Operand
 zero = IRB.int64 (0 :: Integer)
 
-codegenExp :: A.Exp -> Codegen (LL.Operand, Types.Ty)
+charStar :: LL.Type
+charStar = LL.ptr LL.i8
 
-codegenExp (A.IntExp i) = pure (IRB.int64 $ toInteger i, Types.INT)
+nullptr :: LL.Operand
+nullptr = LL.ConstantOperand $ LL.Null $ LL.ptr LL.i8
+
+lltype :: Types.Ty -> LL.Type
+lltype Types.INT  = LL.i64
+lltype Types.NIL  = charStar
+lltype Types.UNIT = LL.void
+lltype t = error $ "unimplemented alternative " <> show t <> " in lltype"
+
+codegenExp :: A.Exp -> Codegen (LL.Operand, Types.Ty)
 
 codegenExp (A.VarExp (A.SimpleVar sym pos)) = do
   operandEnv <- gets operands
@@ -57,6 +68,10 @@ codegenExp (A.VarExp (A.SimpleVar sym pos)) = do
       pure (loadOp, opTy)
     Nothing ->
       error $ "use of undefined variable " <> show sym <> " at " <> show pos
+
+codegenExp A.NilExp = pure (nullptr, Types.NIL)
+
+codegenExp (A.IntExp i) = pure (IRB.int64 $ toInteger i, Types.INT)
 
 codegenExp (A.OpExp left oper right pos) = do
   (leftOperand , leftTy ) <- codegenExp left
@@ -223,7 +238,7 @@ codegenDivOrModulo divOrMod dividend divisor = mdo
 
   divisorIsZero <- IRB.block `IRB.named` "divisor_is_zero"
   operandEnv    <- gets operands
-  let (divByZeroFn, _) = operandEnv M.! (Text.pack "tiger_divByZero")
+  let (divByZeroFn, _) = operandEnv M.! Text.pack "tiger_divByZero"
   _    <- IRB.call divByZeroFn []
   _    <- IRB.unreachable
 
@@ -234,7 +249,7 @@ codegenDecl :: A.Dec -> Codegen ()
 codegenDecl (A.FunctionDec [funDec]     ) = lift $ codegenFunDec funDec
 codegenDecl (A.VarDec name _ _ initExp _) = do
   (initOp, initTy) <- codegenExp initExp
-  addr             <- IRB.alloca LL.i64 Nothing 8
+  addr             <- IRB.alloca (lltype initTy) Nothing 8
   IRB.store addr 8 initOp
   registerOperand (S.name name) initTy addr
   pure ()
