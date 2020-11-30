@@ -5,7 +5,7 @@ import os
 import math
 
 
-class TestCompiler(unittest.TestCase):
+class TestNativeCompiler(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.temp_dir = TemporaryDirectory()
@@ -19,12 +19,8 @@ class TestCompiler(unittest.TestCase):
         return os.path.join(self.temp_dir.name, 'a.out')
 
     @property
-    def tiger_source_file(self):
-        return os.path.join(self.temp_dir.name, 'source.tiger')
-
-    @property
     def assem_file(self):
-        return os.path.join(self.temp_dir.name, 'source.s')
+        return os.path.join(self.temp_dir.name, 'out.s')
 
     def check_compiler(self, source_file, expected_output=None, run=True, expected_retcode=0):
         base_compile_command = ['cabal', '-v0', 'new-run', 'tigerc', '--',
@@ -176,6 +172,75 @@ class TestCompiler(unittest.TestCase):
         assem = self.check_compiler('examples/constexpr-div.tiger', run=False, expected_retcode=1)
         assem = assem.decode('utf-8')
         self.assertEqual(assem.strip().splitlines()[-1].strip().split(), ['call', 'rax'])
+
+class TestLLVMCodegen(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.temp_dir = TemporaryDirectory()
+    
+    @classmethod
+    def tearDownClass(cls):
+        cls.temp_dir.cleanup()
+
+    @property
+    def compiler_outfile(self):
+        return os.path.join(self.temp_dir.name, 'a.out')
+
+    @property
+    def assem_file(self):
+        return os.path.join(self.temp_dir.name, 'out.ll')
+
+    def check_compiler(self, source_file, expected_output=None, run=True, expected_retcode=0):
+        compile_command = ['cabal', '-v0', 'new-run', 'tigerc', '--', '--emit-llvm',
+                           source_file]
+
+        tiger_process = Popen(compile_command,
+                              stdout=PIPE)
+
+        assem, err = tiger_process.communicate()
+
+        tiger_process.wait()
+
+        self.assertEqual(tiger_process.returncode, 0, (assem, err))
+
+        with open(self.assem_file, 'wb') as f:
+            f.write(assem)
+
+        codegen_process = Popen(['echo', assem], stdout=PIPE)
+        clang_process = Popen(['clang', self.assem_file, 'runtime/build/libtiger_rt.a',
+                               '-lc++', '-o', self.compiler_outfile, '-Wno-override-module'],
+                              stdin=codegen_process.stdout)
+
+        codegen_process.stdout.close()
+        out, err = clang_process.communicate()
+
+        codegen_process.wait()
+        clang_process.wait()
+
+        self.assertEqual(clang_process.returncode, 0, (out, err))
+
+        if run:
+            binary_process = Popen([self.compiler_outfile], stdout=PIPE)
+            out, err = binary_process.communicate()
+
+            binary_process.wait()
+
+            self.assertEqual(binary_process.returncode, expected_retcode, (out, err))
+            self.assertEqual(out.decode('utf-8'), expected_output)
+
+        return assem
+
+    def test_hello_world(self):
+        self.check_compiler('examples/assign-llvm.tiger', '0\n1\n')
+
+    def test_fib(self):
+        self.check_compiler('examples/fib-llvm.tiger', '75025\n')
+        
+    def test_loop(self):
+        self.check_compiler('examples/loop-llvm.tiger', '4950\n')
+        
+    def test_first(self):
+        self.check_compiler('examples/llvm-test.tiger', '3\n')
         
 if __name__ == '__main__':
     unittest.main()

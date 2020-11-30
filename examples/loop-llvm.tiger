@@ -1,0 +1,11 @@
+let
+    function sum(low: int, high: int) : int =
+       let var res := 0 in
+         while (low < high) do
+           (res := res + low;
+           low := low + 1);
+         res
+       end
+in
+    print_int(sum(0,100))
+end

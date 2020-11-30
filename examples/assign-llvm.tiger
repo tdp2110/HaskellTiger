@@ -1,0 +1,7 @@
+let
+    var x := 0
+in
+    print_int(x);
+    x := x + 1;
+    print_int(x)
+end
