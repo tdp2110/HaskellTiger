@@ -343,8 +343,8 @@ emitBuiltin (InternalName internalName, ExternalName externalName, argtys, retty
 baseTEnv :: M.Map Text Types.Ty
 baseTEnv = M.fromList [("string", Types.STRING), ("int", Types.INT)]
 
-codegenLLVM :: A.Exp -> LL.Module
-codegenLLVM e =
+codegenLLVM :: String -> A.Exp -> LL.Module
+codegenLLVM filename e =
   flip
       evalState
       (CodegenState { operands           = M.empty
@@ -352,7 +352,7 @@ codegenLLVM e =
                     , currentFunAndRetTy = Nothing
                     }
       )
-    $ IRB.buildModuleT "llvm-test"
+    $ IRB.buildModuleT (toShortBS filename)
     $ do
         mapM_ emitBuiltin builtins
         codegenTop e

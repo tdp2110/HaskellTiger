@@ -424,11 +424,12 @@ main = do
                                    (not $ optO0 clopts)
               else if optEmitLLVM clopts
                 then do
-                  str <- readFile $ head args'
+                  let filename = head args'
+                  str <- readFile filename
                   case Parser.parse str of
                     Left  err  -> error err
                     Right expr -> do
-                      let m = LLVMCodegen.codegenLLVM expr
+                      let m = LLVMCodegen.codegenLLVM filename expr
                       putStrLn $ LT.unpack $ ppllvm m
                 else do
                   str <- readFile $ head args'
