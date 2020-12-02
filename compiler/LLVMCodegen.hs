@@ -33,7 +33,11 @@ charToWord8 = toEnum . fromEnum
 toShortBS :: String -> ShortByteString
 toShortBS s = Data.ByteString.Short.pack $ fmap charToWord8 s
 
+data FunctionType = FunctionType { paramTypes :: [Types.Ty], rettype :: Types.Ty }
+        deriving (Eq, Show)
+
 data CodegenState = CodegenState { operands :: M.Map Text (LL.Operand, Types.Ty)
+                                 , functions :: M.Map Text (LL.Operand, FunctionType)
                                  , types :: M.Map Text Types.Ty
                                  , currentFunAndRetTy :: Maybe (A.FunDec, Types.Ty)
                                  }
@@ -42,7 +46,12 @@ data CodegenState = CodegenState { operands :: M.Map Text (LL.Operand, Types.Ty)
 registerOperand
   :: MonadState CodegenState m => Text -> Types.Ty -> LL.Operand -> m ()
 registerOperand name ty op =
-  modify $ \env -> env { operands = M.insert name (op, ty) (operands env) }
+  modify $ \s -> s { operands = M.insert name (op, ty) (operands s) }
+
+registerFunction
+  :: MonadState CodegenState m => Text -> FunctionType -> LL.Operand -> m ()
+registerFunction name ty op =
+  modify $ \s -> s { functions = M.insert name (op, ty) (functions s) }
 
 type LLVM = IRB.ModuleBuilderT (State CodegenState)
 type Codegen = IRB.IRBuilderT LLVM
@@ -173,15 +182,40 @@ codegenExp (A.SeqExp expAndPosns) = do
     [] -> pure (zero, Types.UNIT)
     _  -> pure $ last expsAndTys
 
-codegenExp (A.CallExp funcSym args _) = do
+codegenExp (A.CallExp funcSym args pos) = do
   argOps <- forM args $ \arg -> do
-    (argOp, _) <- codegenExp arg -- TODO type check
-    pure (argOp, [])
-  operandEnv <- gets operands
-  case M.lookup (S.name funcSym) operandEnv of
-    Just (funcOp, _) -> do
-      call <- IRB.call funcOp argOps
-      pure (call, Types.INT) -- TODO not always int!
+    (argOp, argTy) <- codegenExp arg -- TODO type check
+    pure (argOp, argTy)
+  funcEnv <- gets functions
+  case M.lookup (S.name funcSym) funcEnv of
+    Just (funcOp, funcTy) -> do
+      let argTypes = fmap snd argOps
+      when (Prelude.length (paramTypes funcTy) /= Prelude.length argTypes) $ do
+        error
+          $  "invalid call at "
+          <> show pos
+          <> ": function requires "
+          <> show (Prelude.length (paramTypes funcTy))
+          <> " arguments, but was passed "
+          <> show (Prelude.length argTypes)
+      let paramTypeCheck = zip3 argTypes (paramTypes funcTy) [0 :: Int ..]
+      let paramErrors = filter
+            (\(actualTy, expectedTy, _) -> actualTy /= expectedTy)
+            paramTypeCheck
+      case paramErrors of
+        ((actualTy, expectedTy, idx) : _) ->
+          error
+            $  "In call expression at "
+            <> show pos
+            <> ", parameter "
+            <> show idx
+            <> " has expected type "
+            <> show expectedTy
+            <> " but actual type "
+            <> show actualTy
+        _ -> do
+          call <- IRB.call funcOp (fmap (\(argOp, _) -> (argOp, [])) argOps)
+          pure (call, rettype funcTy)
     Nothing -> error $ "use of undeclared function " <> show funcSym
 
 codegenExp (A.WhileExp test body pos) = mdo
@@ -264,13 +298,26 @@ codegenFunDec f@A.FunDec { A.fundecName = name, A.params = params, A.result = re
   = mdo
     tenv       <- gets types
     stashedFun <- gets currentFunAndRetTy
-    let retty = extractRetTy tenv
+    let retty    = extractRetTy tenv
+    let paramTys = extractParamTys tenv
     modify $ \env -> env { currentFunAndRetTy = Just (f, retty) }
-    registerOperand (S.name name) retty fun
+    registerFunction (S.name name) (FunctionType paramTys retty) fun
     fun <- IRB.function (LL.Name $ toShortBS $ show name) args LL.i64 genBody
     modify $ \env -> env { currentFunAndRetTy = stashedFun }
     pure ()
  where
+  extractParamTys tenv = fmap
+    (\field -> case M.lookup (S.name (A.fieldTyp field)) tenv of
+      Just resultTy -> resultTy
+      Nothing ->
+        error
+          $  "use of undeclared typename "
+          <> show (A.fieldTyp field)
+          <> " in function param declaration at "
+          <> show (A.fieldPos field)
+    )
+    params
+
   extractRetTy tenv = maybe
     Types.UNIT
     (\(resultTySym, pos) -> case M.lookup (S.name resultTySym) tenv of
@@ -320,25 +367,28 @@ codegenFunDec f@A.FunDec { A.fundecName = name, A.params = params, A.result = re
 newtype InternalName = InternalName String
 newtype ExternalName = ExternalName String
 
-builtins :: [(InternalName, ExternalName, [LL.Type], LL.Type)]
+builtins :: [(InternalName, ExternalName, [Types.Ty], Types.Ty)]
 builtins =
   [ ( InternalName "print_int"
     , ExternalName "tiger_printintln"
-    , [LL.i64]
-    , LL.void
+    , [Types.INT]
+    , Types.UNIT
     )
   , ( InternalName "tiger_divByZero"
     , ExternalName "tiger_divByZero"
     , []
-    , LL.void
+    , Types.UNIT
     )
   ]
 
-emitBuiltin :: (InternalName, ExternalName, [LL.Type], LL.Type) -> LLVM ()
+emitBuiltin :: (InternalName, ExternalName, [Types.Ty], Types.Ty) -> LLVM ()
 emitBuiltin (InternalName internalName, ExternalName externalName, argtys, retty)
   = do
-    func <- IRB.extern (LL.mkName externalName) argtys retty
-    registerOperand (Text.pack internalName) Types.UNIT func -- fixup function types
+    let llArgTys = fmap lltype argtys
+    let llRetTy  = lltype retty
+    func <- IRB.extern (LL.mkName externalName) llArgTys llRetTy
+    let funType = FunctionType argtys retty
+    registerFunction (Text.pack internalName) funType func
 
 baseTEnv :: M.Map Text Types.Ty
 baseTEnv = M.fromList [("string", Types.STRING), ("int", Types.INT)]
@@ -348,6 +398,7 @@ codegenLLVM filename e =
   flip
       evalState
       (CodegenState { operands           = M.empty
+                    , functions          = M.empty
                     , types              = baseTEnv
                     , currentFunAndRetTy = Nothing
                     }
