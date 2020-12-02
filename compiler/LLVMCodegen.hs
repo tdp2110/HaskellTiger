@@ -271,22 +271,18 @@ codegenFunDec f@A.FunDec { A.fundecName = name, A.params = params, A.result = re
     modify $ \env -> env { currentFunAndRetTy = stashedFun }
     pure ()
  where
-  extractRetTy tenv =
-    case
-        fmap
-          (\(resultTySym, pos) -> case M.lookup (S.name resultTySym) tenv of
-            Just resultTy -> resultTy
-            Nothing ->
-              error
-                $  "use of undeclared typedef "
-                <> show resultTySym
-                <> " at "
-                <> show pos
-          )
-          resultTyMaybe
-      of
-        Just ty -> ty
-        Nothing -> Types.UNIT
+  extractRetTy tenv = maybe
+    Types.UNIT
+    (\(resultTySym, pos) -> case M.lookup (S.name resultTySym) tenv of
+      Just resultTy -> resultTy
+      Nothing ->
+        error
+          $  "use of undeclared typedef "
+          <> show resultTySym
+          <> " at "
+          <> show pos
+    )
+    resultTyMaybe
 
   args = toSig params
 
