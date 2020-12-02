@@ -33,14 +33,18 @@ charToWord8 = toEnum . fromEnum
 toShortBS :: String -> ShortByteString
 toShortBS s = Data.ByteString.Short.pack $ fmap charToWord8 s
 
-newtype Env = Env { operands :: M.Map Text (LL.Operand, Types.Ty) }
+data CodegenState = CodegenState { operands :: M.Map Text (LL.Operand, Types.Ty)
+                                 , types :: M.Map Text Types.Ty
+                                 , currentFunAndRetTy :: Maybe (A.FunDec, Types.Ty)
+                                 }
         deriving (Eq, Show)
 
-registerOperand :: MonadState Env m => Text -> Types.Ty -> LL.Operand -> m ()
+registerOperand
+  :: MonadState CodegenState m => Text -> Types.Ty -> LL.Operand -> m ()
 registerOperand name ty op =
   modify $ \env -> env { operands = M.insert name (op, ty) (operands env) }
 
-type LLVM = IRB.ModuleBuilderT (State Env)
+type LLVM = IRB.ModuleBuilderT (State CodegenState)
 type Codegen = IRB.IRBuilderT LLVM
 
 zero :: LL.Operand
@@ -216,7 +220,7 @@ codegenTop e =
       mainFn = A.FunDec
         { A.fundecName = S.Symbol "main"
         , A.params     = []
-        , A.result     = Nothing
+        , A.result     = Just (S.mkSym "int", nilPos)
         , A.funBody    = A.SeqExp [(e, nilPos), (A.IntExp 0, nilPos)]
         , A.funPos     = nilPos
         }
@@ -256,17 +260,41 @@ codegenDecl (A.VarDec name _ _ initExp _) = do
 codegenDecl _ = undefined
 
 codegenFunDec :: A.FunDec -> LLVM ()
-codegenFunDec A.FunDec { A.fundecName = name, A.params = params, A.funBody = body }
+codegenFunDec f@A.FunDec { A.fundecName = name, A.params = params, A.result = resultTyMaybe, A.funBody = body }
   = mdo
-    registerOperand (S.name name) Types.UNIT fun -- TODO fixup function type!
+    tenv       <- gets types
+    stashedFun <- gets currentFunAndRetTy
+    let retty = extractRetTy tenv
+    modify $ \env -> env { currentFunAndRetTy = Just (f, retty) }
+    registerOperand (S.name name) retty fun
     fun <- IRB.function (LL.Name $ toShortBS $ show name) args LL.i64 genBody
+    modify $ \env -> env { currentFunAndRetTy = stashedFun }
     pure ()
  where
+  extractRetTy tenv =
+    case
+        fmap
+          (\(resultTySym, pos) -> case M.lookup (S.name resultTySym) tenv of
+            Just resultTy -> resultTy
+            Nothing ->
+              error
+                $  "use of undeclared typedef "
+                <> show resultTySym
+                <> " at "
+                <> show pos
+          )
+          resultTyMaybe
+      of
+        Just ty -> ty
+        Nothing -> Types.UNIT
+
   args = toSig params
 
   toSig :: [A.Field] -> [(LL.Type, IRB.ParameterName)]
-  toSig =
-    fmap (\f -> (LL.i64, IRB.ParameterName $ toShortBS $ show $ A.fieldName f))
+  toSig = fmap
+    (\field ->
+      (LL.i64, IRB.ParameterName $ toShortBS $ show $ A.fieldName field)
+    )
 
   genBody :: [LL.Operand] -> Codegen ()
   genBody ops = do
@@ -275,8 +303,23 @@ codegenFunDec A.FunDec { A.fundecName = name, A.params = params, A.funBody = bod
       addr <- IRB.alloca LL.i64 Nothing 8
       IRB.store addr 8 op
       registerOperand (S.name $ A.fieldName field) Types.INT addr -- TODO fixup param types
-    (bodyOp, _) <- codegenExp body
-    IRB.ret bodyOp
+    (bodyOp, bodyTy) <- codegenExp body
+    currentFunMaybe  <- gets currentFunAndRetTy
+    case currentFunMaybe of
+      Just (enclosingFunc, retty) -> do
+        when (retty /= bodyTy) $ do
+          error
+            $  "In function "
+            <> show (A.fundecName enclosingFunc)
+            <> " defined at "
+            <> show (A.funPos enclosingFunc)
+            <> ", computed type of function body "
+            <> show bodyTy
+            <> " and annotated type "
+            <> show retty
+            <> " do not match"
+        IRB.ret bodyOp
+      Nothing -> error "impossible"
 
 newtype InternalName = InternalName String
 newtype ExternalName = ExternalName String
@@ -301,9 +344,18 @@ emitBuiltin (InternalName internalName, ExternalName externalName, argtys, retty
     func <- IRB.extern (LL.mkName externalName) argtys retty
     registerOperand (Text.pack internalName) Types.UNIT func -- fixup function types
 
+baseTEnv :: M.Map Text Types.Ty
+baseTEnv = M.fromList [("string", Types.STRING), ("int", Types.INT)]
+
 codegenLLVM :: A.Exp -> LL.Module
 codegenLLVM e =
-  flip evalState (Env { operands = M.empty })
+  flip
+      evalState
+      (CodegenState { operands           = M.empty
+                    , types              = baseTEnv
+                    , currentFunAndRetTy = Nothing
+                    }
+      )
     $ IRB.buildModuleT "llvm-test"
     $ do
         mapM_ emitBuiltin builtins
