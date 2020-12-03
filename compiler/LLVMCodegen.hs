@@ -21,7 +21,9 @@ import qualified LLVM.IRBuilder.Constant       as IRB
 import           Data.Word
 import           Data.ByteString.Short
 import qualified Data.Map                      as M
-import           Control.Monad                  ( when )
+import           Control.Monad                  ( when
+                                                , mapM
+                                                )
 import           Control.Monad.State
 import qualified Data.Text                     as Text
 import           Data.Text                      ( Text )
@@ -39,6 +41,7 @@ data FunctionType = FunctionType { paramTypes :: [Types.Ty], rettype :: Types.Ty
 data CodegenState = CodegenState { operands :: M.Map Text (LL.Operand, Types.Ty)
                                  , functions :: M.Map Text (LL.Operand, FunctionType)
                                  , types :: M.Map Text Types.Ty
+                                 , lltypes :: [(Types.Ty, LL.Type)]
                                  , currentFunAndRetTy :: Maybe (A.FunDec, Types.Ty)
                                  }
         deriving (Eq, Show)
@@ -65,11 +68,13 @@ charStar = LL.ptr LL.i8
 nullptr :: LL.Operand
 nullptr = LL.ConstantOperand $ LL.Null $ LL.ptr LL.i8
 
-lltype :: Types.Ty -> LL.Type
-lltype Types.INT  = LL.i64
-lltype Types.NIL  = charStar
-lltype Types.UNIT = LL.void
-lltype t = error $ "unimplemented alternative " <> show t <> " in lltype"
+lltype :: Types.Ty -> LLVM LL.Type
+lltype ty = do
+  lltypeMapping <- gets lltypes
+  case lookup ty lltypeMapping of
+    Just llt -> pure llt
+    Nothing ->
+      error $ "no tiger -> LLVM type mapping registered for " <> show ty
 
 codegenExp :: A.Exp -> Codegen (LL.Operand, Types.Ty)
 
@@ -287,7 +292,8 @@ codegenDecl :: A.Dec -> Codegen ()
 codegenDecl (A.FunctionDec [funDec]     ) = lift $ codegenFunDec funDec
 codegenDecl (A.VarDec name _ _ initExp _) = do
   (initOp, initTy) <- codegenExp initExp
-  addr             <- IRB.alloca (lltype initTy) Nothing 8
+  llt              <- lift $ lltype initTy
+  addr             <- IRB.alloca llt Nothing 8
   IRB.store addr 8 initOp
   registerOperand (S.name name) initTy addr
   pure ()
@@ -384,14 +390,18 @@ builtins =
 emitBuiltin :: (InternalName, ExternalName, [Types.Ty], Types.Ty) -> LLVM ()
 emitBuiltin (InternalName internalName, ExternalName externalName, argtys, retty)
   = do
-    let llArgTys = fmap lltype argtys
-    let llRetTy  = lltype retty
-    func <- IRB.extern (LL.mkName externalName) llArgTys llRetTy
+    llArgTys <- mapM lltype argtys
+    llRetTy  <- lltype retty
+    func     <- IRB.extern (LL.mkName externalName) llArgTys llRetTy
     let funType = FunctionType argtys retty
     registerFunction (Text.pack internalName) funType func
 
 baseTEnv :: M.Map Text Types.Ty
 baseTEnv = M.fromList [("string", Types.STRING), ("int", Types.INT)]
+
+builtinLLTypes :: [(Types.Ty, LL.Type)]
+builtinLLTypes =
+  [(Types.INT, LL.i64), (Types.NIL, charStar), (Types.UNIT, LL.void)]
 
 codegenLLVM :: String -> A.Exp -> LL.Module
 codegenLLVM filename e =
@@ -401,6 +411,7 @@ codegenLLVM filename e =
                     , functions          = M.empty
                     , types              = baseTEnv
                     , currentFunAndRetTy = Nothing
+                    , lltypes            = builtinLLTypes
                     }
       )
     $ IRB.buildModuleT (toShortBS filename)
