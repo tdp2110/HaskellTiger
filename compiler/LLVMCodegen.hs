@@ -403,6 +403,14 @@ builtinLLTypes :: [(Types.Ty, LL.Type)]
 builtinLLTypes =
   [(Types.INT, LL.i64), (Types.NIL, charStar), (Types.UNIT, LL.void)]
 
+emitStringTypedef :: LLVM ()
+emitStringTypedef = do
+  llStringType <- IRB.typedef (LL.mkName "string") Nothing
+  llTypes      <- gets lltypes
+  let llTypes' = (Types.STRING, llStringType) : llTypes
+  modify $ \s -> s { lltypes = llTypes' }
+  pure ()
+
 codegenLLVM :: String -> A.Exp -> LL.Module
 codegenLLVM filename e =
   flip
@@ -416,5 +424,6 @@ codegenLLVM filename e =
       )
     $ IRB.buildModuleT (toShortBS filename)
     $ do
+        emitStringTypedef
         mapM_ emitBuiltin builtins
         codegenTop e
