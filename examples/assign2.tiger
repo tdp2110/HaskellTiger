@@ -1,0 +1,7 @@
+let
+    var x := 0
+in
+    println(itoa(x));
+    x := x + 1;
+    println(itoa(x))
+end

@@ -7,5 +7,5 @@ let
          res
        end
 in
-    print_int(sum(0,100))
+    println(itoa(sum(0,100)))
 end

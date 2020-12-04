@@ -33,8 +33,6 @@ void tiger_println(TgString const *const str) {
   std::cout << '\n';
 }
 
-void tiger_printintln(int64_t const i) { std::cout << i << '\n'; }
-
 uint8_t *tiger_alloc(int64_t const numBytes) {
   if (numBytes <= 0) {
     std::cerr << "must pass a positive int64_t to " << __FUNCTION__ << ". Got "

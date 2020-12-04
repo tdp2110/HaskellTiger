@@ -231,16 +231,16 @@ class TestLLVMCodegen(unittest.TestCase):
         return assem
 
     def test_hello_world(self):
-        self.check_compiler('examples/assign-llvm.tiger', '0\n1\n')
+        self.check_compiler('examples/assign2.tiger', '0\n1\n')
 
     def test_fib(self):
-        self.check_compiler('examples/fib-llvm.tiger', '75025\n')
+        self.check_compiler('examples/fibonacci.tiger', '75025\n')
         
     def test_loop(self):
-        self.check_compiler('examples/loop-llvm.tiger', '4950\n')
+        self.check_compiler('examples/loop.tiger', '4950\n')
         
     def test_first(self):
-        self.check_compiler('examples/llvm-test.tiger', '3\n')
+        self.check_compiler('examples/call7.tiger', '3\n')
         
 if __name__ == '__main__':
     unittest.main()

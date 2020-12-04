@@ -375,14 +375,24 @@ newtype ExternalName = ExternalName String
 
 builtins :: [(InternalName, ExternalName, [Types.Ty], Types.Ty)]
 builtins =
-  [ ( InternalName "print_int"
-    , ExternalName "tiger_printintln"
-    , [Types.INT]
-    , Types.UNIT
-    )
-  , ( InternalName "tiger_divByZero"
+  [ ( InternalName "tiger_divByZero"
     , ExternalName "tiger_divByZero"
     , []
+    , Types.UNIT
+    )
+  , ( InternalName "itoa"
+    , ExternalName "tiger_itoa"
+    , [Types.INT]
+    , Types.STRING
+    )
+  , ( InternalName "println"
+    , ExternalName "tiger_println"
+    , [Types.STRING]
+    , Types.UNIT
+    )
+  , ( InternalName "print"
+    , ExternalName "tiger_print"
+    , [Types.STRING]
     , Types.UNIT
     )
   ]

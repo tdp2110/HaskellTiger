@@ -353,7 +353,7 @@ Starting in Nov 2020, we've begun an LLVM backend using the *awesome*
 we're assuming everything is `int`. As an example, consider examples/fib-llvm.tiger:
 
 ```
-$ cat examples/fib-llvm.tiger
+$ cat examples/fibonacci.tiger
 let
     function fib(n: int) : int =
         if n < 2 then
@@ -361,21 +361,33 @@ let
         else
             fib(n - 1) + fib(n - 2)
 in
-    print_int(fib(25))
+    println(itoa(fib(25)))
 end
 ```
 
 We can compile this to LLVM IR with
 
 ```
-$ cabal -v0 new-run tigerc examples/fib-llvm.tiger -- --emit-llvm
-; ModuleID = 'llvm-test'
+$ cabal -v0 new-run tigerc examples/fibonacci.tiger -- --emit-llvm
+; ModuleID = 'examples/fibonacci.tiger'
 
 
 
 
 
-declare external ccc  void @tiger_printintln(i64)
+%string = type opaque
+
+
+declare external ccc  void @tiger_divByZero()
+
+
+declare external ccc  %string @tiger_itoa(i64)
+
+
+declare external ccc  void @tiger_println(%string)
+
+
+declare external ccc  void @tiger_print(%string)
 
 
 define external ccc  i64 @fib(i64  %n_0)    {
@@ -407,7 +419,8 @@ if.exit_0:
 define external ccc  i64 @main()    {
 entry_0:
   %0 =  call ccc  i64  @fib(i64  25)
-   call ccc  void  @tiger_printintln(i64  %0)
+  %1 =  call ccc  %string  @tiger_itoa(i64  %0)
+   call ccc  void  @tiger_println(%string  %1)
   ret i64 0
 }
 ```
@@ -415,11 +428,15 @@ entry_0:
 We can run the llvm optimizer on this IR by invoking `opt` (which may not be in your path):
 
 ```
-$ cabal -v0 new-run tigerc examples/fib-llvm.tiger -- --emit-llvm | opt -S -O2
+$ cabal -v0 new-run tigerc examples/fibonacci.tiger -- --emit-llvm | opt -S -O2
 ; ModuleID = '<stdin>'
 source_filename = "<stdin>"
 
-declare void @tiger_printintln(i64) local_unnamed_addr
+%string = type opaque
+
+declare %string @tiger_itoa(i64) local_unnamed_addr
+
+declare void @tiger_println(%string) local_unnamed_addr
 
 ; Function Attrs: nounwind readnone
 define i64 @fib(i64 %n_0) local_unnamed_addr #0 {
@@ -442,7 +459,8 @@ if.exit_0:                                        ; preds = %entry_0
 define i64 @main() local_unnamed_addr {
 entry_0:
   %0 = tail call i64 @fib(i64 25)
-  tail call void @tiger_printintln(i64 %0)
+  %1 = tail call %string @tiger_itoa(i64 %0)
+  tail call void @tiger_println(%string zeroinitializer)
   ret i64 0
 }
 
