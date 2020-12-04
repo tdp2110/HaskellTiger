@@ -239,7 +239,13 @@ class TestLLVMCodegen(unittest.TestCase):
     def test_loop(self):
         self.check_compiler('examples/loop.tiger', '4950\n')
         
-    def test_first(self):
+    def test_call(self):
+        self.check_compiler('examples/call.tiger', '43\n')
+
+    def test_call2(self):
+        self.check_compiler('examples/call2.tiger', '84')
+        
+    def test_call_7(self):
         self.check_compiler('examples/call7.tiger', '3\n')
         
 if __name__ == '__main__':
