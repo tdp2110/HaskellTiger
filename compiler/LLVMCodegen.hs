@@ -40,6 +40,7 @@ data FunctionType = FunctionType { paramTypes :: [Types.Ty], rettype :: Types.Ty
 
 data CodegenState = CodegenState { operands :: M.Map Text (LL.Operand, Types.Ty)
                                  , functions :: M.Map Text (LL.Operand, FunctionType)
+                                 , runtimeFunctions :: M.Map Text LL.Operand
                                  , types :: M.Map Text Types.Ty
                                  , lltypes :: [(Types.Ty, LL.Type)]
                                  , currentFunAndRetTy :: Maybe (A.FunDec, Types.Ty)
@@ -280,8 +281,8 @@ codegenDivOrModulo divOrMod dividend divisor = mdo
   IRB.br exit
 
   divisorIsZero <- IRB.block `IRB.named` "divisor_is_zero"
-  operandEnv    <- gets operands
-  let (divByZeroFn, _) = operandEnv M.! Text.pack "tiger_divByZero"
+  rtsFuncEnv    <- gets runtimeFunctions
+  let divByZeroFn = rtsFuncEnv M.! Text.pack "tiger_divByZero"
   _    <- IRB.call divByZeroFn []
   _    <- IRB.unreachable
 
@@ -373,18 +374,11 @@ codegenFunDec f@A.FunDec { A.fundecName = name, A.params = params, A.result = re
 newtype InternalName = InternalName String
 newtype ExternalName = ExternalName String
 
-builtins :: [(InternalName, ExternalName, [Types.Ty], Types.Ty)]
+type BuiltinFuncDescription = (InternalName, ExternalName, [Types.Ty], Types.Ty)
+
+builtins :: [BuiltinFuncDescription]
 builtins =
-  [ ( InternalName "tiger_divByZero"
-    , ExternalName "tiger_divByZero"
-    , []
-    , Types.UNIT
-    )
-  , ( InternalName "itoa"
-    , ExternalName "tiger_itoa"
-    , [Types.INT]
-    , Types.STRING
-    )
+  [ (InternalName "itoa", ExternalName "tiger_itoa", [Types.INT], Types.STRING)
   , ( InternalName "println"
     , ExternalName "tiger_println"
     , [Types.STRING]
@@ -397,7 +391,19 @@ builtins =
     )
   ]
 
-emitBuiltin :: (InternalName, ExternalName, [Types.Ty], Types.Ty) -> LLVM ()
+type RuntimeFuncDescription = (String, [LL.Type], LL.Type)
+
+runtimeFuncs :: [RuntimeFuncDescription]
+runtimeFuncs = [("tiger_divByZero", [], LL.void)]
+
+emitRuntimeFunction :: RuntimeFuncDescription -> LLVM ()
+emitRuntimeFunction (name, argTypes, retType) = do
+  func <- IRB.extern (LL.mkName name) argTypes retType
+  modify $ \s -> s
+    { runtimeFunctions = M.insert (Text.pack name) func (runtimeFunctions s)
+    }
+
+emitBuiltin :: BuiltinFuncDescription -> LLVM ()
 emitBuiltin (InternalName internalName, ExternalName externalName, argtys, retty)
   = do
     llArgTys <- mapM lltype argtys
@@ -427,6 +433,7 @@ codegenLLVM filename e =
       evalState
       (CodegenState { operands           = M.empty
                     , functions          = M.empty
+                    , runtimeFunctions   = M.empty
                     , types              = baseTEnv
                     , currentFunAndRetTy = Nothing
                     , lltypes            = builtinLLTypes
@@ -434,6 +441,7 @@ codegenLLVM filename e =
       )
     $ IRB.buildModuleT (toShortBS filename)
     $ do
+        mapM_ emitRuntimeFunction runtimeFuncs
         emitStringTypedef
         mapM_ emitBuiltin builtins
         codegenTop e
