@@ -472,4 +472,25 @@ codegenLLVM filename e =
       , [Types.STRING]
       , Types.INT
       )
+    , (InternalName "getchar", ExternalName "tiger_getchar", [], Types.STRING)
+    , (InternalName "getline", ExternalName "tiger_getline", [], Types.STRING)
+    , (InternalName "ord", ExternalName "tiger_ord", [Types.STRING], Types.INT)
+    , (InternalName "chr", ExternalName "tiger_chr", [Types.INT], Types.STRING)
+    , ( InternalName "substring"
+      , ExternalName "tiger_substring"
+      , [Types.STRING, Types.INT, Types.INT]
+      , Types.STRING
+      )
+    , ( InternalName "concat"
+      , ExternalName "tiger_concat"
+      , [Types.STRING, Types.STRING]
+      , Types.STRING
+      )
+    , (InternalName "not" , ExternalName "tiger_not" , [Types.INT], Types.INT)
+    , (InternalName "exit", ExternalName "tiger_exit", [Types.INT], Types.UNIT)
+    , ( InternalName "rand"
+      , ExternalName "tiger_rand"
+      , [Types.INT, Types.INT]
+      , Types.INT
+      )
     ]

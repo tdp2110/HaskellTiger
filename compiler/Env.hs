@@ -44,7 +44,6 @@ baseVEnv x64 gen =
   let signatures =
           [ ("print"    , [STRING]          , UNIT)
           , ("println"  , [STRING]          , UNIT)
-          , ("print_int", [INT]             , UNIT)
           , ("flush"    , []                , UNIT)
           , ("getchar"  , []                , STRING)
           , ("getline"  , []                , STRING)
