@@ -254,5 +254,17 @@ class TestLLVMCodegen(unittest.TestCase):
     def test_hello_world_2(self):
         self.check_compiler('examples/strings.tiger', 'hello world!\n12\n')
         
+    def test_add(self):
+        self.check_compiler('examples/add.tiger', str(42+1337)+'\n')
+
+    def test_addVar(self):
+        self.check_compiler('examples/addVar.tiger', str(3)+'\n')
+
+    def test_assign(self):
+        self.check_compiler('examples/assign.tiger', '3\n')
+
+    def test_divs(self):
+        self.check_compiler('examples/divs.tiger', '2\n1\n')
+        
 if __name__ == '__main__':
     unittest.main()

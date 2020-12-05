@@ -111,7 +111,6 @@ codegenExp (A.StringExp s) = do
                      [(op, []), (IRB.int64 $ toInteger (Text.length s), [])]
     pure (call, Types.STRING)
 
-
 codegenExp (A.OpExp left oper right pos) = do
   (leftOperand , leftTy ) <- codegenExp left
   (rightOperand, rightTy) <- codegenExp right
