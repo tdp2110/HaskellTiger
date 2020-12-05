@@ -42,6 +42,7 @@ data CodegenState = CodegenState { operands :: M.Map Text (LL.Operand, Types.Ty)
                                  , functions :: M.Map Text (LL.Operand, FunctionType)
                                  , runtimeFunctions :: M.Map Text LL.Operand
                                  , types :: M.Map Text Types.Ty
+                                 , strings :: M.Map Text LL.Operand
                                  , lltypes :: [(Types.Ty, LL.Type)]
                                  , currentFunAndRetTy :: Maybe (A.FunDec, Types.Ty)
                                  }
@@ -88,9 +89,28 @@ codegenExp (A.VarExp (A.SimpleVar sym pos)) = do
     Nothing ->
       error $ "use of undefined variable " <> show sym <> " at " <> show pos
 
-codegenExp A.NilExp = pure (nullptr, Types.NIL)
+codegenExp A.NilExp        = pure (nullptr, Types.NIL)
 
-codegenExp (A.IntExp i) = pure (IRB.int64 $ toInteger i, Types.INT)
+codegenExp (A.IntExp    i) = pure (IRB.int64 $ toInteger i, Types.INT)
+
+codegenExp (A.StringExp s) = do
+  strs <- gets strings
+  case M.lookup s strs of
+    Just op -> codegenStringOp op
+    Nothing -> do
+      let name = LL.mkName (show (M.size strs) <> ".str")
+      op <- IRB.globalStringPtr (Text.unpack s) name
+      let res = LL.ConstantOperand op
+      modify $ \st -> st { strings = M.insert s res strs }
+      codegenStringOp res
+ where
+  codegenStringOp op = do
+    rtsFuncEnv <- gets runtimeFunctions
+    let stringCreateFn = rtsFuncEnv M.! Text.pack "tiger_allocString"
+    call <- IRB.call stringCreateFn
+                     [(op, []), (IRB.int64 $ toInteger (Text.length s), [])]
+    pure (call, Types.STRING)
+
 
 codegenExp (A.OpExp left oper right pos) = do
   (leftOperand , leftTy ) <- codegenExp left
@@ -374,59 +394,6 @@ codegenFunDec f@A.FunDec { A.fundecName = name, A.params = params, A.result = re
 newtype InternalName = InternalName String
 newtype ExternalName = ExternalName String
 
-type BuiltinFuncDescription = (InternalName, ExternalName, [Types.Ty], Types.Ty)
-
-builtins :: [BuiltinFuncDescription]
-builtins =
-  [ (InternalName "itoa", ExternalName "tiger_itoa", [Types.INT], Types.STRING)
-  , ( InternalName "println"
-    , ExternalName "tiger_println"
-    , [Types.STRING]
-    , Types.UNIT
-    )
-  , ( InternalName "print"
-    , ExternalName "tiger_print"
-    , [Types.STRING]
-    , Types.UNIT
-    )
-  ]
-
-type RuntimeFuncDescription = (String, [LL.Type], LL.Type)
-
-runtimeFuncs :: [RuntimeFuncDescription]
-runtimeFuncs = [("tiger_divByZero", [], LL.void)]
-
-emitRuntimeFunction :: RuntimeFuncDescription -> LLVM ()
-emitRuntimeFunction (name, argTypes, retType) = do
-  func <- IRB.extern (LL.mkName name) argTypes retType
-  modify $ \s -> s
-    { runtimeFunctions = M.insert (Text.pack name) func (runtimeFunctions s)
-    }
-
-emitBuiltin :: BuiltinFuncDescription -> LLVM ()
-emitBuiltin (InternalName internalName, ExternalName externalName, argtys, retty)
-  = do
-    llArgTys <- mapM lltype argtys
-    llRetTy  <- lltype retty
-    func     <- IRB.extern (LL.mkName externalName) llArgTys llRetTy
-    let funType = FunctionType argtys retty
-    registerFunction (Text.pack internalName) funType func
-
-baseTEnv :: M.Map Text Types.Ty
-baseTEnv = M.fromList [("string", Types.STRING), ("int", Types.INT)]
-
-builtinLLTypes :: [(Types.Ty, LL.Type)]
-builtinLLTypes =
-  [(Types.INT, LL.i64), (Types.NIL, charStar), (Types.UNIT, LL.void)]
-
-emitStringTypedef :: LLVM ()
-emitStringTypedef = do
-  llStringType <- IRB.typedef (LL.mkName "string") Nothing
-  llTypes      <- gets lltypes
-  let llTypes' = (Types.STRING, llStringType) : llTypes
-  modify $ \s -> s { lltypes = llTypes' }
-  pure ()
-
 codegenLLVM :: String -> A.Exp -> LL.Module
 codegenLLVM filename e =
   flip
@@ -435,13 +402,74 @@ codegenLLVM filename e =
                     , functions          = M.empty
                     , runtimeFunctions   = M.empty
                     , types              = baseTEnv
+                    , strings            = M.empty
                     , currentFunAndRetTy = Nothing
                     , lltypes            = builtinLLTypes
                     }
       )
     $ IRB.buildModuleT (toShortBS filename)
     $ do
-        mapM_ emitRuntimeFunction runtimeFuncs
         emitStringTypedef
-        mapM_ emitBuiltin builtins
+        runtimeFuncs <- buildRuntimeFuncs
+        mapM_ emitRuntimeFunction runtimeFuncs
+        mapM_ emitBuiltin         builtins
         codegenTop e
+ where
+  buildRuntimeFuncs = do
+    llStringType <- lltype Types.STRING
+    pure
+      [ ("tiger_divByZero"  , []                , LL.void)
+      , ("tiger_allocString", [charStar, LL.i64], llStringType)
+      ]
+
+  emitRuntimeFunction (name, argTypes, retType) = do
+    func <- IRB.extern (LL.mkName name) argTypes retType
+    modify $ \s -> s
+      { runtimeFunctions = M.insert (Text.pack name) func (runtimeFunctions s)
+      }
+
+  emitBuiltin (InternalName internalName, ExternalName externalName, argtys, retty)
+    = do
+      llArgTys <- mapM lltype argtys
+      llRetTy  <- lltype retty
+      func     <- IRB.extern (LL.mkName externalName) llArgTys llRetTy
+      let funType = FunctionType argtys retty
+      registerFunction (Text.pack internalName) funType func
+
+  baseTEnv :: M.Map Text Types.Ty
+  baseTEnv = M.fromList [("string", Types.STRING), ("int", Types.INT)]
+
+  builtinLLTypes :: [(Types.Ty, LL.Type)]
+  builtinLLTypes =
+    [(Types.INT, LL.i64), (Types.NIL, charStar), (Types.UNIT, LL.void)]
+
+  emitStringTypedef :: LLVM ()
+  emitStringTypedef = do
+    opaqueStringType <- IRB.typedef (LL.mkName "string") Nothing
+    llTypes          <- gets lltypes
+    let llTypes' = (Types.STRING, LL.ptr opaqueStringType) : llTypes
+    modify $ \s -> s { lltypes = llTypes' }
+    pure ()
+
+  builtins =
+    [ ( InternalName "itoa"
+      , ExternalName "tiger_itoa"
+      , [Types.INT]
+      , Types.STRING
+      )
+    , ( InternalName "println"
+      , ExternalName "tiger_println"
+      , [Types.STRING]
+      , Types.UNIT
+      )
+    , ( InternalName "print"
+      , ExternalName "tiger_print"
+      , [Types.STRING]
+      , Types.UNIT
+      )
+    , ( InternalName "size"
+      , ExternalName "tiger_size"
+      , [Types.STRING]
+      , Types.INT
+      )
+    ]

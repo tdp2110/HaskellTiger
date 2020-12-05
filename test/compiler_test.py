@@ -248,5 +248,11 @@ class TestLLVMCodegen(unittest.TestCase):
     def test_call_7(self):
         self.check_compiler('examples/call7.tiger', '3\n')
         
+    def test_hello_world(self):
+        self.check_compiler('examples/hello_world.tiger', 'hello world\n')
+
+    def test_hello_world_2(self):
+        self.check_compiler('examples/strings.tiger', 'hello world!\n12\n')
+        
 if __name__ == '__main__':
     unittest.main()
