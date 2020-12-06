@@ -69,23 +69,30 @@ entryNodes :: NodeId a => Graph a -> [Node a]
 entryNodes g = filter isEntryNode $ Map.elems $ nodes g
   where isEntryNode = null . pred
 
+allNodes :: NodeId a => Graph a -> [Node a]
+allNodes g = Map.elems $ nodes g
+
 type TopoSorter a = WriterT (DList a) (StateT (Set a) Identity)
 
 quasiTopoSort :: NodeId a => Graph a -> [Node a]
 quasiTopoSort g =
-  let unvisitedIds = Set.fromList $ Map.keys $ nodes g
-      (((), dlist1), unvisitedIds') =
-          (flip runState unvisitedIds . runWriterT) $ quasiTopoSortM g
-      (((), dlist2), _) =
-          (flip runState unvisitedIds' . runWriterT) $ quasiTopoSortM g
+  let
+    unvisitedIds = Set.fromList $ Map.keys $ nodes g
+    (((), dlist1), unvisitedIds') =
+      (flip runState unvisitedIds . runWriterT) $ quasiTopoSortM g (exitNodes g)
+    (((), dlist2), unvisitedIds'') =
+      (flip runState unvisitedIds' . runWriterT) $ quasiTopoSortM g (allNodes g) -- to account for possible infinite loops
 
-      ids1   = toList dlist1
-      ids2   = toList dlist2
-      allIds = reverse $ ids1 ++ ids2
-  in  fmap (nodes g Map.!) allIds
+    ids1   = toList dlist1
+    ids2   = toList dlist2
+    allIds = reverse $ ids1 ++ ids2
+  in
+    if (not . null) unvisitedIds''
+      then error "didn't visit all nodes!"
+      else fmap (nodes g Map.!) allIds
 
-quasiTopoSortM :: NodeId a => Graph a -> TopoSorter a ()
-quasiTopoSortM g = let exits = exitNodes g in mapM_ (dfs g) exits
+quasiTopoSortM :: NodeId a => Graph a -> [Node a] -> TopoSorter a ()
+quasiTopoSortM g = mapM_ (dfs g)
 
 dfs :: NodeId a => Graph a -> Node a -> TopoSorter a ()
 dfs g node =
