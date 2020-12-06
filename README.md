@@ -350,7 +350,7 @@ _main:                          ## (_main,line -1, col -1)
 
 Starting in Nov 2020, we've begun an LLVM backend using the *awesome*
 [llvm-hs project](https://github.com/llvm-hs/llvm-hs). To start,
-we're assuming everything is `int`. As an example, consider examples/fib-llvm.tiger:
+we're assuming everything is `int`. As an example, consider examples/fibonacci.tiger:
 
 ```
 $ cat examples/fibonacci.tiger
