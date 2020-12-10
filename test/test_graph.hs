@@ -1,6 +1,10 @@
 import           Test.Hspec
+import           Test.QuickCheck
 
 import qualified Graph                         as G
+import           Data.List
+import qualified Data.Map                      as Map
+import qualified Data.Set                      as Set
 
 
 newtype NodeId = NodeId Int
@@ -20,10 +24,54 @@ instance Ord NodeId where
 instance G.NodeId NodeId where
   incrId (NodeId nid) = NodeId $ nid + 1
 
+instance Arbitrary NodeId where
+  arbitrary = do
+    n <- choose (0, 1024) :: Gen Int
+    pure $ NodeId n
+
+newtype GraphWrapper = GraphWrapper (G.Graph NodeId)
+  deriving (Show)
+
+instance Arbitrary GraphWrapper where
+  arbitrary = do
+    let maxId = 1024
+    numNodes <- choose (1, maxId) :: Gen Int
+    nodeIds  <- vectorOf numNodes (arbitrary :: Gen NodeId)
+    let nodes = fmap
+          (\n -> (n, G.Node { G.succ = [], G.pred = [], G.nodeId = n }))
+          nodeIds
+    let graph =
+          G.Graph { G.nodes = Map.fromList nodes, G.nextId = NodeId maxId }
+    edges <- genEdges nodeIds
+    let graph' =
+          foldl' (\g (node1, node2) -> G.mkEdge g node1 node2) graph edges
+    pure $ GraphWrapper graph'
+
+prop_quasiToposortVisitsAllNodes :: GraphWrapper -> Bool
+prop_quasiToposortVisitsAllNodes (GraphWrapper g) =
+  let allNodes           = G.nodeId <$> G.allNodes g
+      allNodesSet        = Set.fromList allNodes
+      topoSortedNodes    = G.nodeId <$> G.quasiTopoSort g
+      topoSortedNodesSet = Set.fromList topoSortedNodes
+  in  length topoSortedNodes
+        == length allNodes
+        && topoSortedNodesSet
+        == allNodesSet
+
+genEdges :: [a] -> Gen [(a, a)]
+genEdges nodes = do
+  numEdges <- choose (0, 1024) :: Gen Int
+  vectorOf numEdges $ genEdge nodes
+
+genEdge :: [a] -> Gen (a, a)
+genEdge nodes = do
+  node1 <- elements nodes
+  node2 <- elements nodes
+  pure (node1, node2)
+
 main :: IO ()
-main =
-  hspec
-    $ describe "toposort"
+main = hspec $ do
+  describe "toposort"
     $ it "works"
     $ let g0              = G.newGraph $ NodeId 0
           (node0, g1)     = G.newNode g0
@@ -43,7 +91,9 @@ main =
 
           g               = g14
 
-          topoSortedNodes = fmap (nodeId . G.nodeId) $ G.quasiTopoSort g
+          topoSortedNodes = nodeId . G.nodeId <$> G.quasiTopoSort g
       in  do
             length (G.nodes g) `shouldBe` 7
             topoSortedNodes `shouldBe` [6, 5, 4, 3, 1, 2, 0]
+  describe "toposort" $ it "visits all nodes" $ property
+    prop_quasiToposortVisitsAllNodes

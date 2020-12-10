@@ -4,6 +4,7 @@ module Graph
   , GraphBuilder
   , Graph(..)
   , addEdge
+  , allNodes
   , newGraph
   , allocNode
   , edges
