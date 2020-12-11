@@ -9,7 +9,7 @@ import qualified Symbol                        as S
 import qualified Types
 
 import qualified LLVM.AST                      as LL
-import qualified LLVM.AST.Constant             as LL
+import qualified LLVM.AST.Constant             as LLConstant
 import qualified LLVM.AST.Type                 as LL
 import qualified LLVM.AST.IntegerPredicate     as LL
 
@@ -18,6 +18,7 @@ import qualified LLVM.IRBuilder.Monad          as IRB
 import qualified LLVM.IRBuilder.Instruction    as IRB
 import qualified LLVM.IRBuilder.Constant       as IRB
 
+import qualified Data.InfList                  as InfList
 import           Data.Word
 import           Data.ByteString.Short
 import qualified Data.Map                      as M
@@ -45,6 +46,7 @@ data CodegenState = CodegenState { operands :: M.Map Text (LL.Operand, Types.Ty)
                                  , strings :: M.Map Text LL.Operand
                                  , lltypes :: [(Types.Ty, LL.Type)]
                                  , currentFunAndRetTy :: Maybe (A.FunDec, Types.Ty)
+                                 , intSupply :: InfList.InfList Integer
                                  }
         deriving (Eq, Show)
 
@@ -61,6 +63,13 @@ registerFunction name ty op =
 type LLVM = IRB.ModuleBuilderT (State CodegenState)
 type Codegen = IRB.IRBuilderT LLVM
 
+nextInt :: LLVM Integer
+nextInt = do
+  ints <- gets intSupply
+  let (res, ints') = (InfList.head ints, InfList.tail ints)
+  modify $ \s -> s { intSupply = ints' }
+  pure res
+
 zero :: LL.Operand
 zero = IRB.int64 (0 :: Integer)
 
@@ -68,7 +77,7 @@ charStar :: LL.Type
 charStar = LL.ptr LL.i8
 
 nullptr :: LL.Operand
-nullptr = LL.ConstantOperand $ LL.Null $ LL.ptr LL.i8
+nullptr = LL.ConstantOperand $ LLConstant.Null $ LL.ptr LL.i8
 
 lltype :: Types.Ty -> LLVM LL.Type
 lltype ty = do
@@ -309,7 +318,9 @@ codegenDivOrModulo divOrMod dividend divisor = mdo
   pure quotient
 
 codegenDecl :: A.Dec -> Codegen ()
+
 codegenDecl (A.FunctionDec [funDec]     ) = lift $ codegenFunDec funDec
+
 codegenDecl (A.VarDec name _ _ initExp _) = do
   (initOp, initTy) <- codegenExp initExp
   llt              <- lift $ lltype initTy
@@ -317,7 +328,58 @@ codegenDecl (A.VarDec name _ _ initExp _) = do
   IRB.store addr 8 initOp
   registerOperand (S.name name) initTy addr
   pure ()
-codegenDecl _ = undefined
+
+codegenDecl (A.TypeDec [tydec]) = lift $ codegenTypeDec tydec
+
+codegenDecl tydec =
+  error $ "unimplemented alternative in codegenDecl: " <> show tydec
+
+codegenTypeDec :: A.TyDec -> LLVM ()
+codegenTypeDec (A.TyDec (S.Symbol (tydecName)) ty tydecPos) = do
+  tenv <- gets types
+  case M.lookup tydecName tenv of
+    Just _ ->
+      error
+        $  "redefinition of type name "
+        <> show tydecName
+        <> " at "
+        <> show tydecPos
+        <> ". Note: previous definition at ???"
+    Nothing -> do
+      (tigerType, llType) <- transType ty
+      let tenv' = M.insert tydecName tigerType tenv
+      modify $ \s -> s { types = tenv' }
+      lltenv  <- gets lltypes
+      llType' <- IRB.typedef (LL.mkName $ "struct." <> show tydecName)
+                             (Just llType)
+      modify $ \s -> s { lltypes = (tigerType, LL.ptr llType') : lltenv }
+
+transType :: A.Ty -> LLVM (Types.Ty, LL.Type)
+transType (A.RecordTy fields) = do
+  tenv <- gets types
+  let
+    fieldTypesTiger = fmap
+      (\(A.Field { A.fieldTyp = (S.Symbol fieldTypeName), A.fieldPos = pos }) ->
+        case M.lookup fieldTypeName tenv of
+          Nothing ->
+            error
+              $  "use of undefined typename "
+              <> show fieldTypeName
+              <> " at "
+              <> show pos
+          Just t -> t
+      )
+      fields
+  typeId         <- nextInt
+  fieldTypesLLVM <- mapM lltype fieldTypesTiger
+  let recordTypeLLVM = LL.StructureType { LL.isPacked     = False
+                                        , LL.elementTypes = fieldTypesLLVM
+                                        }
+  let fieldNames      = A.fieldName <$> fields
+  let recordTypeTiger = Types.RECORD (zip fieldNames fieldTypesTiger, typeId)
+  pure (recordTypeTiger, recordTypeLLVM)
+
+transType t = error $ "unimplemented alternative in transType: " <> show t
 
 codegenFunDec :: A.FunDec -> LLVM ()
 codegenFunDec f@A.FunDec { A.fundecName = name, A.params = params, A.result = resultTyMaybe, A.funBody = body }
@@ -404,6 +466,7 @@ codegenLLVM filename e =
                     , strings            = M.empty
                     , currentFunAndRetTy = Nothing
                     , lltypes            = builtinLLTypes
+                    , intSupply          = InfList.iterate (+ 1) 0
                     }
       )
     $ IRB.buildModuleT (toShortBS filename)
