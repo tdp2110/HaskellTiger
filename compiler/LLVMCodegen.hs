@@ -210,6 +210,57 @@ codegenExp (A.IfExp test then' (Just else') pos) = mdo
   phi    <- IRB.phi [(ifThenOp, ifThen), (ifElseOp, ifElse)]
   pure (phi, ifElseTy)
 
+codegenExp (A.RecordExp fields (S.Symbol typeSym) pos) = do
+  tenv <- gets types
+  case M.lookup typeSym tenv of
+    Nothing ->
+      error
+        $  "use of undeclared typename "
+        <> show typeSym
+        <> " at "
+        <> show pos
+    Just (Types.RECORD (symToTy, _)) ->
+      let expectedSyms = fmap fst symToTy
+          actualSyms   = fmap (\(sym, _, _) -> sym) fields
+      in  if expectedSyms /= actualSyms
+            then
+              error
+              $  "In record exp at "
+              <> show pos
+              <> ", incompatible field names. Expected "
+              <> show expectedSyms
+              <> ", but got "
+              <> show actualSyms
+            else do
+              let expectedFieldTys = fmap snd symToTy
+              actualFieldOpTys <- mapM codegenExp
+                $ fmap (\(_, expr, _) -> expr) fields
+              let mismatchedTypes =
+                    filter (\(t1, (_, t2), _) -> t1 /= t2) $ zip3
+                      expectedFieldTys
+                      actualFieldOpTys
+                      [1 :: Integer ..]
+              case mismatchedTypes of
+                (expectedType, actualType, idx) : _ ->
+                  error
+                    $  "In record exp at "
+                    <> show pos
+                    <> ", mismatched types at index "
+                    <> show idx
+                    <> ": expected "
+                    <> show expectedType
+                    <> " but found "
+                    <> show actualType
+                _ -> undefined
+    Just nonRecordType ->
+      error
+        $  "in record exp, use of non record type "
+        <> show typeSym
+        <> " of type "
+        <> show nonRecordType
+        <> " at "
+        <> show pos
+
 codegenExp (A.SeqExp expAndPosns) = do
   expsAndTys <- forM expAndPosns (\(e, _) -> codegenExp e)
   case expsAndTys of
