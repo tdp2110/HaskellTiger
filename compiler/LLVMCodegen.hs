@@ -70,6 +70,11 @@ nextInt = do
   modify $ \s -> s { intSupply = ints' }
   pure res
 
+getRTSFunc :: String -> LLVM LL.Operand
+getRTSFunc funname = do
+  rtsFuncEnv <- gets runtimeFunctions
+  pure $ rtsFuncEnv M.! Text.pack funname
+
 zero :: LL.Operand
 zero = IRB.int64 (0 :: Integer)
 
@@ -219,39 +224,48 @@ codegenExp (A.RecordExp fields (S.Symbol typeSym) pos) = do
         <> show typeSym
         <> " at "
         <> show pos
-    Just (Types.RECORD (symToTy, _)) ->
-      let expectedSyms = fmap fst symToTy
-          actualSyms   = fmap (\(sym, _, _) -> sym) fields
-      in  if expectedSyms /= actualSyms
-            then
-              error
-              $  "In record exp at "
-              <> show pos
-              <> ", incompatible field names. Expected "
-              <> show expectedSyms
-              <> ", but got "
-              <> show actualSyms
-            else do
-              let expectedFieldTys = fmap snd symToTy
-              actualFieldOpTys <- mapM codegenExp
-                $ fmap (\(_, expr, _) -> expr) fields
-              let mismatchedTypes =
-                    filter (\(t1, (_, t2), _) -> t1 /= t2) $ zip3
-                      expectedFieldTys
-                      actualFieldOpTys
-                      [1 :: Integer ..]
-              case mismatchedTypes of
-                (expectedType, actualType, idx) : _ ->
-                  error
-                    $  "In record exp at "
-                    <> show pos
-                    <> ", mismatched types at index "
-                    <> show idx
-                    <> ": expected "
-                    <> show expectedType
-                    <> " but found "
-                    <> show actualType
-                _ -> undefined
+    Just recordType@(Types.RECORD (symToTy, _)) ->
+      let
+        expectedSyms = fmap fst symToTy
+        actualSyms   = fmap (\(sym, _, _) -> sym) fields
+      in
+        if expectedSyms /= actualSyms
+          then
+            error
+            $  "In record exp at "
+            <> show pos
+            <> ", incompatible field names. Expected "
+            <> show expectedSyms
+            <> ", but got "
+            <> show actualSyms
+          else do
+            let expectedFieldTys = fmap snd symToTy
+            actualFieldOpTys <- mapM codegenExp
+              $ fmap (\(_, expr, _) -> expr) fields
+            let mismatchedTypes = filter (\(t1, (_, t2), _) -> t1 /= t2)
+                  $ zip3 expectedFieldTys actualFieldOpTys [1 :: Integer ..]
+            case mismatchedTypes of
+              (expectedType, actualType, idx) : _ ->
+                error
+                  $  "In record exp at "
+                  <> show pos
+                  <> ", mismatched types at index "
+                  <> show idx
+                  <> ": expected "
+                  <> show expectedType
+                  <> " but found "
+                  <> show actualType
+              _ -> do
+                allocFn      <- lift $ getRTSFunc "tiger_alloc"
+                llrecordType <- lift $ lltype recordType
+                let
+                  recordSize32 =
+                    LL.ConstantOperand $ LLConstant.sizeof $ LL.pointerReferent
+                      llrecordType
+                recordSize64 <- IRB.sext recordSize32 LL.i64
+                dataPtr      <- IRB.call allocFn [(recordSize64, [])]
+                bitcastOp    <- IRB.bitcast dataPtr llrecordType
+                pure (bitcastOp, recordType)
     Just nonRecordType ->
       error
         $  "in record exp, use of non record type "
@@ -360,12 +374,11 @@ codegenDivOrModulo divOrMod dividend divisor = mdo
   IRB.br exit
 
   divisorIsZero <- IRB.block `IRB.named` "divisor_is_zero"
-  rtsFuncEnv    <- gets runtimeFunctions
-  let divByZeroFn = rtsFuncEnv M.! Text.pack "tiger_divByZero"
-  _    <- IRB.call divByZeroFn []
-  _    <- IRB.unreachable
+  divByZeroFn   <- lift $ getRTSFunc "tiger_divByZero"
+  _             <- IRB.call divByZeroFn []
+  _             <- IRB.unreachable
 
-  exit <- IRB.block `IRB.named` "exit"
+  exit          <- IRB.block `IRB.named` "exit"
   pure quotient
 
 codegenDecl :: A.Dec -> Codegen ()
@@ -533,6 +546,7 @@ codegenLLVM filename e =
     pure
       [ ("tiger_divByZero"  , []                , LL.void)
       , ("tiger_allocString", [charStar, LL.i64], llStringType)
+      , ("tiger_alloc"      , [LL.i64]          , charStar)
       ]
 
   emitRuntimeFunction (name, argTypes, retType) = do
