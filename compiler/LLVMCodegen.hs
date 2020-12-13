@@ -264,8 +264,8 @@ codegenExp (A.RecordExp fields (S.Symbol typeSym) pos) = do
                       llrecordType
                 recordSize64 <- IRB.sext recordSize32 LL.i64
                 dataPtr      <- IRB.call allocFn [(recordSize64, [])]
-                bitcastOp    <- IRB.bitcast dataPtr llrecordType
-                pure (bitcastOp, recordType)
+                recordPtr    <- IRB.bitcast dataPtr llrecordType
+                pure (recordPtr, recordType)
     Just nonRecordType ->
       error
         $  "in record exp, use of non record type "
@@ -414,7 +414,7 @@ codegenTypeDec (A.TyDec (S.Symbol (tydecName)) ty tydecPos) = do
       let tenv' = M.insert tydecName tigerType tenv
       modify $ \s -> s { types = tenv' }
       lltenv  <- gets lltypes
-      llType' <- IRB.typedef (LL.mkName $ "struct." <> show tydecName)
+      llType' <- IRB.typedef (LL.mkName $ "struct." <> Text.unpack tydecName)
                              (Just llType)
       modify $ \s -> s { lltypes = (tigerType, LL.ptr llType') : lltenv }
 
