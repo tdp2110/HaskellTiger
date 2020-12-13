@@ -24,6 +24,7 @@ import           Data.ByteString.Short
 import qualified Data.Map                      as M
 import           Control.Monad                  ( when
                                                 , mapM
+                                                , forM_
                                                 )
 import           Control.Monad.State
 import qualified Data.Text                     as Text
@@ -265,6 +266,15 @@ codegenExp (A.RecordExp fields (S.Symbol typeSym) pos) = do
                 recordSize64 <- IRB.sext recordSize32 LL.i64
                 dataPtr      <- IRB.call allocFn [(recordSize64, [])]
                 recordPtr    <- IRB.bitcast dataPtr llrecordType
+                let fieldOps = fst <$> actualFieldOpTys
+                forM_
+                  (zip fieldOps [0 :: Integer ..])
+                  (\(fieldOp, fieldIdx) -> do
+                    eltPtr <- IRB.gep recordPtr
+                                      [IRB.int32 0, IRB.int32 fieldIdx]
+                    IRB.store eltPtr 8 fieldOp
+                  )
+
                 pure (recordPtr, recordType)
     Just nonRecordType ->
       error
