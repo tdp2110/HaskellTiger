@@ -118,11 +118,23 @@ codegenVar (A.FieldVar var sym pos) = do
   (varOp, varTy) <- codegenVar var
   case varTy of
     Types.RECORD (sym2ty, _) -> case fieldOffset sym2ty sym of
-      Just (fieldTy, fieldNumber) -> do
-        fieldPtr <- IRB.gep
+      Just (fieldTy, fieldNumber) -> mdo
+        test <- IRB.icmp LL.NE varOp nullptr
+        IRB.condBr test nonnullCase nullCase
+
+        nonnullCase <- IRB.block `IRB.named` "nonnull"
+        fieldPtr    <- IRB.gep
           varOp
           [IRB.int32 0, IRB.int32 $ fromIntegral fieldNumber]
         loadOp <- IRB.load fieldPtr 8
+        IRB.br exit
+
+        nullCase          <- IRB.block `IRB.named` "null"
+        nullDereferenceFn <- lift $ getRTSFunc "tiger_nullRecordDereference"
+        _                 <- IRB.call nullDereferenceFn []
+        _                 <- IRB.unreachable
+
+        exit              <- IRB.block `IRB.named` "exit"
         pure (loadOp, fieldTy)
       Nothing ->
         error
@@ -602,9 +614,10 @@ codegenLLVM filename e =
   buildRuntimeFuncs = do
     llStringType <- lltype Types.STRING
     pure
-      [ ("tiger_divByZero"  , []                , LL.void)
-      , ("tiger_allocString", [charStar, LL.i64], llStringType)
-      , ("tiger_alloc"      , [LL.i64]          , charStar)
+      [ ("tiger_divByZero"            , []                , LL.void)
+      , ("tiger_allocString"          , [charStar, LL.i64], llStringType)
+      , ("tiger_alloc"                , [LL.i64]          , charStar)
+      , ("tiger_nullRecordDereference", []                , LL.void)
       ]
 
   emitRuntimeFunction (name, argTypes, retType) = do
