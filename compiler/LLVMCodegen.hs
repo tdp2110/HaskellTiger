@@ -93,16 +93,58 @@ lltype ty = do
     Nothing ->
       error $ "no tiger -> LLVM type mapping registered for " <> show ty
 
-codegenExp :: A.Exp -> Codegen (LL.Operand, Types.Ty)
+codegenVar :: A.Var -> Codegen (LL.Operand, Types.Ty)
 
-codegenExp (A.VarExp (A.SimpleVar sym pos)) = do
+codegenVar (A.SimpleVar sym pos) = do
   operandEnv <- gets operands
   case M.lookup (S.name sym) operandEnv of
     Just (op, opTy) -> do
       loadOp <- IRB.load op 8
       pure (loadOp, opTy)
-    Nothing ->
-      error $ "use of undefined variable " <> show sym <> " at " <> show pos
+    Nothing -> do
+      funcEnv <- gets functions
+      case M.lookup (S.name sym) funcEnv of
+        Just _ ->
+          error
+            $  "variable "
+            <> show sym
+            <> " has no non-function bindings (at "
+            <> show pos
+            <> ")"
+        Nothing ->
+          error $ "use of undefined variable " <> show sym <> " at " <> show pos
+
+codegenVar (A.FieldVar var sym pos) = do
+  (varOp, varTy) <- codegenVar var
+  case varTy of
+    Types.RECORD (sym2ty, _) -> case fieldOffset sym2ty sym of
+      Just (fieldTy, fieldNumber) -> do
+        fieldPtr <- IRB.gep
+          varOp
+          [IRB.int32 0, IRB.int32 $ fromIntegral fieldNumber]
+        loadOp <- IRB.load fieldPtr 8
+        pure (loadOp, fieldTy)
+      Nothing ->
+        error
+          $  "in field expr, record type "
+          <> show varTy
+          <> " has no "
+          <> show sym
+          <> " field, at "
+          <> show pos
+    t ->
+      error
+        $  "in field expr at "
+        <> show pos
+        <> ", only record types have fields. type="
+        <> show t
+
+codegenVar v =
+  error $ "unimplemented alterative " <> show v <> " in codegenVar"
+
+codegenExp :: A.Exp -> Codegen (LL.Operand, Types.Ty)
+
+codegenExp (A.VarExp var)  = codegenVar var
 
 codegenExp A.NilExp        = pure (nullptr, Types.NIL)
 
@@ -354,6 +396,12 @@ codegenExp (A.LetExp decs body _) = do
 
 codegenExp e = error $ "unimplemented alternative in codegenExp: " <> show e
 
+fieldOffset :: [(S.Symbol, Types.Ty)] -> S.Symbol -> Maybe (Types.Ty, Int)
+fieldOffset sym2ty sym =
+  let symTyIxList =
+          (\((s, t), ix) -> (s, (t, ix))) <$> zip sym2ty [0 :: Int ..]
+  in  lookup sym symTyIxList
+
 emptyModule :: String -> LL.Module
 emptyModule label = LL.defaultModule { LL.moduleName = toShortBS label }
 
@@ -409,7 +457,7 @@ codegenDecl tydec =
   error $ "unimplemented alternative in codegenDecl: " <> show tydec
 
 codegenTypeDec :: A.TyDec -> LLVM ()
-codegenTypeDec (A.TyDec (S.Symbol (tydecName)) ty tydecPos) = do
+codegenTypeDec (A.TyDec (S.Symbol tydecName) ty tydecPos) = do
   tenv <- gets types
   case M.lookup tydecName tenv of
     Just _ ->
@@ -424,7 +472,7 @@ codegenTypeDec (A.TyDec (S.Symbol (tydecName)) ty tydecPos) = do
       let tenv' = M.insert tydecName tigerType tenv
       modify $ \s -> s { types = tenv' }
       lltenv  <- gets lltypes
-      llType' <- IRB.typedef (LL.mkName $ "struct." <> Text.unpack tydecName)
+      llType' <- IRB.typedef (LL.mkName $ "struct." <> Text.unpack tydecName) -- TODO: not all typedefs are records. Records need a typeid too
                              (Just llType)
       modify $ \s -> s { lltypes = (tigerType, LL.ptr llType') : lltenv }
 
@@ -433,7 +481,7 @@ transType (A.RecordTy fields) = do
   tenv <- gets types
   let
     fieldTypesTiger = fmap
-      (\(A.Field { A.fieldTyp = (S.Symbol fieldTypeName), A.fieldPos = pos }) ->
+      (\A.Field { A.fieldTyp = (S.Symbol fieldTypeName), A.fieldPos = pos } ->
         case M.lookup fieldTypeName tenv of
           Nothing ->
             error

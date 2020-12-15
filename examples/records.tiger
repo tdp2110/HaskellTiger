@@ -1,0 +1,8 @@
+let
+    type IntPair = { fst : int, snd: string }
+    var x : IntPair := nil
+    var y := IntPair { fst=1, snd="hello" }
+in
+    println(itoa(y.fst));
+    println(y.snd)
+end

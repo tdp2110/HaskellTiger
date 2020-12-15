@@ -266,5 +266,8 @@ class TestLLVMCodegen(unittest.TestCase):
     def test_divs(self):
         self.check_compiler('examples/divs.tiger', '2\n1\n')
         
+    def test_records_1(self):
+        self.check_compiler('examples/records.tiger', '1\nhello\n')
+        
 if __name__ == '__main__':
     unittest.main()
