@@ -562,9 +562,17 @@ codegenTypeDec (A.TyDec (S.Symbol tydecName) ty tydecPos) = do
       let tenv' = M.insert tydecName tigerType tenv
       modify $ \s -> s { types = tenv' }
       lltenv  <- gets lltypes
-      llType' <- IRB.typedef (LL.mkName $ "struct." <> Text.unpack tydecName) -- TODO: not all typedefs are records. Records need a typeid too
-                             (Just llType)
+      llType' <- IRB.typedef (mkTypeName tigerType) (Just llType)
       modify $ \s -> s { lltypes = (tigerType, LL.ptr llType') : lltenv }
+ where
+  mkTypeName tigerType =
+    let tydecNameStr = Text.unpack tydecName
+    in  LL.mkName $ case tigerType of
+          Types.RECORD (_, typeId) ->
+            "struct." <> tydecNameStr <> "." <> show typeId
+          Types.ARRAY (_, typeId) ->
+            "array." <> tydecNameStr <> "." <> show typeId
+          _ -> tydecNameStr
 
 transType :: A.Ty -> LLVM (Types.Ty, LL.Type)
 transType (A.RecordTy fields) = do
