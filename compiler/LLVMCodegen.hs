@@ -121,12 +121,9 @@ codegenVar (A.FieldVar var sym pos) = do
       Just (fieldTy, fieldNumber) -> mdo
         test <- IRB.icmp LL.NE varOp nullptr
         IRB.condBr test nonnullCase nullCase
-        llrecordType <- lift $ lltype varTy
-        recordPtr    <- IRB.bitcast varOp llrecordType
-
-        nonnullCase  <- IRB.block `IRB.named` "nonnull"
-        fieldPtr     <- IRB.gep
-          recordPtr
+        nonnullCase <- IRB.block `IRB.named` "nonnull"
+        fieldPtr    <- IRB.gep
+          varOp
           [IRB.int32 0, IRB.int32 $ fromIntegral fieldNumber]
         loadOp <- IRB.load fieldPtr 8
         IRB.br exit
@@ -459,13 +456,18 @@ codegenDecl (A.FunctionDec [funDec]) = lift $ codegenFunDec funDec
 
 codegenDecl (A.VarDec name _ maybeAnnotatedTy initExp pos) = do
   (initOp, initTy) <- codegenExp initExp
-  llt              <- lift $ lltype initTy
-  addr             <- IRB.alloca llt Nothing 8
-  IRB.store addr 8 initOp
-  eltTy <- getEltTy initTy
+  eltTy            <- getEltTy initTy
+  llty             <- lift $ lltype eltTy
+  addr             <- IRB.alloca llty Nothing 8
+  initOpCorrected  <- castNullPtrToType initOp llty initTy
+  IRB.store addr 8 initOpCorrected
   registerOperand (S.name name) eltTy addr
   pure ()
  where
+  castNullPtrToType initOp llty eltTy = case eltTy of
+    Types.NIL -> IRB.bitcast initOp llty
+    _         -> pure initOp
+
   getEltTy :: Types.Ty -> Codegen Types.Ty
   getEltTy initTy = case maybeAnnotatedTy of
     Nothing -> do
