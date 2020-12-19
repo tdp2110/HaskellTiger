@@ -115,40 +115,9 @@ codegenVar (A.SimpleVar sym pos) = do
           error $ "use of undefined variable " <> show sym <> " at " <> show pos
 
 codegenVar (A.FieldVar var sym pos) = do
-  (varOp, varTy) <- codegenVar var
-  case varTy of
-    Types.RECORD (sym2ty, _) -> case fieldOffset sym2ty sym of
-      Just (fieldTy, fieldNumber) -> mdo
-        test <- IRB.icmp LL.NE varOp nullptr
-        IRB.condBr test nonnullCase nullCase
-        nonnullCase <- IRB.block `IRB.named` "nonnull"
-        fieldPtr    <- IRB.gep
-          varOp
-          [IRB.int32 0, IRB.int32 $ fromIntegral fieldNumber]
-        loadOp <- IRB.load fieldPtr 8
-        IRB.br exit
-
-        nullCase          <- IRB.block `IRB.named` "null"
-        nullDereferenceFn <- lift $ getRTSFunc "tiger_nullRecordDereference"
-        _                 <- IRB.call nullDereferenceFn []
-        _                 <- IRB.unreachable
-
-        exit              <- IRB.block `IRB.named` "exit"
-        pure (loadOp, fieldTy)
-      Nothing ->
-        error
-          $  "in field expr, record type "
-          <> show varTy
-          <> " has no "
-          <> show sym
-          <> " field, at "
-          <> show pos
-    t ->
-      error
-        $  "in field expr at "
-        <> show pos
-        <> ", only record types have fields. type="
-        <> show t
+  (fieldAddr, fieldTy) <- getFieldAddr var sym pos
+  loadOp               <- IRB.load fieldAddr 8
+  pure (loadOp, fieldTy)
 
 codegenVar v =
   error $ "unimplemented alterative " <> show v <> " in codegenVar"
@@ -406,6 +375,42 @@ codegenExp (A.LetExp decs body _) = do
   codegenExp body
 
 codegenExp e = error $ "unimplemented alternative in codegenExp: " <> show e
+
+getFieldAddr :: A.Var -> S.Symbol -> A.Pos -> Codegen (LL.Operand, Types.Ty)
+getFieldAddr var sym pos = do
+  (varOp, varTy) <- codegenVar var
+  case varTy of
+    Types.RECORD (sym2ty, _) -> case fieldOffset sym2ty sym of
+      Just (fieldTy, fieldNumber) -> mdo
+        test <- IRB.icmp LL.NE varOp nullptr
+        IRB.condBr test nonnullCase nullCase
+        nonnullCase <- IRB.block `IRB.named` "nonnull"
+        fieldAddr   <- IRB.gep
+          varOp
+          [IRB.int32 0, IRB.int32 $ fromIntegral fieldNumber]
+        IRB.br exit
+
+        nullCase          <- IRB.block `IRB.named` "null"
+        nullDereferenceFn <- lift $ getRTSFunc "tiger_nullRecordDereference"
+        _                 <- IRB.call nullDereferenceFn []
+        _                 <- IRB.unreachable
+
+        exit              <- IRB.block `IRB.named` "exit"
+        pure (fieldAddr, fieldTy)
+      Nothing ->
+        error
+          $  "in field expr, record type "
+          <> show varTy
+          <> " has no "
+          <> show sym
+          <> " field, at "
+          <> show pos
+    t ->
+      error
+        $  "in field expr at "
+        <> show pos
+        <> ", only record types have fields. type="
+        <> show t
 
 fieldOffset :: [(S.Symbol, Types.Ty)] -> S.Symbol -> Maybe (Types.Ty, Int)
 fieldOffset sym2ty sym =
