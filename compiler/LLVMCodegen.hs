@@ -121,10 +121,12 @@ codegenVar (A.FieldVar var sym pos) = do
       Just (fieldTy, fieldNumber) -> mdo
         test <- IRB.icmp LL.NE varOp nullptr
         IRB.condBr test nonnullCase nullCase
+        llrecordType <- lift $ lltype varTy
+        recordPtr    <- IRB.bitcast varOp llrecordType
 
-        nonnullCase <- IRB.block `IRB.named` "nonnull"
-        fieldPtr    <- IRB.gep
-          varOp
+        nonnullCase  <- IRB.block `IRB.named` "nonnull"
+        fieldPtr     <- IRB.gep
+          recordPtr
           [IRB.int32 0, IRB.int32 $ fromIntegral fieldNumber]
         loadOp <- IRB.load fieldPtr 8
         IRB.br exit
@@ -453,15 +455,57 @@ codegenDivOrModulo divOrMod dividend divisor = mdo
 
 codegenDecl :: A.Dec -> Codegen ()
 
-codegenDecl (A.FunctionDec [funDec]     ) = lift $ codegenFunDec funDec
+codegenDecl (A.FunctionDec [funDec]) = lift $ codegenFunDec funDec
 
-codegenDecl (A.VarDec name _ _ initExp _) = do
+codegenDecl (A.VarDec name _ maybeAnnotatedTy initExp pos) = do
   (initOp, initTy) <- codegenExp initExp
   llt              <- lift $ lltype initTy
   addr             <- IRB.alloca llt Nothing 8
   IRB.store addr 8 initOp
-  registerOperand (S.name name) initTy addr
+  eltTy <- getEltTy initTy
+  registerOperand (S.name name) eltTy addr
   pure ()
+ where
+  getEltTy :: Types.Ty -> Codegen Types.Ty
+  getEltTy initTy = case maybeAnnotatedTy of
+    Nothing -> do
+      pure initTy
+    Just (S.Symbol annotatedTypeName, annotatedTyPos) -> do
+      tenv <- gets types
+      case M.lookup annotatedTypeName tenv of
+        Nothing -> do
+          error
+            $  "use of undefined typename "
+            <> show annotatedTypeName
+            <> " at "
+            <> show annotatedTyPos
+        Just annotatedType -> if annotatedType == initTy
+          then do
+            pure initTy
+          else
+            let err = do
+                  error
+                    $  "in var decl at "
+                    <> show pos
+                    <> ", computed element type "
+                    <> show initTy
+                    <> " is incompatible with annotated type "
+                    <> show annotatedType
+            in  case initTy of
+                  Types.NIL ->
+                    if not (isRecordTy annotatedType)
+                         && annotatedType
+                         /= Types.NIL
+                      then do
+                        err
+                      else do
+                        pure annotatedType
+                  _ -> do
+                    err
+
+  isRecordTy :: Types.Ty -> Bool
+  isRecordTy (Types.RECORD _) = True
+  isRecordTy _                = False
 
 codegenDecl (A.TypeDec [tydec]) = lift $ codegenTypeDec tydec
 
