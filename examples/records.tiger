@@ -4,5 +4,9 @@ let
     var y := IntPair { fst=1, snd="hello" }
 in
     println(itoa(y.fst));
+    println(y.snd);
+    y.fst := 42;
+    y.snd := "world";
+    println(itoa(y.fst));
     println(y.snd)
 end

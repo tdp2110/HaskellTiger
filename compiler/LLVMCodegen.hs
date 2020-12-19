@@ -313,6 +313,27 @@ codegenExp (A.SeqExp expAndPosns) = do
     [] -> pure (zero, Types.UNIT)
     _  -> pure $ last expsAndTys
 
+codegenExp (A.AssignExp (A.FieldVar var sym fieldPos) expr assignPos) = do
+  (fieldAddr, fieldTy) <- getFieldAddr var sym fieldPos
+  (rhsOp    , rhsTy  ) <- codegenExp expr
+  if not $ typesAreCompatible fieldTy rhsTy
+    then
+      error
+      $  "in assign exp at "
+      <> show assignPos
+      <> ", attempting to set field "
+      <> show sym
+      <> " in var "
+      <> show var
+      <> " of type "
+      <> show fieldTy
+      <> " to a value of type "
+      <> show rhsTy
+    else do
+      IRB.store fieldAddr 8 rhsOp
+      pure (zero, Types.UNIT)
+
+
 codegenExp (A.CallExp funcSym args pos) = do
   argOps <- forM args $ \arg -> do
     (argOp, argTy) <- codegenExp arg -- TODO type check
@@ -375,6 +396,12 @@ codegenExp (A.LetExp decs body _) = do
   codegenExp body
 
 codegenExp e = error $ "unimplemented alternative in codegenExp: " <> show e
+
+typesAreCompatible :: Types.Ty -> Types.Ty -> Bool
+typesAreCompatible t1 t2 = case (t1, t2) of
+  (Types.RECORD _, Types.NIL) -> True
+  (Types.NIL, Types.RECORD _) -> True
+  _ -> t1 == t2
 
 getFieldAddr :: A.Var -> S.Symbol -> A.Pos -> Codegen (LL.Operand, Types.Ty)
 getFieldAddr var sym pos = do

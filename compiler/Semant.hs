@@ -540,7 +540,7 @@ transExp (A.AssignExp (A.FieldVar var sym fieldPos) expr assignPos) = do
           ++ " in var "
           ++ show var
           ++ " of type "
-          ++ show rhsTy
+          ++ show varTy
           ++ " to a value of type "
           ++ show rhsTy
           ++ " when type "
