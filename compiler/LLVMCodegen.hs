@@ -599,6 +599,21 @@ transType (A.RecordTy fields) = do
   let recordTypeTiger = Types.RECORD (zip fieldNames fieldTypesTiger, typeId)
   pure (recordTypeTiger, recordTypeLLVM)
 
+transType (A.ArrayTy (S.Symbol sym, pos)) = do
+  tenv <- gets types
+  let eltTypeTiger = case M.lookup sym tenv of
+        Nothing ->
+          error $ "use of undefined typename " <> show sym <> " at " <> show pos
+        Just t -> t
+  eltTypeLLVM <- lltype eltTypeTiger
+  typeId      <- nextInt
+  let arrayTypeLLVM = LL.StructureType
+        { LL.isPacked     = False
+        , LL.elementTypes = [LL.i64, LL.ptr eltTypeLLVM]
+        }
+  let arrayTypeTiger = Types.ARRAY (eltTypeTiger, typeId)
+  pure (arrayTypeTiger, arrayTypeLLVM)
+
 transType t = error $ "unimplemented alternative in transType: " <> show t
 
 codegenFunDec :: A.FunDec -> LLVM ()
