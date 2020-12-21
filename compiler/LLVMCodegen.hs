@@ -395,6 +395,84 @@ codegenExp (A.LetExp decs body _) = do
   forM_ decs codegenDecl
   codegenExp body
 
+codegenExp (A.ArrayExp (S.Symbol typ) sizeExp initExp pos) = do
+  tenv <- gets types
+  case M.lookup typ tenv of
+    Nothing ->
+      error
+        $  "In array exp at "
+        <> show pos
+        <> ", use of undeclared typename "
+        <> show typ
+    Just t -> case t of
+      Types.ARRAY (eltTy, _) -> do
+        (_, initTy) <- codegenExp initExp
+        if not $ typesAreCompatible initTy eltTy
+          then
+            error
+            $  "In array exp at "
+            <> show pos
+            <> ", incompatible init exp of type "
+            <> show initTy
+            <> " in an array holding "
+            <> show eltTy
+          else mdo
+            allocFn           <- lift $ getRTSFunc "tiger_alloc"
+            llEltTy           <- lift $ lltype initTy
+            arrayStructTyLLVM <- lift $ lltype t
+            let arrayStructSizez32 =
+                  LL.ConstantOperand $ LLConstant.sizeof $ LL.pointerReferent
+                    arrayStructTyLLVM
+            arrayStructSizez64 <- IRB.sext arrayStructSizez32 LL.i64
+            arrayPtrI8         <- IRB.call allocFn [(arrayStructSizez64, [])]
+            arrayPtr           <- IRB.bitcast arrayPtrI8 arrayStructTyLLVM
+
+            idxAddr            <- IRB.alloca LL.i64 Nothing 8
+            IRB.store idxAddr 8 zero
+
+            szAddr           <- IRB.gep arrayPtr [IRB.int32 0, IRB.int32 0]
+            (sizeOp, sizeTy) <- codegenExp sizeExp
+            when (sizeTy /= Types.INT)
+              $  error
+              $  "In array exp, size exp must be integral. Found "
+              <> show sizeTy
+              <> " at "
+              <> show pos
+            IRB.store szAddr 8 sizeOp
+
+            dataPtr <- IRB.gep arrayPtr [IRB.int32 0, IRB.int32 1]
+            let eltSize32 = LL.ConstantOperand $ LLConstant.sizeof llEltTy
+            eltSize64           <- IRB.sext eltSize32 LL.i64
+            dataPtrNumBytes     <- IRB.mul sizeOp eltSize64
+            arrayStorageI8      <- IRB.call allocFn [(dataPtrNumBytes, [])]
+            arrayStorageEltType <- IRB.bitcast arrayStorageI8 $ LL.ptr llEltTy
+            IRB.store dataPtr 8 arrayStorageEltType
+            IRB.br testLab
+
+            testLab <- IRB.block `IRB.named` "initloop.test"
+            idx     <- IRB.load idxAddr 8
+            test    <- IRB.icmp LL.SLT idx sizeOp
+            IRB.condBr test initLoop initLoopExit
+
+            initLoop     <- IRB.block `IRB.named` "initloop"
+            (initOp, _)  <- codegenExp initExp
+            idx'         <- IRB.load idxAddr 8
+            eltToInitPtr <- IRB.gep arrayStorageEltType [idx']
+            IRB.store eltToInitPtr 8 initOp
+            idx'' <- IRB.add idx' $ IRB.int64 1
+            IRB.store idxAddr 8 idx''
+            IRB.br testLab
+
+            initLoopExit <- IRB.block `IRB.named` "initloop.exit"
+
+            pure (arrayPtr, t)
+      _ ->
+        error
+          $  "In array exp at "
+          <> show pos
+          <> ", only array types may appear as symbol. Found "
+          <> show t
+
 codegenExp e = error $ "unimplemented alternative in codegenExp: " <> show e
 
 typesAreCompatible :: Types.Ty -> Types.Ty -> Bool
