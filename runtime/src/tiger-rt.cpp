@@ -146,6 +146,12 @@ void tiger_nullRecordDereference() {
   std::terminate();
 }
 
+void tiger_indexError(int64_t const idx, int64_t const length) {
+  std::cerr << "FATAL TIGER ERROR: attempted to index into an array of length "
+            << length << " with an out-of-range index " << idx << '\n';
+  std::terminate();
+}
+
 void tiger_divByZero() {
   std::cerr << "FATAL TIGER ERROR: division or modulo by zero\n";
   std::terminate();

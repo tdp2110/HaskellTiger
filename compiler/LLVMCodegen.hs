@@ -114,13 +114,15 @@ codegenVar (A.SimpleVar sym pos) = do
         Nothing ->
           error $ "use of undefined variable " <> show sym <> " at " <> show pos
 
+codegenVar (A.SubscriptVar var idxExp pos) = do
+  (eltPtr, eltTy) <- getArrayEltPtr var idxExp pos
+  loadOp          <- IRB.load eltPtr 8
+  pure (loadOp, eltTy)
+
 codegenVar (A.FieldVar var sym pos) = do
   (fieldAddr, fieldTy) <- getFieldAddr var sym pos
   loadOp               <- IRB.load fieldAddr 8
   pure (loadOp, fieldTy)
-
-codegenVar v =
-  error $ "unimplemented alterative " <> show v <> " in codegenVar"
 
 codegenExp :: A.Exp -> Codegen (LL.Operand, Types.Ty)
 
@@ -333,7 +335,6 @@ codegenExp (A.AssignExp (A.FieldVar var sym fieldPos) expr assignPos) = do
       IRB.store fieldAddr 8 rhsOp
       pure (zero, Types.UNIT)
 
-
 codegenExp (A.CallExp funcSym args pos) = do
   argOps <- forM args $ \arg -> do
     (argOp, argTy) <- codegenExp arg -- TODO type check
@@ -516,6 +517,47 @@ getFieldAddr var sym pos = do
         <> show pos
         <> ", only record types have fields. type="
         <> show t
+
+getArrayEltPtr :: A.Var -> A.Exp -> A.Pos -> Codegen (LL.Operand, Types.Ty)
+getArrayEltPtr var idxExp pos = do
+  (idxOp, idxTy) <- codegenExp idxExp
+  when (idxTy /= Types.INT)
+    $  error
+    $  "In subscript expr at "
+    <> show pos
+    <> ", index expression must have type INT, but found "
+    <> show idxTy
+  (varOp, varTy) <- codegenVar var
+  case varTy of
+    Types.ARRAY (eltTy, _) -> mdo
+      sizeAddr <- IRB.gep varOp [IRB.int32 0, IRB.int32 0]
+      sizeOp   <- IRB.load sizeAddr 8
+      IRB.br checkNonNegative
+
+      checkNonNegative <- IRB.block `IRB.named` "nonnegative-check"
+      isNonNegative    <- IRB.icmp LL.SLE zero idxOp
+      IRB.condBr isNonNegative checkLTSize outOfRange
+
+      checkLTSize <- IRB.block `IRB.named` "check-lt-size"
+      isLTSize    <- IRB.icmp LL.SLT idxOp sizeOp
+      IRB.condBr isLTSize doDereference outOfRange
+
+      outOfRange    <- IRB.block `IRB.named` "out-of-range"
+      outOfRangeFn  <- lift $ getRTSFunc "tiger_indexError"
+      _             <- IRB.call outOfRangeFn [(idxOp, []), (sizeOp, [])]
+      _             <- IRB.unreachable
+
+      doDereference <- IRB.block `IRB.named` "dereference"
+      dataPtrPtr    <- IRB.gep varOp [IRB.int32 0, IRB.int32 1]
+      dataPtr       <- IRB.load dataPtrPtr 8
+      eltPtr        <- IRB.gep dataPtr [idxOp]
+      pure (eltPtr, eltTy)
+    _ ->
+      error
+        $  "In subscript expr at "
+        <> show pos
+        <> ", only arrays may be subscripted. Found "
+        <> show varTy
 
 fieldOffset :: [(S.Symbol, Types.Ty)] -> S.Symbol -> Maybe (Types.Ty, Int)
 fieldOffset sym2ty sym =
@@ -796,6 +838,7 @@ codegenLLVM filename e =
       [ ("tiger_divByZero"            , []                , LL.void)
       , ("tiger_allocString"          , [charStar, LL.i64], llStringType)
       , ("tiger_alloc"                , [LL.i64]          , charStar)
+      , ("tiger_indexError"           , [LL.i64, LL.i64]  , LL.void)
       , ("tiger_nullRecordDereference", []                , LL.void)
       ]
 
