@@ -200,6 +200,21 @@ codegenExp (A.AssignExp (A.SimpleVar var varPos) rhs rhsPos) = do
             <> " at "
             <> show varPos
 
+codegenExp (A.AssignExp (A.SubscriptVar var idxExp subscriptPos) rhs rhsPos) =
+  do
+    (eltPtr, eltTy) <- getArrayEltPtr var idxExp subscriptPos
+    (rhsOp , rhsTy) <- codegenExp rhs
+    when (not $ typesAreCompatible rhsTy eltTy)
+      $  error
+      $  "In assign op at "
+      <> show rhsPos
+      <> ", cannot assign a value of type "
+      <> show rhsTy
+      <> " into an array holding type "
+      <> show eltTy
+    IRB.store eltPtr 8 rhsOp
+    pure (zero, Types.UNIT)
+
 codegenExp (A.IfExp test then' (Just else') pos) = mdo
   -- %entry
   ---------

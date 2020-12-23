@@ -270,7 +270,7 @@ class TestLLVMCodegen(unittest.TestCase):
         self.check_compiler('examples/records.tiger', '1\nhello\n42\nworld\n')
         
     def test_arrays_1(self):
-        self.check_compiler('examples/arrays-llvm.tiger', '1337\n1337\n1337\n1337\n')
+        self.check_compiler('examples/arrays-llvm.tiger', '1337\n1337\n0\n1\n')
         
 if __name__ == '__main__':
     unittest.main()

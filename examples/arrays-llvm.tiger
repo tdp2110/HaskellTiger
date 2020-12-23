@@ -1,9 +1,17 @@
 let
-    var N := 4
+    var N := 2
     type intArray = array of int
     var arr := intArray [ N ] of 1337
     var idx := 0
 in
+    while idx < N do
+      (println(itoa(arr[idx]));
+       idx := idx + 1);
+    idx := 0;
+    while idx < N do
+      (arr[idx] := idx;
+       idx := idx + 1);
+    idx := 0;
     while idx < N do
       (println(itoa(arr[idx]));
        idx := idx + 1)
