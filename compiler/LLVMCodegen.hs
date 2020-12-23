@@ -206,7 +206,7 @@ codegenExp (A.AssignExp (A.SubscriptVar var idxExp subscriptPos) rhs rhsPos) =
     (rhsOp , rhsTy) <- codegenExp rhs
     when (not $ typesAreCompatible rhsTy eltTy)
       $  error
-      $  "In assign op at "
+      $  "In assign exp at "
       <> show rhsPos
       <> ", cannot assign a value of type "
       <> show rhsTy
@@ -214,6 +214,24 @@ codegenExp (A.AssignExp (A.SubscriptVar var idxExp subscriptPos) rhs rhsPos) =
       <> show eltTy
     IRB.store eltPtr 8 rhsOp
     pure (zero, Types.UNIT)
+
+codegenExp (A.AssignExp (A.FieldVar var sym fieldPos) expr assignPos) = do
+  (fieldAddr, fieldTy) <- getFieldAddr var sym fieldPos
+  (rhsOp    , rhsTy  ) <- codegenExp expr
+  when (not $ typesAreCompatible fieldTy rhsTy)
+    $  error
+    $  "in assign exp at "
+    <> show assignPos
+    <> ", attempting to set field "
+    <> show sym
+    <> " in var "
+    <> show var
+    <> " of type "
+    <> show fieldTy
+    <> " to a value of type "
+    <> show rhsTy
+  IRB.store fieldAddr 8 rhsOp
+  pure (zero, Types.UNIT)
 
 codegenExp (A.IfExp test then' (Just else') pos) = mdo
   -- %entry
@@ -329,26 +347,6 @@ codegenExp (A.SeqExp expAndPosns) = do
   case expsAndTys of
     [] -> pure (zero, Types.UNIT)
     _  -> pure $ last expsAndTys
-
-codegenExp (A.AssignExp (A.FieldVar var sym fieldPos) expr assignPos) = do
-  (fieldAddr, fieldTy) <- getFieldAddr var sym fieldPos
-  (rhsOp    , rhsTy  ) <- codegenExp expr
-  if not $ typesAreCompatible fieldTy rhsTy
-    then
-      error
-      $  "in assign exp at "
-      <> show assignPos
-      <> ", attempting to set field "
-      <> show sym
-      <> " in var "
-      <> show var
-      <> " of type "
-      <> show fieldTy
-      <> " to a value of type "
-      <> show rhsTy
-    else do
-      IRB.store fieldAddr 8 rhsOp
-      pure (zero, Types.UNIT)
 
 codegenExp (A.CallExp funcSym args pos) = do
   argOps <- forM args $ \arg -> do
