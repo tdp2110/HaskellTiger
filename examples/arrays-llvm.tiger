@@ -1,18 +1,23 @@
 let
     var N := 2
-    type intArray = array of int
-    var arr := intArray [ N ] of 1337
+    type IntArray = array of int
+    var arr := IntArray [ N ] of 1337
     var idx := 0
+
+    function printArr(x: IntArray) =
+        let
+            var ix := 0
+            var sz := 2
+        in
+            while ix < sz do
+              (println(itoa(x[ix]));
+               ix := ix + 1)
+        end
+
 in
-    while idx < N do
-      (println(itoa(arr[idx]));
-       idx := idx + 1);
-    idx := 0;
+    printArr(arr);
     while idx < N do
       (arr[idx] := idx;
        idx := idx + 1);
-    idx := 0;
-    while idx < N do
-      (println(itoa(arr[idx]));
-       idx := idx + 1)
+    printArr(arr)
 end

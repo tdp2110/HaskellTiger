@@ -2,11 +2,12 @@ let
     type IntPair = { fst : int, snd: string }
     var x : IntPair := nil
     var y := IntPair { fst=1, snd="hello" }
+    function printPair(p : IntPair) =
+      (println(itoa(p.fst));
+       println(p.snd))
 in
-    println(itoa(y.fst));
-    println(y.snd);
+    printPair(y);
     y.fst := 42;
     y.snd := "world";
-    println(itoa(y.fst));
-    println(y.snd)
+    printPair(y)
 end

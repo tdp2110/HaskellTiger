@@ -46,7 +46,7 @@ data CodegenState = CodegenState { operands :: M.Map Text (LL.Operand, Types.Ty)
                                  , types :: M.Map Text Types.Ty
                                  , strings :: M.Map Text LL.Operand
                                  , lltypes :: [(Types.Ty, LL.Type)]
-                                 , currentFunAndRetTy :: Maybe (A.FunDec, Types.Ty)
+                                 , currentFun :: Maybe (A.FunDec, Types.Ty, [Types.Ty])
                                  , intSupply :: InfList.InfList Integer
                                  }
         deriving (Eq, Show)
@@ -753,13 +753,18 @@ codegenFunDec :: A.FunDec -> LLVM ()
 codegenFunDec f@A.FunDec { A.fundecName = name, A.params = params, A.result = resultTyMaybe, A.funBody = body }
   = mdo
     tenv       <- gets types
-    stashedFun <- gets currentFunAndRetTy
+    stashedFun <- gets currentFun
     let retty    = extractRetTy tenv
     let paramTys = extractParamTys tenv
-    modify $ \env -> env { currentFunAndRetTy = Just (f, retty) }
+    modify $ \env -> env { currentFun = Just (f, retty, paramTys) }
     registerFunction (S.name name) (FunctionType paramTys retty) fun
-    fun <- IRB.function (LL.Name $ toShortBS $ show name) args LL.i64 genBody
-    modify $ \env -> env { currentFunAndRetTy = stashedFun }
+    llArgTys  <- getLLArgs params
+    rettyLLVM <- lltype retty
+    fun       <- IRB.function (LL.Name $ toShortBS $ show name)
+                              llArgTys
+                              rettyLLVM
+                              genBody
+    modify $ \env -> env { currentFun = stashedFun }
     pure ()
  where
   extractParamTys tenv = fmap
@@ -787,25 +792,33 @@ codegenFunDec f@A.FunDec { A.fundecName = name, A.params = params, A.result = re
     )
     resultTyMaybe
 
-  args = toSig params
-
-  toSig :: [A.Field] -> [(LL.Type, IRB.ParameterName)]
-  toSig = fmap
-    (\field ->
-      (LL.i64, IRB.ParameterName $ toShortBS $ show $ A.fieldName field)
-    )
+  getLLArgs :: [A.Field] -> LLVM [(LL.Type, IRB.ParameterName)]
+  getLLArgs fields = do
+    currentFunMaybe <- gets currentFun
+    case currentFunMaybe of
+      Just (_, _, paramTys) -> do
+        mapM
+            (\(field, fieldTy) -> do
+              llty <- lltype fieldTy
+              let paramName =
+                    IRB.ParameterName $ toShortBS $ show $ A.fieldName field
+              pure (llty, paramName)
+            )
+          $ zip fields paramTys
+      Nothing -> error "impossible"
 
   genBody :: [LL.Operand] -> Codegen ()
   genBody ops = do
-    _entry <- IRB.block `IRB.named` "entry"
-    forM_ (zip ops params) $ \(op, field) -> do
-      addr <- IRB.alloca LL.i64 Nothing 8
-      IRB.store addr 8 op
-      registerOperand (S.name $ A.fieldName field) Types.INT addr -- TODO fixup param types
-    (bodyOp, bodyTy) <- codegenExp body
-    currentFunMaybe  <- gets currentFunAndRetTy
+    _entry          <- IRB.block `IRB.named` "entry"
+    currentFunMaybe <- gets currentFun
     case currentFunMaybe of
-      Just (enclosingFunc, retty) -> do
+      Just (enclosingFunc, retty, paramTys) -> do
+        forM_ (zip3 ops params paramTys) $ \(op, field, fieldTy) -> do
+          llfieldTy <- lift $ lltype fieldTy
+          addr      <- IRB.alloca llfieldTy Nothing 8
+          IRB.store addr 8 op
+          registerOperand (S.name $ A.fieldName field) fieldTy addr
+        (bodyOp, bodyTy) <- codegenExp body
         when (retty /= bodyTy) $ do
           error
             $  "In function "
@@ -817,7 +830,9 @@ codegenFunDec f@A.FunDec { A.fundecName = name, A.params = params, A.result = re
             <> " and annotated type "
             <> show retty
             <> " do not match"
-        IRB.ret bodyOp
+        case retty of
+          Types.UNIT -> IRB.retVoid
+          _          -> IRB.ret bodyOp
       Nothing -> error "impossible"
 
 newtype InternalName = InternalName String
@@ -827,14 +842,14 @@ codegenLLVM :: String -> A.Exp -> LL.Module
 codegenLLVM filename e =
   flip
       evalState
-      (CodegenState { operands           = M.empty
-                    , functions          = M.empty
-                    , runtimeFunctions   = M.empty
-                    , types              = baseTEnv
-                    , strings            = M.empty
-                    , currentFunAndRetTy = Nothing
-                    , lltypes            = builtinLLTypes
-                    , intSupply          = InfList.iterate (+ 1) 0
+      (CodegenState { operands         = M.empty
+                    , functions        = M.empty
+                    , runtimeFunctions = M.empty
+                    , types            = baseTEnv
+                    , strings          = M.empty
+                    , currentFun       = Nothing
+                    , lltypes          = builtinLLTypes
+                    , intSupply        = InfList.iterate (+ 1) 0
                     }
       )
     $ IRB.buildModuleT (toShortBS filename)
