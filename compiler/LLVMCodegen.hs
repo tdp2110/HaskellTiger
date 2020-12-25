@@ -274,6 +274,31 @@ codegenExp (A.IfExp test then' (Just else') pos) = mdo
   phi    <- IRB.phi [(ifThenOp, ifThen), (ifElseOp, ifElse)]
   pure (phi, ifElseTy)
 
+codegenExp (A.IfExp test then' Nothing pos) = mdo
+  (testOp, testTy) <- codegenExp test
+  when (testTy /= Types.INT) $ do
+    error
+      $  "test expressions must be INT. Found "
+      <> show testTy
+      <> " at "
+      <> show pos
+
+  test' <- IRB.icmp LL.NE testOp zero
+  IRB.condBr test' ifThen ifExit
+
+  ifThen        <- IRB.block `IRB.named` "if.then"
+  (_, ifThenTy) <- codegenExp then'
+  when (ifThenTy /= Types.UNIT)
+    $  error
+    $ "In if-then exp (without else), the if body must yield no value. Found value of type "
+    <> show ifThenTy
+    <> " in if-then at "
+    <> show pos
+  IRB.br ifExit
+
+  ifExit <- IRB.block `IRB.named` "if.exit"
+  pure (zero, Types.UNIT)
+
 codegenExp (A.RecordExp fields (S.Symbol typeSym) pos) = do
   tenv <- gets types
   case M.lookup typeSym tenv of

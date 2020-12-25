@@ -1,8 +1,10 @@
 let
     var x := 0
 in
-    if x = 1 then
+    if x = 0 then
+        x := 1;
+    println(itoa(x));
+    if x = 0 then
         x := 2;
-
-    print (chr(x))
+    println(itoa(x))
 end

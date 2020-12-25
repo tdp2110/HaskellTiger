@@ -272,5 +272,8 @@ class TestLLVMCodegen(unittest.TestCase):
     def test_arrays_1(self):
         self.check_compiler('examples/arrays-llvm.tiger', '1337\n1337\n0\n1\n')
         
+    def test_if_then_no_else(self):
+        self.check_compiler('examples/ifThen.tiger', '1\n1\n')
+        
 if __name__ == '__main__':
     unittest.main()
