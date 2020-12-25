@@ -23,6 +23,7 @@ import           Data.Word
 import           Data.ByteString.Short
 import qualified Data.Map                      as M
 import           Control.Monad                  ( when
+                                                , unless
                                                 , mapM
                                                 , forM_
                                                 )
@@ -204,7 +205,7 @@ codegenExp (A.AssignExp (A.SubscriptVar var idxExp subscriptPos) rhs rhsPos) =
   do
     (eltPtr, eltTy) <- getArrayEltPtr var idxExp subscriptPos
     (rhsOp , rhsTy) <- codegenExp rhs
-    when (not $ typesAreCompatible rhsTy eltTy)
+    unless (typesAreCompatible rhsTy eltTy)
       $  error
       $  "In assign exp at "
       <> show rhsPos
@@ -218,7 +219,7 @@ codegenExp (A.AssignExp (A.SubscriptVar var idxExp subscriptPos) rhs rhsPos) =
 codegenExp (A.AssignExp (A.FieldVar var sym fieldPos) expr assignPos) = do
   (fieldAddr, fieldTy) <- getFieldAddr var sym fieldPos
   (rhsOp    , rhsTy  ) <- codegenExp expr
-  when (not $ typesAreCompatible fieldTy rhsTy)
+  unless (typesAreCompatible fieldTy rhsTy)
     $  error
     $  "in assign exp at "
     <> show assignPos
@@ -754,15 +755,15 @@ codegenFunDec f@A.FunDec { A.fundecName = name, A.params = params, A.result = re
   = mdo
     tenv       <- gets types
     stashedFun <- gets currentFun
-    let retty    = extractRetTy tenv
+    let retTy    = extractRetTy tenv
     let paramTys = extractParamTys tenv
-    modify $ \env -> env { currentFun = Just (f, retty, paramTys) }
-    registerFunction (S.name name) (FunctionType paramTys retty) fun
-    llArgTys  <- getLLArgs params
-    rettyLLVM <- lltype retty
+    modify $ \env -> env { currentFun = Just (f, retTy, paramTys) }
+    registerFunction (S.name name) (FunctionType paramTys retTy) fun
+    llArgs    <- getLLArgs params
+    retTyLLVM <- lltype retTy
     fun       <- IRB.function (LL.Name $ toShortBS $ show name)
-                              llArgTys
-                              rettyLLVM
+                              llArgs
+                              retTyLLVM
                               genBody
     modify $ \env -> env { currentFun = stashedFun }
     pure ()
@@ -796,30 +797,27 @@ codegenFunDec f@A.FunDec { A.fundecName = name, A.params = params, A.result = re
   getLLArgs fields = do
     currentFunMaybe <- gets currentFun
     case currentFunMaybe of
-      Just (_, _, paramTys) -> do
-        mapM
-            (\(field, fieldTy) -> do
-              llty <- lltype fieldTy
-              let paramName =
-                    IRB.ParameterName $ toShortBS $ show $ A.fieldName field
-              pure (llty, paramName)
-            )
-          $ zip fields paramTys
-      Nothing -> error "impossible"
+      Just (_, _, paramTys) -> mapM getLLArg $ zip fields paramTys
+      Nothing               -> error "impossible"
+
+  getLLArg (field, fieldTy) = do
+    llty <- lltype fieldTy
+    let paramName = IRB.ParameterName $ toShortBS $ show $ A.fieldName field
+    pure (llty, paramName)
 
   genBody :: [LL.Operand] -> Codegen ()
   genBody ops = do
     _entry          <- IRB.block `IRB.named` "entry"
     currentFunMaybe <- gets currentFun
     case currentFunMaybe of
-      Just (enclosingFunc, retty, paramTys) -> do
+      Just (enclosingFunc, retTy, paramTys) -> do
         forM_ (zip3 ops params paramTys) $ \(op, field, fieldTy) -> do
           llfieldTy <- lift $ lltype fieldTy
           addr      <- IRB.alloca llfieldTy Nothing 8
           IRB.store addr 8 op
           registerOperand (S.name $ A.fieldName field) fieldTy addr
         (bodyOp, bodyTy) <- codegenExp body
-        when (retty /= bodyTy) $ do
+        when (retTy /= bodyTy) $ do
           error
             $  "In function "
             <> show (A.fundecName enclosingFunc)
@@ -828,9 +826,9 @@ codegenFunDec f@A.FunDec { A.fundecName = name, A.params = params, A.result = re
             <> ", computed type of function body "
             <> show bodyTy
             <> " and annotated type "
-            <> show retty
+            <> show retTy
             <> " do not match"
-        case retty of
+        case retTy of
           Types.UNIT -> IRB.retVoid
           _          -> IRB.ret bodyOp
       Nothing -> error "impossible"
