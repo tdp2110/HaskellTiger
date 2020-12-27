@@ -31,6 +31,10 @@ import           Control.Monad.State
 import qualified Data.Text                     as Text
 import           Data.Text                      ( Text )
 
+import           Debug.Trace
+
+debug = flip trace
+
 
 charToWord8 :: Char -> Word8
 charToWord8 = toEnum . fromEnum
@@ -48,6 +52,7 @@ data CodegenState = CodegenState { operands :: M.Map Text (LL.Operand, Types.Ty)
                                  , strings :: M.Map Text LL.Operand
                                  , lltypes :: [(Types.Ty, LL.Type)]
                                  , currentFun :: Maybe (A.FunDec, Types.Ty, [Types.Ty])
+                                 , breakTarget :: Maybe LL.Name
                                  , intSupply :: InfList.InfList Integer
                                  }
         deriving (Eq, Show)
@@ -79,6 +84,9 @@ getRTSFunc funname = do
 
 zero :: LL.Operand
 zero = IRB.int64 (0 :: Integer)
+
+one :: LL.Operand
+one = IRB.int64 (1 :: Integer)
 
 charStar :: LL.Type
 charStar = LL.ptr LL.i8
@@ -261,14 +269,14 @@ codegenExp (A.IfExp test then' maybeElse pos) = mdo
       -----------
       ifElse               <- IRB.block `IRB.named` "if.else"
       (ifElseOp, ifElseTy) <- codegenExp else'
-      when (ifThenTy /= ifElseTy) $
-        error
-          $ "In if else expressions, both ifTrue and ifFalse branches must have the same type. Found "
-          <> show ifThenTy
-          <> " and "
-          <> show ifElseTy
-          <> " at "
-          <> show pos
+      when (ifThenTy /= ifElseTy)
+        $  error
+        $ "In if else expressions, both ifTrue and ifFalse branches must have the same type. Found "
+        <> show ifThenTy
+        <> " and "
+        <> show ifElseTy
+        <> " at "
+        <> show pos
       IRB.br ifExit
 
       -- %if.exit
@@ -279,18 +287,24 @@ codegenExp (A.IfExp test then' maybeElse pos) = mdo
     Nothing -> mdo
       IRB.condBr test' ifThen ifExit
 
-      ifThen        <- IRB.block `IRB.named` "if.then"
-      (_, ifThenTy) <- codegenExp then'
+      ifThen              <- IRB.block `IRB.named` "if.then"
+      (retcode, ifThenTy) <- codegenExp then'
       when (ifThenTy /= Types.UNIT)
         $  error
         $ "In if-then exp (without else), the if body must yield no value. Found value of type "
         <> show ifThenTy
         <> " in if-then at "
         <> show pos
-      IRB.br ifExit
+      unless (didBreak retcode) $ do
+        IRB.br ifExit
 
       ifExit <- IRB.block `IRB.named` "if.exit"
       pure (zero, Types.UNIT)
+ where
+  didBreak :: LL.Operand -> Bool
+  didBreak (LL.ConstantOperand (LLConstant.Int { LLConstant.integerValue = 1 }))
+    = True
+  didBreak _ = False
 
 codegenExp (A.RecordExp fields (S.Symbol typeSym) pos) = do
   tenv <- gets types
@@ -417,12 +431,27 @@ codegenExp (A.WhileExp test body pos) = mdo
   test' <- IRB.icmp LL.NE testOp zero
   IRB.condBr test' loopBody loopExit
 
+  stashedBreakTarget <- gets breakTarget
+  modify $ \s -> s { breakTarget = Just loopExit }
   loopBody <- IRB.block `IRB.named` "while.body"
   _        <- codegenExp body
   IRB.br testLab
 
   loopExit <- IRB.block `IRB.named` "while.exit"
+  modify $ \s -> s { breakTarget = stashedBreakTarget }
   pure (zero, Types.UNIT)
+
+codegenExp (A.BreakExp pos) = do
+  breakLabel <- gets breakTarget
+  case breakLabel of
+    Just lab -> do
+      IRB.br lab
+      pure (one, Types.UNIT)
+    Nothing ->
+      error
+        $  "BreakExp at "
+        <> show pos
+        <> " not enclosed in a while or for loop."
 
 codegenExp (A.LetExp decs body _) = do
   forM_ decs codegenDecl
@@ -864,6 +893,7 @@ codegenLLVM filename e =
                     , types            = baseTEnv
                     , strings          = M.empty
                     , currentFun       = Nothing
+                    , breakTarget      = Nothing
                     , lltypes          = builtinLLTypes
                     , intSupply        = InfList.iterate (+ 1) 0
                     }

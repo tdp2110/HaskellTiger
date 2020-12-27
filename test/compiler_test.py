@@ -275,5 +275,8 @@ class TestLLVMCodegen(unittest.TestCase):
     def test_if_then_no_else(self):
         self.check_compiler('examples/ifThen.tiger', '1\n1\n')
         
+    def test_break(self):
+        self.check_compiler('examples/break.tiger', '0\n1\n2\n3\n4\n')
+        
 if __name__ == '__main__':
     unittest.main()
