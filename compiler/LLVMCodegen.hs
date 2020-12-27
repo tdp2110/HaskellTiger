@@ -234,7 +234,7 @@ codegenExp (A.AssignExp (A.FieldVar var sym fieldPos) expr assignPos) = do
   IRB.store fieldAddr 8 rhsOp
   pure (zero, Types.UNIT)
 
-codegenExp (A.IfExp test then' (Just else') pos) = mdo
+codegenExp (A.IfExp test then' maybeElse pos) = mdo
   -- %entry
   ---------
   (testOp, testTy) <- codegenExp test
@@ -246,58 +246,51 @@ codegenExp (A.IfExp test then' (Just else') pos) = mdo
       <> show pos
 
   test' <- IRB.icmp LL.NE testOp zero
-  IRB.condBr test' ifThen ifElse
 
-  -- %if.then
-  -----------
-  ifThen               <- IRB.block `IRB.named` "if.then"
-  (ifThenOp, ifThenTy) <- codegenExp then'
-  IRB.br ifExit
+  case maybeElse of
+    Just else' -> mdo
+      IRB.condBr test' ifThen ifElse
 
-  -- %if.else
-  -----------
-  ifElse               <- IRB.block `IRB.named` "if.else"
-  (ifElseOp, ifElseTy) <- codegenExp else'
-  when (ifThenTy /= ifElseTy) $ do
-    error
-      $ "In if else expressions, both ifTrue and ifFalse branches must have the same type. Found "
-      <> show ifThenTy
-      <> " and "
-      <> show ifElseTy
-      <> " at "
-      <> show pos
-  IRB.br ifExit
+      -- %if.then
+      -----------
+      ifThen               <- IRB.block `IRB.named` "if.then"
+      (ifThenOp, ifThenTy) <- codegenExp then'
+      IRB.br ifExit
 
-  -- %if.exit
-  -----------
-  ifExit <- IRB.block `IRB.named` "if.exit"
-  phi    <- IRB.phi [(ifThenOp, ifThen), (ifElseOp, ifElse)]
-  pure (phi, ifElseTy)
+      -- %if.else
+      -----------
+      ifElse               <- IRB.block `IRB.named` "if.else"
+      (ifElseOp, ifElseTy) <- codegenExp else'
+      when (ifThenTy /= ifElseTy) $
+        error
+          $ "In if else expressions, both ifTrue and ifFalse branches must have the same type. Found "
+          <> show ifThenTy
+          <> " and "
+          <> show ifElseTy
+          <> " at "
+          <> show pos
+      IRB.br ifExit
 
-codegenExp (A.IfExp test then' Nothing pos) = mdo
-  (testOp, testTy) <- codegenExp test
-  when (testTy /= Types.INT) $ do
-    error
-      $  "test expressions must be INT. Found "
-      <> show testTy
-      <> " at "
-      <> show pos
+      -- %if.exit
+      -----------
+      ifExit <- IRB.block `IRB.named` "if.exit"
+      phi    <- IRB.phi [(ifThenOp, ifThen), (ifElseOp, ifElse)]
+      pure (phi, ifElseTy)
+    Nothing -> mdo
+      IRB.condBr test' ifThen ifExit
 
-  test' <- IRB.icmp LL.NE testOp zero
-  IRB.condBr test' ifThen ifExit
+      ifThen        <- IRB.block `IRB.named` "if.then"
+      (_, ifThenTy) <- codegenExp then'
+      when (ifThenTy /= Types.UNIT)
+        $  error
+        $ "In if-then exp (without else), the if body must yield no value. Found value of type "
+        <> show ifThenTy
+        <> " in if-then at "
+        <> show pos
+      IRB.br ifExit
 
-  ifThen        <- IRB.block `IRB.named` "if.then"
-  (_, ifThenTy) <- codegenExp then'
-  when (ifThenTy /= Types.UNIT)
-    $  error
-    $ "In if-then exp (without else), the if body must yield no value. Found value of type "
-    <> show ifThenTy
-    <> " in if-then at "
-    <> show pos
-  IRB.br ifExit
-
-  ifExit <- IRB.block `IRB.named` "if.exit"
-  pure (zero, Types.UNIT)
+      ifExit <- IRB.block `IRB.named` "if.exit"
+      pure (zero, Types.UNIT)
 
 codegenExp (A.RecordExp fields (S.Symbol typeSym) pos) = do
   tenv <- gets types
