@@ -302,7 +302,7 @@ codegenExp (A.IfExp test then' maybeElse pos) = mdo
       pure (zero, Types.UNIT)
  where
   didBreak :: LL.Operand -> Bool
-  didBreak (LL.ConstantOperand (LLConstant.Int { LLConstant.integerValue = 1 }))
+  didBreak (LL.ConstantOperand LLConstant.Int { LLConstant.integerValue = 1 })
     = True
   didBreak _ = False
 
@@ -383,7 +383,7 @@ codegenExp (A.SeqExp expAndPosns) = do
 
 codegenExp (A.CallExp funcSym args pos) = do
   argOps <- forM args $ \arg -> do
-    (argOp, argTy) <- codegenExp arg -- TODO type check
+    (argOp, argTy) <- codegenExp arg
     pure (argOp, argTy)
   funcEnv <- gets functions
   case M.lookup (S.name funcSym) funcEnv of
@@ -665,7 +665,7 @@ codegenDivOrModulo divOrMod dividend divisor = mdo
 
 codegenDecl :: A.Dec -> Codegen ()
 
-codegenDecl (A.FunctionDec [funDec]) = lift $ codegenFunDec funDec
+codegenDecl (A.FunctionDec funDecs) = mapM_ (lift . codegenFunDec) funDecs
 
 codegenDecl (A.VarDec name _ maybeAnnotatedTy initExp pos) = do
   (initOp, initTy) <- codegenExp initExp
@@ -722,10 +722,7 @@ codegenDecl (A.VarDec name _ maybeAnnotatedTy initExp pos) = do
   isRecordTy (Types.RECORD _) = True
   isRecordTy _                = False
 
-codegenDecl (A.TypeDec [tydec]) = lift $ codegenTypeDec tydec
-
-codegenDecl tydec =
-  error $ "unimplemented alternative in codegenDecl: " <> show tydec
+codegenDecl (A.TypeDec tydecs) = mapM_ (lift . codegenTypeDec) tydecs
 
 codegenTypeDec :: A.TyDec -> LLVM ()
 codegenTypeDec (A.TyDec (S.Symbol tydecName) ty tydecPos) = do
