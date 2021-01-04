@@ -21,19 +21,15 @@ import qualified LLVM.IRBuilder.Constant       as IRB
 import qualified Data.InfList                  as InfList
 import           Data.Word
 import           Data.ByteString.Short
-import qualified Data.Map                      as M
+import qualified Data.Map.Lazy                 as M
 import           Control.Monad                  ( when
                                                 , unless
                                                 , mapM
                                                 , forM_
                                                 )
-import           Control.Monad.State
+import           Control.Monad.State.Lazy
 import qualified Data.Text                     as Text
 import           Data.Text                      ( Text )
-
-import           Debug.Trace
-
-debug = flip trace
 
 
 charToWord8 :: Char -> Word8
@@ -62,8 +58,7 @@ registerOperand
 registerOperand name ty op =
   modify $ \s -> s { operands = M.insert name (op, ty) (operands s) }
 
-registerFunction
-  :: MonadState CodegenState m => Text -> FunctionType -> LL.Operand -> m ()
+registerFunction :: Text -> FunctionType -> LL.Operand -> LLVM ()
 registerFunction name ty op =
   modify $ \s -> s { functions = M.insert name (op, ty) (functions s) }
 
@@ -84,9 +79,6 @@ getRTSFunc funname = do
 
 zero :: LL.Operand
 zero = IRB.int64 (0 :: Integer)
-
-one :: LL.Operand
-one = IRB.int64 (1 :: Integer)
 
 charStar :: LL.Type
 charStar = LL.ptr LL.i8
@@ -287,24 +279,18 @@ codegenExp (A.IfExp test then' maybeElse pos) = mdo
     Nothing -> mdo
       IRB.condBr test' ifThen ifExit
 
-      ifThen              <- IRB.block `IRB.named` "if.then"
-      (retcode, ifThenTy) <- codegenExp then'
+      ifThen        <- IRB.block `IRB.named` "if.then"
+      (_, ifThenTy) <- codegenExp then'
       when (ifThenTy /= Types.UNIT)
         $  error
         $ "In if-then exp (without else), the if body must yield no value. Found value of type "
         <> show ifThenTy
         <> " in if-then at "
         <> show pos
-      unless (didBreak retcode) $ do
-        IRB.br ifExit
+      IRB.br ifExit
 
       ifExit <- IRB.block `IRB.named` "if.exit"
       pure (zero, Types.UNIT)
- where
-  didBreak :: LL.Operand -> Bool
-  didBreak (LL.ConstantOperand LLConstant.Int { LLConstant.integerValue = 1 })
-    = True
-  didBreak _ = False
 
 codegenExp (A.RecordExp fields (S.Symbol typeSym) pos) = do
   tenv <- gets types
@@ -397,6 +383,7 @@ codegenExp (A.CallExp funcSym args pos) = do
           <> show (Prelude.length (paramTypes funcTy))
           <> " arguments, but was passed "
           <> show (Prelude.length argTypes)
+
       let paramTypeCheck = zip3 argTypes (paramTypes funcTy) [0 :: Int ..]
       let paramErrors = filter
             (\(actualTy, expectedTy, _) -> actualTy /= expectedTy)
@@ -441,17 +428,8 @@ codegenExp (A.WhileExp test body pos) = mdo
   modify $ \s -> s { breakTarget = stashedBreakTarget }
   pure (zero, Types.UNIT)
 
-codegenExp (A.BreakExp pos) = do
-  breakLabel <- gets breakTarget
-  case breakLabel of
-    Just lab -> do
-      IRB.br lab
-      pure (one, Types.UNIT)
-    Nothing ->
-      error
-        $  "BreakExp at "
-        <> show pos
-        <> " not enclosed in a while or for loop."
+codegenExp (A.BreakExp pos) =
+  error $ "llvm backend does not support break expression: at " <> show pos
 
 codegenExp (A.LetExp decs body _) = do
   forM_ decs codegenDecl
@@ -639,7 +617,7 @@ codegenTop e =
         , A.funBody    = A.SeqExp [(e, nilPos), (A.IntExp 0, nilPos)]
         , A.funPos     = nilPos
         }
-  in  codegenFunDec mainFn
+  in  codegenFunDecls [mainFn]
 
 data DivOrMod = DivOp | ModOp
 
@@ -663,9 +641,98 @@ codegenDivOrModulo divOrMod dividend divisor = mdo
   exit          <- IRB.block `IRB.named` "exit"
   pure quotient
 
+codegenFunDecls :: [A.FunDec] -> LLVM ()
+
+codegenFunDecls funDecs = mdo
+  prototypes <- mapM getPrototype funDecs
+  registerFunctions funs
+  funs <- mapM buildFun $ zip prototypes funDecs
+  pure ()
+ where
+  registerFunctions funs = forM_ funs $ \(fun, name, paramTys, retTy) ->
+    registerFunction (S.name name) (FunctionType paramTys retTy) fun
+
+  getPrototype A.FunDec { A.params = params, A.result = resultTyMaybe } = do
+    tenv <- gets types
+    let retTy    = extractRetTy tenv resultTyMaybe
+    let paramTys = extractParamTys tenv params
+    llArgs    <- getLLArgs params paramTys
+    retTyLLVM <- lltype retTy
+    pure (retTy, paramTys, retTyLLVM, llArgs)
+
+  buildFun ((retTy, paramTys, retTyLLVM, llArgs), f@A.FunDec { A.fundecName = name, A.params = params, A.funBody = body })
+    = do
+      stashedFun <- gets currentFun
+      modify $ \env -> env { currentFun = Just (f, retTy, paramTys) }
+      fun <- IRB.function (LL.Name $ toShortBS $ show name)
+                          llArgs
+                          retTyLLVM
+                          (genBody params body)
+      modify $ \env -> env { currentFun = stashedFun }
+      pure (fun, name, paramTys, retTy)
+
+  extractParamTys tenv params = fmap
+    (\field -> case M.lookup (S.name (A.fieldTyp field)) tenv of
+      Just resultTy -> resultTy
+      Nothing ->
+        error
+          $  "use of undeclared typename "
+          <> show (A.fieldTyp field)
+          <> " in function param declaration at "
+          <> show (A.fieldPos field)
+    )
+    params
+
+  extractRetTy tenv resultTyMaybe = maybe
+    Types.UNIT
+    (\(resultTySym, pos) -> case M.lookup (S.name resultTySym) tenv of
+      Just resultTy -> resultTy
+      Nothing ->
+        error
+          $  "use of undeclared typedef "
+          <> show resultTySym
+          <> " at "
+          <> show pos
+    )
+    resultTyMaybe
+
+  getLLArgs fields paramTys = mapM getLLArg $ zip fields paramTys
+
+  getLLArg (field, fieldTy) = do
+    llty <- lltype fieldTy
+    let paramName = IRB.ParameterName $ toShortBS $ show $ A.fieldName field
+    pure (llty, paramName)
+
+  genBody params body ops = do
+    _entry          <- IRB.block `IRB.named` "entry"
+    currentFunMaybe <- gets currentFun
+    case currentFunMaybe of
+      Just (enclosingFunc, retTy, paramTys) -> do
+        forM_ (zip3 ops params paramTys) $ \(op, field, fieldTy) -> do
+          llfieldTy <- lift $ lltype fieldTy
+          addr      <- IRB.alloca llfieldTy Nothing 8
+          IRB.store addr 8 op
+          registerOperand (S.name $ A.fieldName field) fieldTy addr
+        (bodyOp, bodyTy) <- codegenExp body
+        when (retTy /= bodyTy) $ do
+          error
+            $  "In function "
+            <> show (A.fundecName enclosingFunc)
+            <> " defined at "
+            <> show (A.funPos enclosingFunc)
+            <> ", computed type of function body "
+            <> show bodyTy
+            <> " and annotated type "
+            <> show retTy
+            <> " do not match"
+        case retTy of
+          Types.UNIT -> IRB.retVoid
+          _          -> IRB.ret bodyOp
+      Nothing -> error "impossible"
+
 codegenDecl :: A.Dec -> Codegen ()
 
-codegenDecl (A.FunctionDec funDecs) = mapM_ (lift . codegenFunDec) funDecs
+codegenDecl (A.FunctionDec funDecs) = (lift . codegenFunDecls) funDecs
 
 codegenDecl (A.VarDec name _ maybeAnnotatedTy initExp pos) = do
   (initOp, initTy) <- codegenExp initExp
@@ -793,89 +860,6 @@ transType (A.ArrayTy (S.Symbol sym, pos)) = do
   pure (arrayTypeTiger, arrayTypeLLVM)
 
 transType t = error $ "unimplemented alternative in transType: " <> show t
-
-codegenFunDec :: A.FunDec -> LLVM ()
-codegenFunDec f@A.FunDec { A.fundecName = name, A.params = params, A.result = resultTyMaybe, A.funBody = body }
-  = mdo
-    tenv       <- gets types
-    stashedFun <- gets currentFun
-    let retTy    = extractRetTy tenv
-    let paramTys = extractParamTys tenv
-    modify $ \env -> env { currentFun = Just (f, retTy, paramTys) }
-    registerFunction (S.name name) (FunctionType paramTys retTy) fun
-    llArgs    <- getLLArgs params
-    retTyLLVM <- lltype retTy
-    fun       <- IRB.function (LL.Name $ toShortBS $ show name)
-                              llArgs
-                              retTyLLVM
-                              genBody
-    modify $ \env -> env { currentFun = stashedFun }
-    pure ()
- where
-  extractParamTys tenv = fmap
-    (\field -> case M.lookup (S.name (A.fieldTyp field)) tenv of
-      Just resultTy -> resultTy
-      Nothing ->
-        error
-          $  "use of undeclared typename "
-          <> show (A.fieldTyp field)
-          <> " in function param declaration at "
-          <> show (A.fieldPos field)
-    )
-    params
-
-  extractRetTy tenv = maybe
-    Types.UNIT
-    (\(resultTySym, pos) -> case M.lookup (S.name resultTySym) tenv of
-      Just resultTy -> resultTy
-      Nothing ->
-        error
-          $  "use of undeclared typedef "
-          <> show resultTySym
-          <> " at "
-          <> show pos
-    )
-    resultTyMaybe
-
-  getLLArgs :: [A.Field] -> LLVM [(LL.Type, IRB.ParameterName)]
-  getLLArgs fields = do
-    currentFunMaybe <- gets currentFun
-    case currentFunMaybe of
-      Just (_, _, paramTys) -> mapM getLLArg $ zip fields paramTys
-      Nothing               -> error "impossible"
-
-  getLLArg (field, fieldTy) = do
-    llty <- lltype fieldTy
-    let paramName = IRB.ParameterName $ toShortBS $ show $ A.fieldName field
-    pure (llty, paramName)
-
-  genBody :: [LL.Operand] -> Codegen ()
-  genBody ops = do
-    _entry          <- IRB.block `IRB.named` "entry"
-    currentFunMaybe <- gets currentFun
-    case currentFunMaybe of
-      Just (enclosingFunc, retTy, paramTys) -> do
-        forM_ (zip3 ops params paramTys) $ \(op, field, fieldTy) -> do
-          llfieldTy <- lift $ lltype fieldTy
-          addr      <- IRB.alloca llfieldTy Nothing 8
-          IRB.store addr 8 op
-          registerOperand (S.name $ A.fieldName field) fieldTy addr
-        (bodyOp, bodyTy) <- codegenExp body
-        when (retTy /= bodyTy) $ do
-          error
-            $  "In function "
-            <> show (A.fundecName enclosingFunc)
-            <> " defined at "
-            <> show (A.funPos enclosingFunc)
-            <> ", computed type of function body "
-            <> show bodyTy
-            <> " and annotated type "
-            <> show retTy
-            <> " do not match"
-        case retTy of
-          Types.UNIT -> IRB.retVoid
-          _          -> IRB.ret bodyOp
-      Nothing -> error "impossible"
 
 newtype InternalName = InternalName String
 newtype ExternalName = ExternalName String
