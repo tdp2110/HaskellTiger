@@ -1,0 +1,9 @@
+let
+    type IntPair = { fst : int, snd: string }
+    var x := IntPair { fst=1, snd="hello" }
+in
+    if x = nil then
+      println("cat")
+    else
+      println("dog")
+end

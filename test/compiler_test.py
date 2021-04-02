@@ -281,5 +281,23 @@ class TestLLVMCodegen(unittest.TestCase):
     def test_if_then_void(self):
         self.check_compiler('examples/ifThenVoid.tiger', 'dog\n')
         
+    def test_record_eq_1(self):
+        self.check_compiler('examples/recordCmp1.tiger', 'dog\n')
+        
+    def test_record_eq_2(self):
+        self.check_compiler('examples/recordCmp2.tiger', 'cat\n')
+        
+    def test_record_eq_nil(self):
+        self.check_compiler('examples/recordCmpNil.tiger', 'dog\n')
+                
+    def test_nil_eq_nil(self):
+        self.check_compiler('examples/nilEqNil.tiger', 'cat\n')
+        
+    def test_strcmp_1(self):
+        self.check_compiler('examples/strCmp1.tiger', 'dog\n')
+        
+    def test_strcmp_2(self):
+        self.check_compiler('examples/strCmp2.tiger', 'cat\n')
+        
 if __name__ == '__main__':
     unittest.main()

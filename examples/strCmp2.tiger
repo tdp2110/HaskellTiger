@@ -1,0 +1,4 @@
+    if "cat" = "cat" then
+      println("cat")
+    else
+      println("dog")

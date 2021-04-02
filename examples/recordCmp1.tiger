@@ -1,0 +1,10 @@
+let
+    type IntPair = { fst : int, snd: string }
+    var x := IntPair { fst=1, snd="hello" }
+    var y := IntPair { fst=2, snd="goodbye" }
+in
+    if x = y then
+      println("cat")
+    else
+      println("dog")
+end

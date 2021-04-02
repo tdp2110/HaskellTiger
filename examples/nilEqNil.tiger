@@ -1,0 +1,4 @@
+    if nil = nil then
+      println("cat")
+    else
+      println("dog")
