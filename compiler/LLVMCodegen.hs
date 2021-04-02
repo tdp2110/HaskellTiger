@@ -166,23 +166,90 @@ codegenExp (A.OpExp left oper right pos) = do
         A.GtOp     -> IRB.icmp LL.SGT
         A.GeOp     -> IRB.icmp LL.SGE
         A.ModOp    -> codegenDivOrModulo ModOp
-  if leftTy /= Types.INT
-    then
-      error
-      $  "invalid operand of type "
-      <> show leftTy
-      <> " in binary operator at "
-      <> show pos
-    else if rightTy /= Types.INT
+      arithResult = do
+        res <- f leftOperand rightOperand
+        pure (res, Types.INT)
+      cmpResult = do
+        resI1  <- f leftOperand rightOperand
+        resI64 <- IRB.sext resI1 LL.i64
+        pure (resI64, Types.INT)
+  if isArith oper
+    then if leftTy /= Types.INT
       then
         error
         $  "invalid operand of type "
-        <> show right
+        <> show leftTy
         <> " in binary operator at "
         <> show pos
-      else do
-        res <- f leftOperand rightOperand
-        pure (res, Types.INT)
+      else if rightTy /= Types.INT
+        then
+          error
+          $  "invalid operand of type "
+          <> show right
+          <> " in binary operator at "
+          <> show pos
+        else arithResult
+    else if isCmp oper
+      then case (leftTy, rightTy) of
+        (Types.INT          , Types.INT          ) -> cmpResult
+        (r1@(Types.RECORD _), r2@(Types.RECORD _)) -> if r1 == r2
+          then cmpResult
+          else
+            error
+            $  "only identical record types may be compared. Left type "
+            <> show leftTy
+            <> ", right type "
+            <> show rightTy
+            <> " at "
+            <> show pos
+        (Types.RECORD _    , Types.NIL         ) -> cmpResult
+        (Types.NIL         , Types.RECORD _    ) -> cmpResult
+        (Types.NIL         , Types.NIL         ) -> cmpResult
+        (a1@(Types.ARRAY _), a2@(Types.ARRAY _)) -> if a1 == a2
+          then cmpResult
+          else
+            error
+            $  "only identical array types may be compared. Left type "
+            <> show leftTy
+            <> ", right type "
+            <> show rightTy
+            <> " at "
+            <> show pos
+        (Types.STRING, Types.STRING) -> do
+          strCmp <- lift $ getRTSFunc "tiger_strCmp"
+          cmpRes <- IRB.call strCmp [(leftOperand, []), (rightOperand, [])]
+          resI1  <- f cmpRes zero
+          resI64 <- IRB.sext resI1 LL.i64
+          pure (resI64, Types.INT)
+        (_, _) ->
+          error
+            $  "incomparable types "
+            <> show leftTy
+            <> " and "
+            <> show rightTy
+            <> " at "
+            <> show pos
+      else error "impossible"
+ where
+
+
+  isArith :: A.Oper -> Bool
+  isArith A.PlusOp   = True
+  isArith A.MinusOp  = True
+  isArith A.TimesOp  = True
+  isArith A.DivideOp = True
+  isArith A.ModOp    = True
+  isArith _          = False
+
+  isCmp :: A.Oper -> Bool
+  isCmp A.EqOp  = True
+  isCmp A.NeqOp = True
+  isCmp A.LtOp  = True
+  isCmp A.LeOp  = True
+  isCmp A.GtOp  = True
+  isCmp A.GeOp  = True
+  isCmp _       = False
+
 
 codegenExp (A.AssignExp (A.SimpleVar var varPos) rhs rhsPos) = do
   (rhsOp, rhsTy) <- codegenExp rhs
@@ -890,11 +957,12 @@ codegenLLVM filename e =
   buildRuntimeFuncs = do
     llStringType <- lltype Types.STRING
     pure
-      [ ("tiger_divByZero"            , []                , LL.void)
-      , ("tiger_allocString"          , [charStar, LL.i64], llStringType)
-      , ("tiger_alloc"                , [LL.i64]          , charStar)
-      , ("tiger_indexError"           , [LL.i64, LL.i64]  , LL.void)
-      , ("tiger_nullRecordDereference", []                , LL.void)
+      [ ("tiger_divByZero"            , []                          , LL.void)
+      , ("tiger_allocString", [charStar, LL.i64], llStringType)
+      , ("tiger_alloc"                , [LL.i64]                    , charStar)
+      , ("tiger_indexError"           , [LL.i64, LL.i64]            , LL.void)
+      , ("tiger_nullRecordDereference", []                          , LL.void)
+      , ("tiger_strCmp"               , [llStringType, llStringType], LL.i64)
       ]
 
   emitRuntimeFunction (name, argTypes, retType) = do
