@@ -423,6 +423,7 @@ transExp (A.OpExp leftExp op rightExp pos) = do
           else throwT pos "only identical record types may be compared"
         (Types.RECORD _      , Types.NIL           ) -> ptrCmp expLeft expRight
         (Types.NIL           , Types.RECORD _      ) -> ptrCmp expLeft expRight
+        (Types.NIL           , Types.NIL           ) -> ptrCmp expLeft expRight
         (arr1@(Types.ARRAY _), arr2@(Types.ARRAY _)) -> if arr1 == arr2
           then if isEqOrNe
             then translate (Translate.ptrCmp expLeft expRight op) Types.INT
