@@ -277,6 +277,9 @@ class TestLLVMCodegen(unittest.TestCase):
         
     def test_mutual_recursion(self):
         self.check_compiler('examples/mutualRecursion.tiger', '0\n1\n1\n0\n')
+
+    def test_if_then_void(self):
+        self.check_compiler('examples/ifThenVoid.tiger', 'dog\n')
         
 if __name__ == '__main__':
     unittest.main()

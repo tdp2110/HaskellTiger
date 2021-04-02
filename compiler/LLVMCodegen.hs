@@ -341,8 +341,12 @@ codegenExp (A.IfExp test then' maybeElse pos) = mdo
       -- %if.exit
       -----------
       ifExit <- IRB.block `IRB.named` "if.exit"
-      phi    <- IRB.phi [(ifThenOp, ifThen), (ifElseOp, ifElse)]
-      pure (phi, ifElseTy)
+      if ifThenTy /= Types.UNIT
+        then do
+          phi <- IRB.phi [(ifThenOp, ifThen), (ifElseOp, ifElse)]
+          pure (phi, ifElseTy)
+        else do
+          pure (zero, Types.UNIT)
     Nothing -> mdo
       IRB.condBr test' ifThen ifExit
 
