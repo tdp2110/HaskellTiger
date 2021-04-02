@@ -159,6 +159,7 @@ class TestNativeCompiler(unittest.TestCase):
     def test_dead_stores(self):
         assem = self.check_compiler('examples/dead-stores.tiger', '42\n')
         assem = assem.decode('utf-8')
+        self.assertNotIn('1337', assem) # not a great test ... could be in a label or something
 
     def test_unused_functions(self):
         assem = self.check_compiler('examples/unused-funs.tiger', 'hello world\n')
