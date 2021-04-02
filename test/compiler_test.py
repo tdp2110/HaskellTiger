@@ -142,7 +142,10 @@ class TestNativeCompiler(unittest.TestCase):
         self.check_compiler('examples/local-access-4.tiger', '42\n')
 
     def test_mutual_recursion(self):
-        self.check_compiler('examples/mutualRecursion.tiger', '0\n1\n1\n0\n')
+        self.check_compiler('examples/mutualRecursion.tiger', '0\n1\n1\n0\n')        
+        
+    def test_str_concat(self):
+        self.check_compiler('examples/concat.tiger', 'catdog\n')
         
     def test_redzone(self):
         assem = self.check_compiler('examples/redzone.tiger', '190\n')
@@ -298,6 +301,9 @@ class TestLLVMCodegen(unittest.TestCase):
         
     def test_strcmp_2(self):
         self.check_compiler('examples/strCmp2.tiger', 'cat\n')
+        
+    def test_str_concat(self):
+        self.check_compiler('examples/concat.tiger', 'catdog\n')
         
 if __name__ == '__main__':
     unittest.main()
